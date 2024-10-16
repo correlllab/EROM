@@ -31,11 +31,12 @@ from magpie.poses import repair_pose, translation_diff
 import open3d as o3d
 
 ### Local ###
+from aspire.env_config import env_var
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols )
 from aspire.utils import ( DataLogger, diff_norm,  )
 from aspire.actions import ( display_PDLS_plan, get_BT_plan_until_block_change, BT_Runner, 
                              Interleaved_MoveFree_and_PerceiveScene, MoveFree, GroundedAction, )
-from aspire.BlocksTask import rand_table_pose
+from aspire.BlocksTask import set_blocks_env, rand_table_pose
 
 # ### PDDLStream ### 
 from aspire.pddlstream.pddlstream.utils import read, INF, get_file_path
@@ -90,6 +91,7 @@ class TaskPlanner:
 
     def __init__( self, world = None, noViz = False, noBot = False ):
         """ Create a pre-determined collection of poses and plan skeletons """
+        set_blocks_env()
         self.reset_symbols()
         self.reset_state()
         self.robot  = ur5.UR5_Interface() if (not noBot) else None
@@ -116,7 +118,7 @@ class TaskPlanner:
     def get_grounded_pose_or_new( self, homog ):
         """ If there is a `Waypoint` approx. to `homog`, then return it, Else create new `ObjPose` """
         for fact in self.facts:
-            if fact[0] == 'Waypoint' and ( euclidean_distance_between_symbols( homog, fact[1] ) <= os.environ["_ACCEPT_POSN_ERR"]):
+            if fact[0] == 'Waypoint' and ( euclidean_distance_between_symbols( homog, fact[1] ) <= env_var("_ACCEPT_POSN_ERR")):
                 return fact[1]
         return ObjPose( homog )
 
@@ -125,7 +127,7 @@ class TaskPlanner:
         """ Does this exist as a `Waypoint`? """
         homog = extract_pose_as_homog( poseOrObj )
         for fact in self.facts:
-            if fact[0] == 'Waypoint' and ( euclidean_distance_between_symbols( homog, fact[1] ) <= os.environ["_ACCEPT_POSN_ERR"]):
+            if fact[0] == 'Waypoint' and ( euclidean_distance_between_symbols( homog, fact[1] ) <= env_var("_ACCEPT_POSN_ERR")):
                 return True
         return False
 
@@ -141,7 +143,7 @@ class TaskPlanner:
         constant_map = {}
         stream_map = pdls_stream_map if ( pdls_stream_map is not None ) else dict()
 
-        if os.environ["_VERBOSE"]:
+        if env_var("_VERBOSE"):
             print( "About to create problem ... " )
 
         return PDDLProblem( domain_pddl, constant_map, stream_pddl, stream_map, self.facts, self.goal )
@@ -161,7 +163,7 @@ class TaskPlanner:
         #     ('HandEmpty',),
         # )
 
-        if os.environ["_VERBOSE"]:
+        if env_var("_VERBOSE"):
             print( f"\n### Goal ###" )
             pprint( self.goal )
             print()
@@ -174,8 +176,10 @@ class TaskPlanner:
 
     ##### Object Permanence ###############################################
 
-    def merge_and_reconcile_object_memories( self, tau = os.environ["_SCORE_DECAY_TAU_S"], cutScoreFrac = 0.5  ):
+    def merge_and_reconcile_object_memories( self, tau = None, cutScoreFrac = 0.5  ):
         """ Calculate a consistent object state from LKG Memory and Beliefs """
+        if tau is None:
+            tau = env_var("_SCORE_DECAY_TAU_S")
         mrgLst  = list()
         tCurr   = now()
         totLst  = self.memory.beliefs[:]
@@ -190,7 +194,7 @@ class TaskPlanner:
         
         # Filter and Decay stale readings
         for r in totLst:
-            if ((tCurr - r.ts) <= os.environ["_OBJ_TIMEOUT_S"]):
+            if ((tCurr - r.ts) <= env_var("_OBJ_TIMEOUT_S")):
                 score_r = np.exp( -(tCurr - r.ts) / tau ) * r.score
                 if isnan( score_r ):
                     print( f"\nWARN: Got a NaN score with count {r.count}, distribution {r.labels}, and age {tCurr - r.ts}\n" )
@@ -249,7 +253,7 @@ class TaskPlanner:
         def p_unique_non_null_labels( objs ):
             """ Return true if there are as many classes as there are objects """
             lbls = set([sym.label for sym in objs])
-            if os.environ["_NULL_NAME"] in lbls: 
+            if env_var("_NULL_NAME") in lbls: 
                 return False
             return len( lbls ) == len( objs )
         
@@ -296,12 +300,12 @@ class TaskPlanner:
             raise ValueError( f"`ResponsiveTaskPlanner.most_likely_objects`: Filtering method \"{method}\" is NOT recognized!" )
         
         ### Return all non-null symbols ###
-        rtnLst = [sym for sym in rtnSymbols if sym.label != os.environ["_NULL_NAME"]]
+        rtnLst = [sym for sym in rtnSymbols if sym.label != env_var("_NULL_NAME")]
         print( f"\nDeterminized {len(rtnLst)} objects!\n" )
         return rtnLst
     
     
-    def reify_chosen_beliefs( self, objs, chosen, factor = os.environ["_REIFY_SUPER_BEL"] ):
+    def reify_chosen_beliefs( self, objs, chosen, factor = env_var("_REIFY_SUPER_BEL") ):
         """ Super-believe in the beliefs we believed in. 
             That is: Refresh the timestamp and score of readings that ultimately became grounded symbols """
         posen = [ extract_pose_as_homog( ch ) for ch in chosen ]
@@ -311,7 +315,7 @@ class TaskPlanner:
                 maxSc = obj.score
         for obj in objs:
             for cPose in posen:
-                if (translation_diff( cPose, extract_pose_as_homog( obj ) ) <= os.environ["_LKG_SEP"]):
+                if (translation_diff( cPose, extract_pose_as_homog( obj ) ) <= env_var("_LKG_SEP")):
                     obj.score = maxSc * factor
                     obj.ts    = now()
                 
@@ -329,9 +333,9 @@ class TaskPlanner:
     def get_grounded_fact_pose_or_new( self, homog ):
         """ If there is a `Waypoint` approx. to `homog`, then return it, Else create new `ObjPose` """ 
         for fact in self.facts:
-            if fact[0] == 'Waypoint' and (euclidean_distance_between_symbols( homog, fact[1] ) <= os.environ["_ACCEPT_POSN_ERR"]):
+            if fact[0] == 'Waypoint' and (euclidean_distance_between_symbols( homog, fact[1] ) <= env_var("_ACCEPT_POSN_ERR")):
                 return fact[1]
-            if fact[0] == 'GraspObj' and (euclidean_distance_between_symbols( homog, fact[2] ) <= os.environ["_ACCEPT_POSN_ERR"]):
+            if fact[0] == 'GraspObj' and (euclidean_distance_between_symbols( homog, fact[2] ) <= env_var("_ACCEPT_POSN_ERR")):
                 return fact[2]
         return ObjPose( homog )
     
@@ -354,7 +358,7 @@ class TaskPlanner:
                 pLbl = g[1]
                 pPos = g[2]
                 tObj = self.get_sampled_block( pLbl )
-                if (tObj is not None) and (euclidean_distance_between_symbols( pPos, tObj ) <= os.environ["_ACCEPT_POSN_ERR"]):
+                if (tObj is not None) and (euclidean_distance_between_symbols( pPos, tObj ) <= env_var("_ACCEPT_POSN_ERR")):
                     rtnFacts.append( g ) # Position goal met
         # B. No need to ground the rest
 
@@ -370,7 +374,7 @@ class TaskPlanner:
                     posDn = extract_pose_as_homog( sym_j )
                     xySep = diff_norm( posUp[0:2,3], posDn[0:2,3] )
                     zSep  = posUp[2,3] - posDn[2,3] # Signed value
-                    if ((xySep <= 1.65*os.environ["_BLOCK_SCALE"]) and (1.65*os.environ["_BLOCK_SCALE"] >= zSep >= 0.9*os.environ["_BLOCK_SCALE"])):
+                    if ((xySep <= 1.65*env_var("_BLOCK_SCALE")) and (1.65*env_var("_BLOCK_SCALE") >= zSep >= 0.9*env_var("_BLOCK_SCALE"))):
                         supDices.add(i)
                         rtnFacts.extend([
                             ('Supported', lblUp, lblDn,),
@@ -437,10 +441,10 @@ class TaskPlanner:
         for _ in range( Nscans ):
             self.perceive_scene( xform ) # We need at least an initial set of beliefs in order to plan
 
-        self.beliefs = self.merge_and_reconcile_object_memories( cutScoreFrac = os.environ["_CUT_MERGE_S_FRAC"] )
+        self.beliefs = self.merge_and_reconcile_object_memories( cutScoreFrac = env_var("_CUT_MERGE_S_FRAC") )
         self.symbols = self.most_likely_objects( self.beliefs, 
                                                  method = "clean-dupes-score",  # clean-dupes # clean-dupes-score # unique
-                                                 cutScoreFrac = os.environ["_CUT_SCORE_FRAC"] )
+                                                 cutScoreFrac = env_var("_CUT_SCORE_FRAC") )
         # HACK: TOP OFF THE SCORES OF THE LKG ENTRIES THAT BECAME SYMBOLS
         self.reify_chosen_beliefs( self.world.memory, self.symbols )
         
@@ -450,7 +454,7 @@ class TaskPlanner:
 
         self.status  = Status.RUNNING
 
-        if os.environ["_VERBOSE"]:
+        if env_var("_VERBOSE"):
             print( f"\nStarting Objects:" )
             for obj in self.symbols:
                 print( f"\t{obj}" )
@@ -458,7 +462,7 @@ class TaskPlanner:
                 print( f"\tNO OBJECTS DETERMINIZED" )
 
 
-    def allocate_table_swap_space( self, Nspots = os.environ["_N_XTRA_SPOTS"] ):
+    def allocate_table_swap_space( self, Nspots = env_var("_N_XTRA_SPOTS") ):
         """ Find some open poses on the table for performing necessary swaps """
         rtnFacts  = []
         freeSpots = []
@@ -468,7 +472,7 @@ class TaskPlanner:
             print( f"\t\tSample: {nuPose}" )
             collide = False
             for spot in occuSpots:
-                if euclidean_distance_between_symbols( spot, nuPose ) < ( os.environ["_MIN_SEP"] ):
+                if euclidean_distance_between_symbols( spot, nuPose ) < ( env_var("_MIN_SEP") ):
                     collide = True
                     break
             if not collide:
@@ -497,7 +501,7 @@ class TaskPlanner:
             for g in self.goal[1:]:
                 if g[0] == 'GraspObj':
                     self.facts.append( ('Waypoint', g[2],) )
-                    if abs( extract_pose_as_homog(g[2])[2,3] - os.environ["_BLOCK_SCALE"]) < os.environ["_ACCEPT_POSN_ERR"]:
+                    if abs( extract_pose_as_homog(g[2])[2,3] - env_var("_BLOCK_SCALE")) < env_var("_ACCEPT_POSN_ERR"):
                         self.facts.append( ('PoseAbove', g[2], 'table') )
 
             ## Ground the Blocks ##
@@ -515,9 +519,9 @@ class TaskPlanner:
             self.facts.extend( self.ground_relevant_predicates_noisy() )
 
             ## Populate Spots for Block Movements ##, 2024-04-25: Injecting this for now, Try a stream later ...
-            self.facts.extend( self.allocate_table_swap_space( os.environ["_N_XTRA_SPOTS"] ) )
+            self.facts.extend( self.allocate_table_swap_space( env_var("_N_XTRA_SPOTS") ) )
 
-            if os.environ["_VERBOSE"]:
+            if env_var("_VERBOSE"):
                 print( f"\n### Initial Symbols ###" )
                 for sym in self.facts:
                     print( f"\t{sym}" )
@@ -572,7 +576,7 @@ class TaskPlanner:
         if (plan is not None) and len( plan ):
             display_PDLS_plan( plan )
             self.currPlan = plan
-            self.action   = get_BT_plan_until_block_change( plan, self, os.environ["_UPDATE_PERIOD_S"] )
+            self.action   = get_BT_plan_until_block_change( plan, self, env_var("_UPDATE_PERIOD_S") )
             self.noSoln   = 0 # DEATH MONITOR
         else:
             self.noSoln += 1 # DEATH MONITOR
@@ -583,7 +587,7 @@ class TaskPlanner:
     def phase_4_Execute_Action( self ):
         """ Attempt to execute the first action in the symbolic plan """
         
-        btr = BT_Runner( self.action, os.environ["_BT_UPDATE_HZ"], os.environ["_BT_ACT_TIMEOUT_S"] )
+        btr = BT_Runner( self.action, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
         btr.setup_BT_for_running()
 
         lastTip = None
@@ -615,12 +619,12 @@ class TaskPlanner:
             Interleaved_MoveFree_and_PerceiveScene( 
                 MoveFree( [None, ObjPose( goPose )], robot = self.robot, suppressGrasp = True ), 
                 self, 
-                os.environ["_UPDATE_PERIOD_S"], 
+                env_var("_UPDATE_PERIOD_S"), 
                 initSenseStep = True 
             ),
         ])
         
-        btr = BT_Runner( btAction, os.environ["_BT_UPDATE_HZ"], os.environ["_BT_ACT_TIMEOUT_S"] )
+        btr = BT_Runner( btAction, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
         btr.setup_BT_for_running()
 
         while not btr.p_ended():
@@ -674,10 +678,10 @@ class TaskPlanner:
         """ Solve the goal """
         
         if beginPlanPose is None:
-            if os.environ["_BLOCK_SCALE"] < 0.030:
-                beginPlanPose = os.environ["_GOOD_VIEW_POSE"]
+            if env_var("_BLOCK_SCALE") < 0.030:
+                beginPlanPose = env_var("_GOOD_VIEW_POSE")
             else:
-                beginPlanPose = os.environ["_HIGH_VIEW_POSE"]
+                beginPlanPose = env_var("_HIGH_VIEW_POSE")
 
         i = 0
 
@@ -711,8 +715,8 @@ class TaskPlanner:
             camPose = self.robot.get_cam_pose()
 
             expBgn = now()
-            if (expBgn - t5) < os.environ["_UPDATE_PERIOD_S"]:
-                sleep( os.environ["_UPDATE_PERIOD_S"] - (expBgn - t5) )
+            if (expBgn - t5) < env_var("_UPDATE_PERIOD_S"):
+                sleep( env_var("_UPDATE_PERIOD_S") - (expBgn - t5) )
             
             self.phase_1_Perceive( 1, camPose )
             
@@ -754,16 +758,16 @@ class TaskPlanner:
 
             print( f"Phase 4, {self.status} ..." )
             t4 = now()
-            if (t4 - expBgn) < os.environ["_UPDATE_PERIOD_S"]:
-                sleep( os.environ["_UPDATE_PERIOD_S"] - (t4 - expBgn) )
+            if (t4 - expBgn) < env_var("_UPDATE_PERIOD_S"):
+                sleep( env_var("_UPDATE_PERIOD_S") - (t4 - expBgn) )
             self.phase_4_Execute_Action()
 
             ##### Phase 5 ########################
 
             print( f"Phase 5, {self.status} ..." )
             t5 = now()
-            if (t5 - t4) < os.environ["_UPDATE_PERIOD_S"]:
-                sleep( os.environ["_UPDATE_PERIOD_S"] - (t5 - t4) )
+            if (t5 - t4) < env_var("_UPDATE_PERIOD_S"):
+                sleep( env_var("_UPDATE_PERIOD_S") - (t5 - t4) )
             self.phase_5_Return_Home( beginPlanPose )
 
             print()
@@ -816,7 +820,7 @@ def responsive_experiment_prep( beginPlanPose = None ):
     print( planner.robot.get_tcp_pose() )
 
     if beginPlanPose is None:
-        if os.environ["_BLOCK_SCALE"] < 0.030:
+        if env_var("_BLOCK_SCALE") < 0.030:
             beginPlanPose = _GOOD_VIEW_POSE
         else:
             beginPlanPose = _HIGH_VIEW_POSE
