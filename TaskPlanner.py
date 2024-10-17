@@ -10,11 +10,11 @@ Contacts: {james.watson-2@colorado.edu,}
 ##### Imports #####
 
 ### Standard ###
-import sys, time, os
+import sys, time, os, json
 now = time.time
 from time import sleep
 from pprint import pprint
-from random import random
+# from random import random
 from traceback import print_exc, format_exc
 from datetime import datetime
 from math import isnan
@@ -24,11 +24,11 @@ from math import isnan
 ### Special ###
 import numpy as np
 from py_trees.common import Status
-from py_trees.composites import Sequence
+# from py_trees.composites import Sequence
 from magpie.BT import Open_Gripper
 from magpie import ur5 as ur5
 from magpie.poses import repair_pose, translation_diff
-import open3d as o3d
+# import open3d as o3d
 
 ### Local ###
 from aspire.env_config import env_var
@@ -44,6 +44,8 @@ from aspire.pddlstream.pddlstream.language.generator import from_gen_fn, from_te
 from aspire.pddlstream.pddlstream.language.constants import print_solution, PDDLProblem
 from aspire.pddlstream.pddlstream.algorithms.meta import solve
 
+### Local ###
+from Bayes import ObjectMemory
 
 
 
@@ -57,13 +59,14 @@ class TaskPlanner:
     def open_file( self ):
         """ Set the name of the current file """
         dateStr     = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
-        self.outNam = f"Task-Planner_{dateStr}.txt"
+        self.outNam = f"Task-Planner_{dateStr}.json"
         self.outFil = open( os.path.join( self.outDir, self.outNam ), 'w' )
 
 
     def dump_to_file( self, openNext = False ):
         """ Write all data lines to a file """
-        self.outFil.writelines( [f"{str(line)}\n" for line in self.datLin] )
+        # self.outFil.writelines( [f"{str(line)}\n" for line in self.datLin] )        
+        json.dump( self.datLin, self.outFil )
         self.outFil.close()
         if openNext:
             self.datLin = list()
@@ -76,6 +79,14 @@ class TaskPlanner:
         """ Erase belief memory """
         self.symbols = list() # ------- Determinized beliefs
         self.facts   = list() # ------- Grounded predicates
+
+
+    def reset_memory( self ):
+        """ Erase memory components """
+        self.scan    = list()
+        self.beliefs = ObjectMemory()
+        self.LKG     = list()
+        self.ranked  = list()
 
 
     def reset_state( self ):
@@ -792,20 +803,7 @@ class TaskPlanner:
 
 
 
-########## MEMORY HELPER FUNCTIONS #################################################################
 
-def copy_as_LKG( sym ):
-    """ Make a copy of this belief for the Last-Known-Good collection """
-    rtnObj = sym.copy()
-    rtnObj.LKG = True
-    return rtnObj
-
-def copy_readings_as_LKG( readLst ):
-    """ Return a list of readings intended for the Last-Known-Good collection """
-    rtnLst = list()
-    for r in readLst:
-        rtnLst.append( copy_as_LKG( r ) )
-    return rtnLst
 
 
 ########## EXPERIMENT HELPER FUNCTIONS #############################################################
