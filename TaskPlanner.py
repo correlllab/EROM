@@ -27,7 +27,7 @@ from py_trees.common import Status
 # from py_trees.composites import Sequence
 from magpie.BT import Open_Gripper
 from magpie import ur5 as ur5
-from magpie.poses import repair_pose, translation_diff
+from magpie.poses import repair_pose
 # import open3d as o3d
 
 ### Local ###
@@ -44,8 +44,7 @@ from aspire.pddlstream.pddlstream.language.generator import from_gen_fn, from_te
 from aspire.pddlstream.pddlstream.language.constants import print_solution, PDDLProblem
 from aspire.pddlstream.pddlstream.algorithms.meta import solve
 
-### Local ###
-from Bayes import ObjectMemory
+
 
 
 
@@ -81,12 +80,7 @@ class TaskPlanner:
         self.facts   = list() # ------- Grounded predicates
 
 
-    def reset_memory( self ):
-        """ Erase memory components """
-        self.scan    = list()
-        self.beliefs = ObjectMemory()
-        self.LKG     = list()
-        self.ranked  = list()
+    
 
 
     def reset_state( self ):
@@ -187,148 +181,10 @@ class TaskPlanner:
 
     ##### Object Permanence ###############################################
 
-    def merge_and_reconcile_object_memories( self, tau = None, cutScoreFrac = 0.5  ):
-        """ Calculate a consistent object state from LKG Memory and Beliefs """
-        if tau is None:
-            tau = env_var("_SCORE_DECAY_TAU_S")
-        mrgLst  = list()
-        tCurr   = now()
-        totLst  = self.memory.beliefs[:]
-        LKGmem  = self.world.get_last_best_readings()
-        totLst.extend( LKGmem )
-
-        def cut_bottom_fraction( objs, frac ):
-            """ Return a version of `objs` with the bottom `frac` scores removed """
-            rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
-            keepNum  = len( rtnObjs ) - int( frac * len( rtnObjs ) )
-            return rtnObjs[ 0:keepNum ]
-        
-        # Filter and Decay stale readings
-        for r in totLst:
-            if ((tCurr - r.ts) <= env_var("_OBJ_TIMEOUT_S")):
-                score_r = np.exp( -(tCurr - r.ts) / tau ) * r.score
-                if isnan( score_r ):
-                    print( f"\nWARN: Got a NaN score with count {r.count}, distribution {r.labels}, and age {tCurr - r.ts}\n" )
-                    score_r = 0.0
-                r.score = score_r
-                mrgLst.append( r )
-
-        if (1.0 > cutScoreFrac > 0.0):
-            mrgLst = cut_bottom_fraction( mrgLst, cutScoreFrac )
-        
-        # Enforce consistency and return
-        return self.world.rectify_readings( mrgLst, suppressStorage = True )
-        
-
-    def most_likely_objects( self, objList, method = "unique-non-null", cutScoreFrac = 0.5 ):
-        """ Get the `N` most likely combinations of object classes """
-        # FIXME: THIS IS PROBABLY WRONG WAS APPLICABLE TO THE SIMULATION ONLY BUT NOT 
-        #        A VARIABLE COLLECTION OF OBJECTS, POSSIBLE SOURCE OF BAD BAD ERRORS
-
-        def cut_bottom_fraction( objs, frac ):
-            """ Return a version of `objs` with the bottom `frac` scores removed """
-            rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
-            keepNum  = len( rtnObjs ) - int( frac * len( rtnObjs ) )
-            return rtnObjs[ 0:keepNum ]
-
-        ### Combination Generator ###
-
-        def gen_combos( objs ):
-            ## Init ##
-            if (1.0 > cutScoreFrac > 0.0):
-                objs = cut_bottom_fraction( objs, cutScoreFrac )
-            comboList = [ [1.0,[],], ]
-            ## Generate all class combinations with joint probabilities ##
-            for bel in objs:
-                nuCombos = []
-                for combo_i in comboList:
-                    for label_j, prob_j in bel.labels.items():
-                        prob_ij = combo_i[0] * prob_j
-
-                        objc_ij = GraspObj( label = label_j, pose = bel.pose, 
-                                            prob = prob_j, score = bel.score, labels = bel.labels )
-                        
-                        nuCombos.append( [prob_ij, combo_i[1]+[objc_ij,],] )
-                comboList = nuCombos
-            ## Sort all class combinations with decreasing probabilities ##
-            comboList.sort( key = (lambda x: x[0]), reverse = True )
-            return comboList
-
-        ### Filtering Methods ###
-
-        def p_unique_labels( objs ):
-            """ Return true if there are as many classes as there are objects """
-            lbls = set([sym.label for sym in objs])
-            return len( lbls ) == len( objs )
-        
-        def p_unique_non_null_labels( objs ):
-            """ Return true if there are as many classes as there are objects """
-            lbls = set([sym.label for sym in objs])
-            if env_var("_NULL_NAME") in lbls: 
-                return False
-            return len( lbls ) == len( objs )
-        
-        def clean_dupes_prob( objLst ):
-            """ Return a version of `objLst` with duplicate objects removed """
-            dctMax = {}
-            for sym in objLst:
-                if not sym.label in dctMax:
-                    dctMax[ sym.label ] = sym
-                elif sym.prob > dctMax[ sym.label ].prob:
-                    dctMax[ sym.label ] = sym
-            return list( dctMax.values() )
-        
-        def clean_dupes_score( objLst ):
-            """ Return a version of `objLst` with duplicate objects removed """
-            dctMax = {}
-            for sym in objLst:
-                if not sym.label in dctMax:
-                    dctMax[ sym.label ] = sym
-                elif sym.score > dctMax[ sym.label ].score:
-                    dctMax[ sym.label ] = sym
-            return list( dctMax.values() )
-
-        ### Apply the chosen Filtering Method to all possible combinations ###
-
-        totCombos  = gen_combos( objList )
-        rtnSymbols = list()
-
-        if (method == "unique"):
-            for combo in totCombos:
-                if p_unique_labels( combo[1] ):
-                    rtnSymbols = combo[1]
-                    break
-        elif (method == "unique-non-null"):
-            for combo in totCombos:
-                if p_unique_non_null_labels( combo[1] ):
-                    rtnSymbols = combo[1]
-                    break
-        elif (method == "clean-dupes"):
-            rtnSymbols = clean_dupes_prob( totCombos[0][1] )
-        elif (method == "clean-dupes-score"):
-            rtnSymbols = clean_dupes_score( totCombos[0][1] )
-        else:
-            raise ValueError( f"`ResponsiveTaskPlanner.most_likely_objects`: Filtering method \"{method}\" is NOT recognized!" )
-        
-        ### Return all non-null symbols ###
-        rtnLst = [sym for sym in rtnSymbols if sym.label != env_var("_NULL_NAME")]
-        print( f"\nDeterminized {len(rtnLst)} objects!\n" )
-        return rtnLst
     
+        
+
     
-    def reify_chosen_beliefs( self, objs, chosen, factor = env_var("_REIFY_SUPER_BEL") ):
-        """ Super-believe in the beliefs we believed in. 
-            That is: Refresh the timestamp and score of readings that ultimately became grounded symbols """
-        posen = [ extract_pose_as_homog( ch ) for ch in chosen ]
-        maxSc = 0.0
-        for obj in objs:
-            if obj.score > maxSc:
-                maxSc = obj.score
-        for obj in objs:
-            for cPose in posen:
-                if (translation_diff( cPose, extract_pose_as_homog( obj ) ) <= env_var("_LKG_SEP")):
-                    obj.score = maxSc * factor
-                    obj.ts    = now()
                 
 
     ##### Noisy Task Monitoring ###########################################
