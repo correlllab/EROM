@@ -89,10 +89,10 @@ def observation_to_readings( obs : dict, xform = None ):
 
 def rectify_readings( objReadingList : list[GraspObj], useTimeout = True ):
     """ Accept/Reject/Update noisy readings from the system, used by both LKG and EROM """
-    tCurr = now()
-    nuMem = list()
-    nuSet = set([])
-    rmSet = set([])
+    tCurr  = now()
+    nuMem  = list()
+    nuSet  = set([])
+    rmSet  = set([])
     totLst = objReadingList[:]
 
     Ntot = len( totLst )
@@ -284,8 +284,7 @@ class EROM:
     def __init__( self ):
         self.reset_memory()
 
-    def __init__( self ):
-        pass
+    
 
 
     
