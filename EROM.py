@@ -253,7 +253,7 @@ def most_likely_objects( objList, method = "unique-non-null", cutScoreFrac = 0.5
     return rtnLst
 
 
-def reify_chosen_beliefs( objs, chosen, factor = env_var("_REIFY_SUPER_BEL") ):
+def reify_chosen_beliefs( objs : list[GraspObj], chosen, factor = env_var("_REIFY_SUPER_BEL") )->None:
     """ Super-believe in the beliefs we believed in. 
         That is: Refresh the timestamp and score of readings that ultimately became grounded symbols """
     posen = [ extract_pose_as_homog( ch ) for ch in chosen ]
