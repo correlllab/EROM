@@ -30,7 +30,7 @@ from magpie import ur5 as ur5
 from magpie.poses import repair_pose
 # import open3d as o3d
 
-### Local ###
+### ASPIRE ###
 from aspire.env_config import env_var
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols )
 from aspire.utils import ( DataLogger, diff_norm,  )
@@ -38,17 +38,30 @@ from aspire.actions import ( display_PDLS_plan, get_BT_plan_until_block_change, 
                              Interleaved_MoveFree_and_PerceiveScene, MoveFree, GroundedAction, )
 from aspire.BlocksTask import set_blocks_env, rand_table_pose
 
-# ### PDDLStream ### 
+### ASPIRE::PDDLStream ### 
 from aspire.pddlstream.pddlstream.utils import read, INF, get_file_path
 from aspire.pddlstream.pddlstream.language.generator import from_gen_fn, from_test
 from aspire.pddlstream.pddlstream.language.constants import print_solution, PDDLProblem
 from aspire.pddlstream.pddlstream.algorithms.meta import solve
+from aspire.SymPlanner import SymPlanner
+
+### Local ###
+from EROM import EROM
 
 
 
+########## PERCEPTION ##############################################################################
+
+class Perception:
+    """ Wrapper for the perception model """
+
+    def __init__( self ):
+        """ Load the model """
+        pass
 
 
-##### Planner #############################################################
+
+########## PLANNER #################################################################################
 
 class TaskPlanner:
     """ Basic task planning loop """
@@ -59,6 +72,8 @@ class TaskPlanner:
         """ Set the name of the current file """
         dateStr     = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
         self.outNam = f"Task-Planner_{dateStr}.json"
+        if (self.outFil is not None) and (not self.outFil.closed):
+            self.outFil.close()
         self.outFil = open( os.path.join( self.outDir, self.outNam ), 'w' )
 
 
@@ -67,237 +82,52 @@ class TaskPlanner:
         # self.outFil.writelines( [f"{str(line)}\n" for line in self.datLin] )        
         json.dump( self.datLin, self.outFil )
         self.outFil.close()
+        self.datLin = list()
         if openNext:
-            self.datLin = list()
             self.open_file()
 
 
     ##### Init ############################################################
 
-    def reset_symbols( self ):
+    def reset_memory( self ):
         """ Erase belief memory """
-        self.symbols = list() # ------- Determinized beliefs
-        self.facts   = list() # ------- Grounded predicates
-
-
-    
+        self.memory = EROM() # Entropy-Ranked Object Memory
 
 
     def reset_state( self ):
         """ Erase problem state """
         self.status = Status.INVALID # Running status
-        self.task   = None # --------- Current task definition
-        self.goal   = tuple() # ------ Current goal specification
-        self.grasp  = list() # ------- ? NOT USED ?
-        self.datLin = list() # ------- Data to write
-        self.outDir = "data/"
-        self.open_file()
 
 
-    def __init__( self, world = None, noViz = False, noBot = False ):
+    def __init__( self, noBot = False ):
         """ Create a pre-determined collection of poses and plan skeletons """
         set_blocks_env()
-        self.reset_symbols()
+        self.datLin = list() # Data to write
+        self.outFil = None
+        self.noBot  = noBot
+        self.outDir = "data/"
+        self.reset_memory()
         self.reset_state()
+        self.open_file()
+        self.perc   = Perception()
         self.robot  = ur5.UR5_Interface() if (not noBot) else None
         self.logger = DataLogger() if (not noBot) else None
-        self.noViz  = noViz
-        self.noBot  = noBot
-        # DEATH MONITOR
-        self.noSoln =  0
-        self.nonLim = 10
+        self.symPln = SymPlanner()
         if (not noBot):
             self.robot.start()
 
 
     def shutdown( self ):
         """ Stop the Perception Process and the UR5 connection """
-        self.world.stop()
         self.dump_to_file( openNext = False )
         if not self.noBot:
             self.robot.stop()
-
-
-    ##### Stream Helpers ##################################################
-
-    def get_grounded_pose_or_new( self, homog ):
-        """ If there is a `Waypoint` approx. to `homog`, then return it, Else create new `ObjPose` """
-        for fact in self.facts:
-            if fact[0] == 'Waypoint' and ( euclidean_distance_between_symbols( homog, fact[1] ) <= env_var("_ACCEPT_POSN_ERR")):
-                return fact[1]
-        return ObjPose( homog )
-
-
-    def p_grounded_fact_pose( self, poseOrObj ):
-        """ Does this exist as a `Waypoint`? """
-        homog = extract_pose_as_homog( poseOrObj )
-        for fact in self.facts:
-            if fact[0] == 'Waypoint' and ( euclidean_distance_between_symbols( homog, fact[1] ) <= env_var("_ACCEPT_POSN_ERR")):
-                return True
-        return False
-
-
-
-    ##### Task Planning Helpers ###########################################
-
-    def pddlstream_from_problem( self, pdls_stream_map = None ):
-        """ Set up a PDDLStream problem with the UR5 """
-
-        domain_pddl  = read( get_file_path( __file__, os.path.join( 'task_planning/', 'domain.pddl' ) ) )
-        stream_pddl  = read( get_file_path( __file__, os.path.join( 'task_planning/', 'stream.pddl' ) ) )
-        constant_map = {}
-        stream_map = pdls_stream_map if ( pdls_stream_map is not None ) else dict()
-
-        if env_var("_VERBOSE"):
-            print( "About to create problem ... " )
-
-        return PDDLProblem( domain_pddl, constant_map, stream_pddl, stream_map, self.facts, self.goal )
-    
-
-    def set_goal( self, nuGoal ):
-        """ Set the goal """
-
-        self.goal = nuGoal
-        
-        # ( 'and',
-            
-        #     ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
-        #     ('Supported', 'ylwBlock', 'grnBlock'), 
-        #     ('Supported', 'bluBlock', 'ylwBlock'),
-
-        #     ('HandEmpty',),
-        # )
-
-        if env_var("_VERBOSE"):
-            print( f"\n### Goal ###" )
-            pprint( self.goal )
-            print()
 
 
     def p_failed( self ):
         """ Has the system encountered a failure? """
         return (self.status == Status.FAILURE)
     
-
-    ##### Object Permanence ###############################################
-
-    
-        
-
-    
-                
-
-    ##### Noisy Task Monitoring ###########################################
-
-    def get_sampled_block( self, label ):
-        """ If a block with `label` was sampled, then return a reference to it, Otherwise return `None` """
-        for sym in self.symbols:
-            if sym.label == label:
-                return sym
-        return None
-    
-
-    def get_grounded_fact_pose_or_new( self, homog ):
-        """ If there is a `Waypoint` approx. to `homog`, then return it, Else create new `ObjPose` """ 
-        for fact in self.facts:
-            if fact[0] == 'Waypoint' and (euclidean_distance_between_symbols( homog, fact[1] ) <= env_var("_ACCEPT_POSN_ERR")):
-                return fact[1]
-            if fact[0] == 'GraspObj' and (euclidean_distance_between_symbols( homog, fact[2] ) <= env_var("_ACCEPT_POSN_ERR")):
-                return fact[2]
-        return ObjPose( homog )
-    
-    
-    def ground_relevant_predicates_noisy( self ):
-        """ Scan the environment for evidence that the task is progressing, using current beliefs """
-        rtnFacts = []
-        ## Gripper Predicates ##
-        if len( self.grasp ):
-            for graspedLabel in self.grasp:
-                # [hndl,pDif,bOrn,] = grasped
-                # labl = self.world.get_handle_name( hndl )
-                rtnFacts.append( ('Holding', graspedLabel,) )
-        else:
-            rtnFacts.append( ('HandEmpty',) )
-        ## Obj@Loc Predicates ##
-        # A. Check goals
-        for g in self.goal[1:]:
-            if g[0] == 'GraspObj':
-                pLbl = g[1]
-                pPos = g[2]
-                tObj = self.get_sampled_block( pLbl )
-                if (tObj is not None) and (euclidean_distance_between_symbols( pPos, tObj ) <= env_var("_ACCEPT_POSN_ERR")):
-                    rtnFacts.append( g ) # Position goal met
-        # B. No need to ground the rest
-
-        ## Support Predicates && Blocked Status ##
-        # Check if `sym_i` is supported by `sym_j`, blocking `sym_j`, NOTE: Table supports not checked
-        supDices = set([])
-        for i, sym_i in enumerate( self.symbols ):
-            for j, sym_j in enumerate( self.symbols ):
-                if i != j:
-                    lblUp = sym_i.label
-                    lblDn = sym_j.label
-                    posUp = extract_pose_as_homog( sym_i )
-                    posDn = extract_pose_as_homog( sym_j )
-                    xySep = diff_norm( posUp[0:2,3], posDn[0:2,3] )
-                    zSep  = posUp[2,3] - posDn[2,3] # Signed value
-                    if ((xySep <= 1.65*env_var("_BLOCK_SCALE")) and (1.65*env_var("_BLOCK_SCALE") >= zSep >= 0.9*env_var("_BLOCK_SCALE"))):
-                        supDices.add(i)
-                        rtnFacts.extend([
-                            ('Supported', lblUp, lblDn,),
-                            ('Blocked', lblDn,),
-                            ('PoseAbove', self.get_grounded_fact_pose_or_new( posUp ), lblDn,),
-                        ])
-        for i, sym_i in enumerate( self.symbols ):
-            if i not in supDices:
-                rtnFacts.extend( [
-                    ('Supported', sym_i.label, 'table',),
-                    ('PoseAbove', self.get_grounded_fact_pose_or_new( sym_i ), 'table',),
-                ] )
-        ## Where the robot at? ##
-        robotPose = ObjPose( self.robot.get_tcp_pose() )
-        rtnFacts.extend([ 
-            ('AtPose', robotPose,),
-            ('WayPoint', robotPose,),
-        ])
-        ## Return relevant predicates ##
-        return rtnFacts
-
-
-    def check_goal_objects( self, goal, symbols ):
-        """ Return True if the labels mentioned in the goals are a subset of the determinized symbols """
-        goalSet = set([])
-        symbSet = set( [sym.label for sym in symbols] )
-        for g in goal:
-            if isinstance( g, (tuple, list) ):
-                prdName = g[0]
-                if prdName == 'GraspObj':
-                    goalSet.add( g[1] )
-                elif prdName == 'Supported':
-                    goalSet.add( g[1] )
-                    goalSet.add( g[2] )
-                else:
-                    continue
-        return (goalSet <= symbSet)
-    
-
-    def block_exists( self, label ):
-        """ See if a fact already covers this block """
-        for f in self.facts:
-            if (f[0] == 'GraspObj') and (f[1] == label):
-                return True
-        return False
-
-
-    # def capture_object_memory( self ):
-    #     """ Save the current state of the entire object permanence framework as nested dictionaries """
-    #     return {
-    #         'time'    : now(),
-    #         'scan'    : copy_readings_dict( self.world.scan ),
-    #         'symbols' : copy_readings_dict( self.symbols ),
-    #         'LKGmem'  : copy_readings_dict( self.world.memory ),
-    #         'beliefs' : copy_readings_dict( self.memory.beliefs ),
-    #     }
 
 
     ##### Task Planning Phases ############################################
