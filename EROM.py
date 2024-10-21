@@ -281,8 +281,44 @@ class EROM:
         self.LKG     = list()
         self.ranked  = list()
 
+
     def __init__( self ):
         self.reset_memory()
+
+
+    def process_observations( self, obs, xform = None ):
+        """ Integrate one noisy scan into the current beliefs """
+        self.scan = observation_to_readings( obs, xform )
+        # LKG and Belief are updated SEPARATELY and merged LATER as symbols
+        self.LKG     = rectify_readings( copy_readings_as_LKG( self.scan ) )
+        self.beliefs.belief_update( self.scan, xform, maxRadius = env_var("_MAX_UPDATE_RAD_M") )
+
+
+    def rank_combined_memory( self ):
+        """ Reconcile and rank the two memory streams """
+        self.ranked = sorted( 
+            merge_and_reconcile_object_memories( 
+                list( self.beliefs.beliefs ), 
+                list( self.LKG ), 
+                tau          = env_var("_SCORE_DECAY_TAU_S"), 
+                cutScoreFrac = env_var("_CUT_MERGE_S_FRAC")
+            ), 
+            key = lambda item: item.score, 
+            reverse = True 
+        )
+        return self.ranked
+        
+        
+    def get_current_most_likely( self ):
+        """ Generate symbols """
+        self.rank_combined_memory()
+        rtnLst = most_likely_objects( 
+            self.ranked, 
+            method       = "unique-non-null", 
+            cutScoreFrac = env_var("_CUT_SCORE_FRAC")
+        )
+        reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
+
 
     
 
