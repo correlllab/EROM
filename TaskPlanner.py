@@ -51,8 +51,35 @@ from EROM import EROM
 
 def set_experiment_env():
     """ Params for this experiment """
-    env_sto( "_UPDATE_PERIOD_S", 1.0/25.0 )
-    env_sto( "_REIFY_SUPER_BEL", True     )
+
+    _poseGrn = np.eye(4)
+    _poseGrn[0:3,3] = [ env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
+                        env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
+                        0.5*env_var("_BLOCK_SCALE"), ]
+    _trgtGrn = ObjPose( _poseGrn )
+
+    env_sto( "_UPDATE_PERIOD_S"  , 1.0/25.0 )
+    env_sto( "_REIFY_SUPER_BEL"  ,   1.01   )
+    env_sto( "_Z_SNAP_BOOST"     ,   0.00   )
+    env_sto( "_OBJ_TIMEOUT_S"    , 120.0    ) # Readings older than this are not considered
+    env_sto( "_SCORE_DECAY_TAU_S",  20.0    )
+    env_sto( "_CUT_MERGE_S_FRAC" ,   0.325  )
+    env_sto( "_CUT_SCORE_FRAC"   ,   0.25   )
+    env_sto( "_N_XTRA_SPOTS"     ,   3      )
+    env_sto( "_MAX_UPDATE_RAD_M" , 2.00*env_var("_BLOCK_SCALE") )
+    env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
+    env_sto( "_GOAL" ,
+        ( 'and',
+            
+            ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
+            ('Supported', 'ylwBlock', 'grnBlock'), 
+            ('Supported', 'bluBlock', 'ylwBlock'),
+            # ('Supported', 'redBlock', 'bluBlock'),
+
+            ('HandEmpty',),
+        )
+    )
+    
 
 
 ########## PLANNER #################################################################################
@@ -107,7 +134,10 @@ class TaskPlanner:
         self.perc   = Perception_OWLViT
         self.robot  = ur5.UR5_Interface() if (not noBot) else None
         self.logger = DataLogger() if (not noBot) else None
-        self.symPln = SymPlanner()
+        self.symPln = SymPlanner(
+            os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
+            os.path.join( os.path.dirname( __file__ ), "pddl", "stream.pddl" )
+        )
         self.blcMod = BlockFunctions( self.symPln )
         if (not noBot):
             self.robot.start()
@@ -174,7 +204,7 @@ class TaskPlanner:
 
     def phase_2_Conditions( self ):
         """ Get the necessary initial state, Check for goals already met """
-        self.blcMod.instantiate_conditions()
+        self.blcMod.instantiate_conditions( self.robot )
         
 
     def phase_3_Plan_Task( self ):
@@ -237,7 +267,9 @@ class TaskPlanner:
 
         # self.reset_beliefs() 
         self.reset_state() 
-        # self.set_goal()
+        
+        self.symPln.set_goal( env_var("_GOAL") )
+
         self.logger.begin_trial()
 
         indicateSuccess = False
