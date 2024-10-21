@@ -31,24 +31,28 @@ from magpie.poses import repair_pose
 # import open3d as o3d
 
 ### ASPIRE ###
-from aspire.env_config import env_var
-from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols )
-from aspire.utils import ( DataLogger, diff_norm,  )
-from aspire.actions import ( display_PDLS_plan, get_BT_plan_until_block_change, BT_Runner, 
-                             Interleaved_MoveFree_and_PerceiveScene, MoveFree, GroundedAction, )
+from aspire.env_config import env_var, env_sto
+from aspire.symbols import ( ObjPose, )
+from aspire.utils import ( DataLogger, )
+from aspire.actions import ( BT_Runner, Interleaved_MoveFree_and_PerceiveScene, MoveFree, GroundedAction, )
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
 
 ### ASPIRE::PDDLStream ### 
-from aspire.pddlstream.pddlstream.utils import read, INF, get_file_path
-from aspire.pddlstream.pddlstream.language.generator import from_gen_fn, from_test
-from aspire.pddlstream.pddlstream.language.constants import print_solution, PDDLProblem
-from aspire.pddlstream.pddlstream.algorithms.meta import solve
 from aspire.SymPlanner import SymPlanner
 
 ### Local ###
 from obj_ID_server import Perception_OWLViT
 from EROM import EROM
 
+
+
+########## HELPER FUNCTIONS ########################################################################
+
+
+def set_experiment_env():
+    """ Params for this experiment """
+    env_sto( "_UPDATE_PERIOD_S", 1.0/25.0 )
+    env_sto( "_REIFY_SUPER_BEL", True     )
 
 
 ########## PLANNER #################################################################################
@@ -92,6 +96,7 @@ class TaskPlanner:
     def __init__( self, noBot = False ):
         """ Create a pre-determined collection of poses and plan skeletons """
         set_blocks_env()
+        set_experiment_env()
         self.datLin = list() # Data to write
         self.outFil = None
         self.noBot  = noBot
@@ -99,13 +104,14 @@ class TaskPlanner:
         self.reset_memory()
         self.reset_state()
         self.open_file()
-        self.perc   = Perception_OWLViT()
+        self.perc   = Perception_OWLViT
         self.robot  = ur5.UR5_Interface() if (not noBot) else None
         self.logger = DataLogger() if (not noBot) else None
         self.symPln = SymPlanner()
         self.blcMod = BlockFunctions( self.symPln )
         if (not noBot):
             self.robot.start()
+            self.perc.start_vision()
 
 
     def shutdown( self ):
@@ -113,6 +119,7 @@ class TaskPlanner:
         self.dump_to_file( openNext = False )
         if not self.noBot:
             self.robot.stop()
+            self.perc.shutdown()
 
 
     def p_failed( self ):
@@ -228,9 +235,9 @@ class TaskPlanner:
 
         print( "\n\n\n##### TASK BEGIN #####\n" )
 
-        self.reset_beliefs() 
+        # self.reset_beliefs() 
         self.reset_state() 
-        self.set_goal()
+        # self.set_goal()
         self.logger.begin_trial()
 
         indicateSuccess = False
@@ -251,7 +258,7 @@ class TaskPlanner:
 
             print( f"Phase 1, {self.status} ..." )
 
-            self.set_goal()
+            # self.set_goal()
 
             camPose = self.robot.get_cam_pose()
 

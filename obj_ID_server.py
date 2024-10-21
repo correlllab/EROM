@@ -21,7 +21,7 @@ from magpie_perception import pcd
 from magpie import realsense_wrapper as real
 from magpie_perception.label_owlvit import LabelOWLViT
 
-os.environ["TOKENIZERS_PARALLELISM"] = "True"
+os.environ["TOKENIZERS_PARALLELISM"] = "False" #"True"
 
 ########## PERCEPTION SETTINGS #####################################################################
 
@@ -46,7 +46,7 @@ _NUM_BLOCKS  = len( _QUERIES )
 _PLOT_BOX    = False
 _VIZ_PCD     = False
 _ID_PERIOD_S = 2.0
-_VERBOSE     = 0
+_VERBOSE     = 1
 
 
 
@@ -389,7 +389,7 @@ class Perception_OWLViT:
     def build_model(cls, rgbd_image=None): ###ADDED INPUT 
         """Builds the perception model."""
 
-        cls.label_vit.reset_prediction_state()
+        # cls.label_vit.reset_prediction_state()
 
         print( f"\nInside `build_model`\n", flush=True, file=sys.stderr )
 
@@ -397,7 +397,12 @@ class Perception_OWLViT:
             images, abbrevqs, filtered_boxes, filtered_scores, filtered_labels, filtered_coords = [], [], [], [], [], []
 
             for j in range(len(_QUERIES)):
+
+                print( f"Ask \"{_QUERIES[j]}\", {_ABBREV_Q[j]}" )
+
                 rgbd, image, abbrevq, boxes, scores, labels, coords = cls.bound(_QUERIES[j], _ABBREV_Q[j])
+
+                print( f"Obtained {len(boxes)} boxes!" )
 
                 if rgbd_image:    ####### CONDITION TO REPLACE RGBD IF INPUT IS NOT NONE
                     rgbd = rgbd_image
