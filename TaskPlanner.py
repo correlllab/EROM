@@ -69,6 +69,7 @@ def set_experiment_env():
     env_sto( "_N_XTRA_SPOTS"     ,   3      )
     env_sto( "_MAX_UPDATE_RAD_M" , 2.00*env_var("_BLOCK_SCALE") )
     env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
+    env_sto( "_CONFUSE_PROB", 0.025 )
     env_sto( "_GOAL" ,
         ( 'and',
             
@@ -193,15 +194,17 @@ class TaskPlanner:
             ) 
 
         self.symPln.symbols = self.memory.get_current_most_likely()
-        self.status = Status.RUNNING
-
-        if env_var("_VERBOSE"):
-            print( f"\nStarting Objects:" )
-            for obj in self.symPln.symbols:
-                print( f"\t{obj}" )
-            if not len( self.symPln.symbols ):
+        if len( self.symPln.symbols ):
+            self.status = Status.RUNNING
+            if env_var("_VERBOSE"):
+                print( f"\nStarting Objects:" )
+                for obj in self.symPln.symbols:
+                    print( f"\t{obj}" )
+        else:
+            self.status = Status.FAILURE
+            if env_var("_VERBOSE"):
                 print( f"\tNO OBJECTS DETERMINIZED" )
-                
+
 
     def phase_2_Conditions( self ):
         """ Get the necessary initial state, Check for goals already met """
@@ -216,6 +219,10 @@ class TaskPlanner:
             ### Symbol Tests ###
             'test-free-placment': from_test( self.blcMod.get_free_placement_test() ),
         })
+        if (self.symPln.status == Status.FAILURE):
+            self.status = Status.FAILURE
+            self.logger.log_event( "Planning Failure" )
+            print( f"Planning Failure!" )
 
 
     def phase_4_Execute_Action( self ):
