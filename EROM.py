@@ -15,11 +15,12 @@ from Bayes import ObjectMemory
 
 ########## HELPER FUNCTIONS ########################################################################
 
-def copy_as_LKG( sym ):
+def copy_as_LKG( sym : GraspObj ):
     """ Make a copy of this belief for the Last-Known-Good collection """
     rtnObj = sym.copy()
     rtnObj.LKG = True
     return rtnObj
+
 
 def copy_readings_as_LKG( readLst ):
     """ Return a list of readings intended for the Last-Known-Good collection """
@@ -161,6 +162,8 @@ def most_likely_objects( objList, method = "unique-non-null", cutScoreFrac = 0.5
     """ Get the `N` most likely combinations of object classes """
     # FIXME: THIS IS PROBABLY WRONG WAS APPLICABLE TO THE SIMULATION ONLY BUT NOT 
     #        A VARIABLE COLLECTION OF OBJECTS, POSSIBLE SOURCE OF BAD BAD ERRORS
+
+    
 
     def cut_bottom_fraction( objs : list[GraspObj], frac ):
         """ Return a version of `objs` with the bottom `frac` scores removed """
@@ -311,6 +314,9 @@ class EROM:
         
     def get_current_most_likely( self ):
         """ Generate symbols """
+
+        print( f"Beliefs: {len(self.beliefs.beliefs)}, LKG: {len(self.LKG)}, Total: {len(self.ranked)}" )
+
         self.rank_combined_memory()
         rtnLst = most_likely_objects( 
             self.ranked, 
