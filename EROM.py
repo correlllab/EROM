@@ -157,42 +157,78 @@ def merge_and_reconcile_object_memories( belLst : list[GraspObj], lkgLst : list[
     return rectify_readings( mrgLst )
 
 
+def cut_bottom_fraction( objs : list[GraspObj], frac ):
+    """ Return a version of `objs` with the bottom `frac` scores removed """
+    rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
+    keepNum  = len( rtnObjs ) - int( frac * len( rtnObjs ) )
+    return rtnObjs[ 0:keepNum ]
+
+
+def objs_choose_k( objs, k : int, bgn = None, end = None ):
+        """ Length choose k """
+        ## Init ##
+        Nreadings = len( objs )
+        comboList = []
+        if bgn is None:
+            bgn = 0
+        if end is None:
+            end = Nreadings-(k-1)
+        ## Generate all reading combinations ##
+        if k == 1:
+            for i in range( bgn, end ):
+                comboList.append( [objs[i],] )
+        elif k > 1:
+            for i in range( bgn, end ):
+                lst_i = [objs[i],]
+                for add_j in objs_choose_k( objs, k-1, bgn+1, end+1 ):
+                    lst_j = lst_i[:]
+                    lst_j.extend( add_j )
+                    comboList.append( lst_j )
+        return comboList
+
+
+def gen_combos_top( objs : list[GraspObj], k : int ):
+    totalList = []
+
+    def gen_combos( objs : list[GraspObj], idx = 0 ):
+        comboList = []
+        if (idx+1) >= len(objs):
+            for label_i, prob_i in objs[ idx ].labels.items():
+                comboList.append( [
+                    GraspObj( label = label_i, pose  = objs[ idx ].pose, 
+                                prob  = prob_i , score = objs[ idx ].score, labels = objs[ idx ].labels ),
+                ] )
+        else:
+            for label_i, prob_i in objs[ idx ].labels.items():
+                obj_i = GraspObj( label = label_i, pose  = objs[ idx ].pose, 
+                                    prob  = prob_i , score = objs[ idx ].score, labels = objs[ idx ].labels )
+                for cmb_j in gen_combos( objs, idx+1 ):
+                    lst_j = [obj_i,]
+                    lst_j.extend( cmb_j )
+                    comboList.append( lst_j )
+        return 
+
+
+    kGroups   = objs_choose_k( objs, k )
+    for o_i in kGroups:
+        pass
+
 
 def most_likely_objects( objList, method = "unique-non-null", cutScoreFrac = 0.5 ):
     """ Get the `N` most likely combinations of object classes """
-    # FIXME: THIS IS PROBABLY WRONG WAS APPLICABLE TO THE SIMULATION ONLY BUT NOT 
-    #        A VARIABLE COLLECTION OF OBJECTS, POSSIBLE SOURCE OF BAD BAD ERRORS
-
     
+    ### Drop Worst Readings ###
+    if (1.0 > cutScoreFrac > 0.0):
+        objs = cut_bottom_fraction( objs, cutScoreFrac )
 
-    def cut_bottom_fraction( objs : list[GraspObj], frac ):
-        """ Return a version of `objs` with the bottom `frac` scores removed """
-        rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
-        keepNum  = len( rtnObjs ) - int( frac * len( rtnObjs ) )
-        return rtnObjs[ 0:keepNum ]
 
     ### Combination Generator ###
 
-    def gen_combos( objs : list[GraspObj] ):
-        ## Init ##
-        if (1.0 > cutScoreFrac > 0.0):
-            objs = cut_bottom_fraction( objs, cutScoreFrac )
-        comboList = [ [1.0,[],], ]
-        ## Generate all class combinations with joint probabilities ##
-        for bel in objs:
-            nuCombos = []
-            for combo_i in comboList:
-                for label_j, prob_j in bel.labels.items():
-                    prob_ij = combo_i[0] * prob_j
+    
+    
 
-                    objc_ij = GraspObj( label = label_j, pose = bel.pose, 
-                                        prob = prob_j, score = bel.score, labels = bel.labels )
-                    
-                    nuCombos.append( [prob_ij, combo_i[1]+[objc_ij,],] )
-            comboList = nuCombos
-        ## Sort all class combinations with decreasing probabilities ##
-        comboList.sort( key = (lambda x: x[0]), reverse = True )
-        return comboList
+    
+
 
     ### Filtering Methods ###
 
