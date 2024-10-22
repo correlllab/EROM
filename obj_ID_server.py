@@ -472,7 +472,10 @@ class Perception_OWLViT:
             if cls.visualize_boxes:
                 cls.plot_bounding_boxes(image, filtered_scores, filtered_boxes, filtered_labels, topk=False, show_plot=True)
 
-                
+            
+            print( objIDstrTemp )
+
+
             return objIDstrTemp
 
         except Exception as e:

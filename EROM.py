@@ -318,6 +318,9 @@ class EROM:
             cutScoreFrac = env_var("_CUT_SCORE_FRAC")
         )
         reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
+
+        print( rtnLst )
+
         return rtnLst
 
 

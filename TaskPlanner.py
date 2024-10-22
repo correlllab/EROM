@@ -38,6 +38,7 @@ from aspire.actions import ( BT_Runner, Interleaved_MoveFree_and_PerceiveScene, 
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
 
 ### ASPIRE::PDDLStream ### 
+from aspire.pddlstream.pddlstream.language.generator import from_gen_fn, from_test
 from aspire.SymPlanner import SymPlanner
 
 ### Local ###
@@ -209,7 +210,12 @@ class TaskPlanner:
 
     def phase_3_Plan_Task( self ):
         """ Attempt to solve the symbolic problem """
-        self.symPln.plan_task()
+        self.symPln.plan_task( pdls_stream_map = {
+            ### Symbol Streams ###
+            'sample-above' : from_gen_fn( self.blcMod.get_above_pose_stream()     ), 
+            ### Symbol Tests ###
+            'test-free-placment': from_test( self.blcMod.get_free_placement_test() ),
+        })
 
 
     def phase_4_Execute_Action( self ):

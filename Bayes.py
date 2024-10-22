@@ -15,7 +15,7 @@ from aspire.env_config import env_var
 from aspire.utils import ( extract_dct_values_in_order, sorted_obj_labels, multiclass_Bayesian_belief_update, 
                            get_confusion_matx, get_confused_class_reading )
 from aspire.symbols import ( euclidean_distance_between_symbols, extract_pose_as_homog, 
-                             p_symbol_inside_workspace_bounds, ObjPose )
+                             p_symbol_inside_workspace_bounds, ObjPose, GraspObj )
 
 from magpie.poses import repair_pose, vec_unit
 from magpie.homog_utils import R_x, R_y, posn_from_xform
@@ -129,14 +129,14 @@ class ObjectMemory:
     ##### Sensor Placement ################################################
 
 
-    def p_symbol_in_cam_view( self, camXform, symbol ):
+    def p_symbol_in_cam_view( self, camXform : np.ndarray, symbol : GraspObj ):
         bounds = get_D405_FOV_frustum( camXform )
         qPosn  = extract_pose_as_homog( symbol )[0:3,3]
         blcRad = np.sqrt( 3.0 * (env_var("_BLOCK_SCALE")/2.0)**2 )
         return p_sphere_inside_plane_list( qPosn, blcRad, bounds )
 
 
-    def integrate_one_reading( self, objReading, camXform, maxRadius = 3.0*env_var("_BLOCK_SCALE") ):
+    def integrate_one_reading( self, objReading : GraspObj, camXform : np.ndarray, maxRadius = 3.0*env_var("_BLOCK_SCALE") ):
         """ Fuse this belief with the current beliefs """
         relevant = False
         tsNow    = now()
@@ -179,7 +179,7 @@ class ObjectMemory:
         return relevant
     
 
-    def integrate_null( self, belief, avgScore = None ):
+    def integrate_null( self, belief : GraspObj, avgScore = None ):
         """ Accrue a non-observation """
         labels = get_confused_class_reading( env_var("_NULL_NAME"), env_var("_CONFUSE_PROB"), env_var("_BLOCK_NAMES") )
         cnfMtx = get_confusion_matx( env_var("_N_CLASSES"), env_var("_CONFUSE_PROB") )
@@ -211,7 +211,7 @@ class ObjectMemory:
         self.beliefs = retain
 
 
-    def decay_beliefs( self, camXform ):
+    def decay_beliefs( self, camXform : np.ndarray ):
         """ Destroy beliefs that have accumulated too many negative indications """
         vstScores = list()
         for belief in self.beliefs:
@@ -228,7 +228,7 @@ class ObjectMemory:
         self.unvisit_beliefs()
 
 
-    def belief_update( self, evdncLst, camXform, maxRadius = 3.0*env_var("_BLOCK_SCALE") ):
+    def belief_update( self, evdncLst : list[GraspObj], camXform : np.ndarray, maxRadius = 3.0*env_var("_BLOCK_SCALE") ):
         """ Gather and aggregate evidence """
 
         ## Integrate Beliefs ##
