@@ -313,8 +313,9 @@ class TaskPlanner:
             
             self.phase_1_Perceive( 1, camPose )
             
-            # if _USE_GRAPHICS:
-            #     self.display_belief_geo()
+            if self.status == Status.FAILURE:
+                print( f"LOOP, {self.status} ..." )
+                continue
 
             ##### Phase 2 ########################
 
