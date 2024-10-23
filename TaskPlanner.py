@@ -378,14 +378,9 @@ class TaskPlanner:
                 {'end_symbols' : list( self.symPln.symbols ) }
             )
 
-        
-
         self.logger.save( "data/Baseline" )
 
         print( f"\n##### PLANNER END with status {self.status} after iteration {i} #####\n\n\n" )
-
-
-
 
 
 
@@ -396,7 +391,6 @@ _HIGH_VIEW_POSE = None
 
 def responsive_experiment_prep( beginPlanPose = None ):
     """ Init system and return a ref to the planner """
-    # planner = BaselineTaskPlanner()
     planner = TaskPlanner()
     print( planner.robot.get_tcp_pose() )
 
@@ -407,7 +401,6 @@ def responsive_experiment_prep( beginPlanPose = None ):
             beginPlanPose = _HIGH_VIEW_POSE
 
     planner.robot.open_gripper()
-    # sleep( OWL_init_pause_s )
     return planner
 
 
@@ -466,12 +459,7 @@ if __name__ == "__main__":
             rbt = ur5.UR5_Interface()
             rbt.start()
             sleep(2)
-            print( f"Began at pose:\n{rbt.get_tcp_pose()}" )
-            
-            # rbt.moveL( repair_pose( _GOOD_VIEW_POSE ), asynch = False )
-            # sleep(5)
-            # rbt.moveL( repair_pose( _HIGH_VIEW_POSE ), asynch = False )
-            
+            print( f"Began at pose:\n{rbt.get_tcp_pose()}" )            
             rbt.stop()
 
     else:
