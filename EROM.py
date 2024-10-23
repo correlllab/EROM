@@ -187,48 +187,54 @@ def objs_choose_k( objs, k : int, bgn = None, end = None ):
         return comboList
 
 
-def gen_combos_top( objs : list[GraspObj], k : int ):
-    totalList = []
-
-    def gen_combos( objs : list[GraspObj], idx = 0 ):
-        comboList = []
-        if (idx+1) >= len(objs):
-            for label_i, prob_i in objs[ idx ].labels.items():
-                comboList.append( [
-                    GraspObj( label = label_i, pose  = objs[ idx ].pose, 
-                                prob  = prob_i , score = objs[ idx ].score, labels = objs[ idx ].labels ),
-                ] )
-        else:
-            for label_i, prob_i in objs[ idx ].labels.items():
-                obj_i = GraspObj( label = label_i, pose  = objs[ idx ].pose, 
-                                    prob  = prob_i , score = objs[ idx ].score, labels = objs[ idx ].labels )
-                for cmb_j in gen_combos( objs, idx+1 ):
-                    lst_j = [obj_i,]
-                    lst_j.extend( cmb_j )
-                    comboList.append( lst_j )
-        return 
+def gen_combos( objs : list[GraspObj], idx = 0 ):
+    comboList = []
+    if (idx+1) >= len(objs):
+        for label_i, prob_i in objs[ idx ].labels.items():
+            comboList.append( [
+                GraspObj( label = label_i, pose  = objs[ idx ].pose, 
+                            prob  = prob_i , score = objs[ idx ].score, labels = objs[ idx ].labels ),
+            ] )
+    else:
+        for label_i, prob_i in objs[ idx ].labels.items():
+            obj_i = GraspObj( label = label_i, pose  = objs[ idx ].pose, 
+                                prob  = prob_i , score = objs[ idx ].score, labels = objs[ idx ].labels )
+            for cmb_j in gen_combos( objs, idx+1 ):
+                lst_j = [obj_i,]
+                lst_j.extend( cmb_j )
+                comboList.append( lst_j )
+    return comboList
 
 
-    kGroups   = objs_choose_k( objs, k )
-    for o_i in kGroups:
-        pass
 
 
-def most_likely_objects( objList, method = "unique-non-null", cutScoreFrac = 0.5 ):
+
+def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non-null", cutScoreFrac = 0.5 ):
     """ Get the `N` most likely combinations of object classes """
     
     ### Drop Worst Readings ###
     if (1.0 > cutScoreFrac > 0.0):
-        objs = cut_bottom_fraction( objs, cutScoreFrac )
-
+        objs = cut_bottom_fraction( objList, cutScoreFrac )
 
     ### Combination Generator ###
-
+    def gen_combos_top( objs : list[GraspObj], k : int ):
+        totalList = []
+        kGroups   = objs_choose_k( objs, k )
+        for o_i in kGroups:
+            totalList.extend( gen_combos( o_i ) )
+        return totalList
     
-    
+    def prod( lst : list[GraspObj] ):
+        p = 1.0
+        for itm in lst:
+            p *= itm.prob
+        return p
 
-    
-
+    totCombos = gen_combos_top( objs , k )
+    totCombos.sort(
+        key     = lambda x: prod(x),
+        reverse = 1
+    )
 
     ### Filtering Methods ###
 
@@ -266,30 +272,29 @@ def most_likely_objects( objList, method = "unique-non-null", cutScoreFrac = 0.5
 
     ### Apply the chosen Filtering Method to all possible combinations ###
 
-    totCombos  = gen_combos( objList )
     rtnSymbols = list()
 
     if (method == "unique"):
         for combo in totCombos:
-            if p_unique_labels( combo[1] ):
-                rtnSymbols = combo[1]
+            if p_unique_labels( combo ):
+                rtnSymbols = combo
                 break
     elif (method == "unique-non-null"):
         for combo in totCombos:
-            if p_unique_non_null_labels( combo[1] ):
-                rtnSymbols = combo[1]
+            if p_unique_non_null_labels( combo ):
+                rtnSymbols = combo
                 break
     elif (method == "clean-dupes"):
-        rtnSymbols = clean_dupes_prob( totCombos[0][1] )
+        rtnSymbols = clean_dupes_prob( totCombos[0] )
     elif (method == "clean-dupes-score"):
-        rtnSymbols = clean_dupes_score( totCombos[0][1] )
+        rtnSymbols = clean_dupes_score( totCombos[0] )
     else:
-        raise ValueError( f"`ResponsiveTaskPlanner.most_likely_objects`: Filtering method \"{method}\" is NOT recognized!" )
+        raise ValueError( f"`most_likely_objects`: Filtering method \"{method}\" is NOT recognized!" )
     
     ### Return all non-null symbols ###
-    rtnLst = [sym for sym in rtnSymbols if sym.label != env_var("_NULL_NAME")]
-    print( f"\nDeterminized {len(rtnLst)} objects!\n" )
-    return rtnLst
+    # rtnLst = [sym for sym in rtnSymbols if sym.label != env_var("_NULL_NAME")]
+    print( f"\nDeterminized {len(rtnSymbols)} objects!\n" )
+    return rtnSymbols
 
 
 def reify_chosen_beliefs( objs : list[GraspObj], chosen, factor = env_var("_REIFY_SUPER_BEL") )->None:
