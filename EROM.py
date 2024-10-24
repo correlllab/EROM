@@ -3,11 +3,13 @@ now = time.time
 from math import isnan
 
 import numpy as np
+from py_trees.common import Status
 
 from aspire.env_config import env_var
 from aspire.utils import match_name
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, p_symbol_inside_workspace_bounds,
                              euclidean_distance_between_symbols )
+from aspire.actions import GroundedAction
 from magpie.poses import translation_diff
 
 ### Local ###
@@ -87,6 +89,12 @@ def observation_to_readings( obs : dict, xform = None ):
 
 ########## OBJECT PERMANENCE #######################################################################
 
+def cut_bottom_fraction( objs : list[GraspObj], frac ):
+    """ Return a version of `objs` with the bottom `frac` scores removed """
+    rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
+    remNum  = int( frac * len( rtnObjs ) )
+    return rtnObjs[ 0:remNum ]
+
 
 def rectify_readings( objReadingList : list[GraspObj], useTimeout = True ):
     """ Accept/Reject/Update noisy readings from the system, used by both LKG and EROM """
@@ -131,74 +139,73 @@ def merge_and_reconcile_object_memories( belLst : list[GraspObj], lkgLst : list[
     if tau is None:
         tau = env_var("_SCORE_DECAY_TAU_S")
     mrgLst  = list()
+    mrgLst.extend( belLst )
+    mrgLst.extend( lkgLst )
     tCurr   = now()
-    rtnLst.extend( lkgLst )
-
-    def cut_bottom_fraction( objs: list[GraspObj], frac ):
-        """ Return a version of `objs` with the bottom `frac` scores removed """
-        rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
-        keepNum  = len( rtnObjs ) - int( frac * len( rtnObjs ) )
-        return rtnObjs[ 0:keepNum ]
+    
     
     # Filter and Decay stale readings
-    for r in belLst:
-        if ((tCurr - r.ts) <= env_var("_OBJ_TIMEOUT_S")):
-            score_r = np.exp( -(tCurr - r.ts) / tau ) * r.score
-            if isnan( score_r ):
-                print( f"\nWARN: Got a NaN score with count {r.count}, distribution {r.labels}, and age {tCurr - r.ts}\n" )
-                score_r = 0.0
-            r.score = score_r
-            mrgLst.append( r )
+    for r in mrgLst:
+        score_r = np.exp( -(tCurr - r.ts) / tau ) * r.score
+        if isnan( score_r ):
+            print( f"\nWARN: Got a NaN score with count {r.count}, distribution {r.labels}, and age {tCurr - r.ts}\n" )
+            score_r = 0.0
+        r.score = score_r
+        rtnLst.append( r )
 
-    if (1.0 > cutScoreFrac > 0.0):
-        mrgLst = cut_bottom_fraction( mrgLst, cutScoreFrac )
+    # if (1.0 > cutScoreFrac > 0.0):
+    #     rtnLst = cut_bottom_fraction( rtnLst, cutScoreFrac )
     
     # Enforce consistency and return
-    return rectify_readings( mrgLst )
+    return rectify_readings( rtnLst )
 
 
-def cut_bottom_fraction( objs : list[GraspObj], frac ):
-    """ Return a version of `objs` with the bottom `frac` scores removed """
-    rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
-    keepNum  = len( rtnObjs ) - int( frac * len( rtnObjs ) )
-    return rtnObjs[ 0:keepNum ]
+
 
 
 def objs_choose_k( objs, k : int, bgn = None, end = None ):
-        """ Length choose k """
-        ## Init ##
-        Nreadings = len( objs )
-        comboList = []
-        if bgn is None:
-            bgn = 0
-        if end is None:
-            end = Nreadings-(k-1)
-        ## Generate all reading combinations ##
-        if k == 1:
-            for i in range( bgn, end ):
-                comboList.append( [objs[i],] )
-        elif k > 1:
-            for i in range( bgn, end ):
-                lst_i = [objs[i],]
-                for add_j in objs_choose_k( objs, k-1, bgn+1, end+1 ):
-                    lst_j = lst_i[:]
-                    lst_j.extend( add_j )
-                    comboList.append( lst_j )
-        return comboList
+    """ Length choose k """
+    ## Init ##
+    Nreadings = len( objs )
+    comboList = []
+    if bgn is None:
+        bgn = 0
+    if end is None:
+        end = Nreadings-(k-1)
+    ## Generate all reading combinations ##
+    if k == 1:
+        for i in range( bgn, end ):
+            comboList.append( [objs[i],] )
+    elif k > 1:
+        for i in range( bgn, end ):
+            lst_i = [objs[i],]
+            for add_j in objs_choose_k( objs, k-1, bgn+1, end+1 ):
+                lst_j = lst_i[:]
+                lst_j.extend( add_j )
+                comboList.append( lst_j )
+    return comboList
 
 
 def gen_combos( objs : list[GraspObj], idx = 0 ):
     comboList = []
     if (idx+1) >= len(objs):
-        for label_i, prob_i in objs[ idx ].labels.items():
+        # for label_i, prob_i in objs[ idx ].labels.items():
+        # for label_i in env_var("_BLOCK_NAMES"):
+        for label_i in sorted( list( objs[ idx ].labels.keys() ) ):
+            prob_i = objs[ idx ].labels[ label_i ]
             comboList.append( [
                 GraspObj( label = label_i, pose  = objs[ idx ].pose, 
-                            prob  = prob_i , score = objs[ idx ].score, labels = objs[ idx ].labels ),
+                          prob  = prob_i , score = objs[ idx ].score, labels = None,
+                          ts = objs[ idx ].ts , count = objs[ idx ].count ),
             ] )
     else:
-        for label_i, prob_i in objs[ idx ].labels.items():
+        # for label_i, prob_i in objs[ idx ].labels.items():
+        # for label_i in env_var("_BLOCK_NAMES"):
+        for label_i in sorted( list( objs[ idx ].labels.keys() ) ):
+            prob_i = objs[ idx ].labels[ label_i ]
             obj_i = GraspObj( label = label_i, pose  = objs[ idx ].pose, 
-                                prob  = prob_i , score = objs[ idx ].score, labels = objs[ idx ].labels )
+                               prob  = prob_i , score = objs[ idx ].score, labels = None,
+                               ts    = objs[ idx ].ts , count = objs[ idx ].count )
             for cmb_j in gen_combos( objs, idx+1 ):
                 lst_j = [obj_i,]
                 lst_j.extend( cmb_j )
@@ -207,14 +214,13 @@ def gen_combos( objs : list[GraspObj], idx = 0 ):
 
 
 
-
-
 def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non-null", cutScoreFrac = 0.5 ):
     """ Get the `N` most likely combinations of object classes """
     
     ### Drop Worst Readings ###
-    if (1.0 > cutScoreFrac > 0.0):
-        objs = cut_bottom_fraction( objList, cutScoreFrac )
+    # if (1.0 > cutScoreFrac > 0.0):
+    #     objs = cut_bottom_fraction( objList, cutScoreFrac )
+    objs = objList[:]
 
     ### Combination Generator ###
     def gen_combos_top( objs : list[GraspObj], k : int ):
@@ -230,11 +236,17 @@ def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non
             p *= itm.prob
         return p
 
-    totCombos = gen_combos_top( objs , k )
+    # totCombos = gen_combos_top( objs , k )
+    totCombos = [item for item in gen_combos_top( objs , k ) if prod(item) > 0.001]
     totCombos.sort(
         key     = lambda x: prod(x),
         reverse = 1
     )
+
+    print( f"\nTotal Combos: {len(totCombos)}" )
+    for combo in totCombos:
+        print( f"Combo: {prod(combo):.3f}, {combo}" )
+    print()
 
     ### Filtering Methods ###
 
@@ -334,18 +346,22 @@ class EROM:
         """ Integrate one noisy scan into the current beliefs """
         self.scan = observation_to_readings( obs, xform )
         # LKG and Belief are updated SEPARATELY and merged LATER as symbols
-        self.LKG     = rectify_readings( copy_readings_as_LKG( self.scan ) )
+        # self.LKG     = rectify_readings( copy_readings_as_LKG( self.scan ) )
+        self.LKG.extend( copy_readings_as_LKG( self.scan ) )
         self.beliefs.belief_update( self.scan, xform, maxRadius = env_var("_MAX_UPDATE_RAD_M") )
 
 
     def rank_combined_memory( self ):
         """ Reconcile and rank the two memory streams """
+
+        self.LKG = cut_bottom_fraction( self.LKG, env_var("_CUT_MERGE_S_FRAC") )
+
         self.ranked = sorted( 
             merge_and_reconcile_object_memories( 
                 list( self.beliefs.beliefs ), 
                 list( self.LKG ), 
                 tau          = env_var("_SCORE_DECAY_TAU_S"), 
-                cutScoreFrac = env_var("_CUT_MERGE_S_FRAC")
+                # cutScoreFrac = env_var("_CUT_MERGE_S_FRAC")
             ), 
             key = lambda item: item.score, 
             reverse = True 
@@ -359,16 +375,61 @@ class EROM:
         print( f"Beliefs: {len(self.beliefs.beliefs)}, LKG: {len(self.LKG)}, Total: {len(self.ranked)}" )
 
         self.rank_combined_memory()
+
+        print( f"\nRanked: {len(self.ranked)}" )
+        for obj in self.ranked:
+            print( obj )
+        print()
+
         rtnLst = most_likely_objects( 
             self.ranked, 
-            method       = "unique-non-null", 
+            env_var("_N_REQD_OBJS"),
+            method       = "unique-non-null", # "unique", #"unique-non-null", 
             cutScoreFrac = env_var("_CUT_SCORE_FRAC")
         )
-        reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
+        # reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
 
         print( rtnLst )
 
         return rtnLst
+    
+    def move_reading_from_BT_plan( self, planBT : GroundedAction ):
+        """ Infer reading to be updated by the robot action, Then update it """
+        _verbose = True
+        # NOTE: This should run after a BT successfully completes
+        # NOTE: This function exits after the first object move
+        # NOTE: This function assumes that the reading nearest to the beginning of the 
+        updated = False
+        dMin    = 1e9
+        endMin  = None
+        objMtch = None
+        
+        
+        for act_i in planBT.children:
+            if "MoveHolding" in act_i.__class__.__name__:
+                poseBgn, poseEnd, label = act_i.args
+                for objM in self.LKG:
+                    dist_ij = euclidean_distance_between_symbols( objM, poseBgn )
+                    if (dist_ij <= env_var("_MIN_SEP")) and (dist_ij < dMin) and (label in objM.labels):
+                        dMin    = dist_ij
+                        endMin  = poseEnd
+                        updated = True
+                        objMtch = objM
+                break
+        if updated:
+            if planBT.status == Status.SUCCESS:
+                objMtch.pose = endMin
+                objMtch.ts   = now() # 2024-07-27: THIS IS EXTREMELY IMPORTANT ELSE THIS READING DIES --> BAD BELIEFS
+                # 2024-07-27: NEED TO DO SOME DEEP THINKING ABOUT THE FRESHNESS OF RELEVANT FACTS
+                if _verbose:
+                    print( f"`get_moved_reading_from_BT_plan`: BT {planBT.name} updated {objMtch}!" )  
+            else:
+                objMtch.score /= env_var('_SCORE_DIV_FAIL')
+        else:
+            if _verbose:
+                print( f"`get_moved_reading_from_BT_plan`: NO update applied by BT {planBT.name}!" )    
+
+        return updated
 
 
     

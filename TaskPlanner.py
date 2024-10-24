@@ -54,12 +54,13 @@ def set_experiment_env():
     """ Params for this experiment """
 
     _poseGrn = np.eye(4)
-    _poseGrn[0:3,3] = [ env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
-                        env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
-                        0.5*env_var("_BLOCK_SCALE"), ]
+    _poseGrn[0:3,3] = [ -0.091-0.070, # env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
+                        -0.304, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
+                         0.5*env_var("_BLOCK_SCALE"), ]
     _trgtGrn = ObjPose( _poseGrn )
-
-    env_sto( "_UPDATE_PERIOD_S"  , 1.0/25.0 )
+    env_sto( "_DEF_NULL_SCORE"   , 0.75     )
+    env_sto( "_NULL_EVIDENCE"    , True     )
+    env_sto( "_UPDATE_PERIOD_S"  ,   float(4.0)    )
     env_sto( "_REIFY_SUPER_BEL"  ,   1.01   )
     env_sto( "_Z_SNAP_BOOST"     ,   0.00   )
     env_sto( "_OBJ_TIMEOUT_S"    , 120.0    ) # Readings older than this are not considered
@@ -67,9 +68,14 @@ def set_experiment_env():
     env_sto( "_CUT_MERGE_S_FRAC" ,   0.325  )
     env_sto( "_CUT_SCORE_FRAC"   ,   0.25   )
     env_sto( "_N_XTRA_SPOTS"     ,   3      )
+    env_sto( "_N_REQD_OBJS"      ,   3      )
+    env_sto( "_CONFUSE_PROB"     ,   0.025  )
+    env_sto( "_SCORE_FILTER_EXP" ,   0.75   )
+    env_sto( "_NULL_THRESH"      ,   0.75   )
+    env_sto( "_SCORE_DIV_FAIL"   ,   2.0    )
     env_sto( "_MAX_UPDATE_RAD_M" , 2.00*env_var("_BLOCK_SCALE") )
     env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
-    env_sto( "_CONFUSE_PROB", 0.025 )
+    
     env_sto( "_GOAL" ,
         ( 'and',
             
@@ -166,13 +172,13 @@ class TaskPlanner:
             Open_Gripper( ctrl = self.robot ),
             Interleaved_MoveFree_and_PerceiveScene( 
                 MoveFree( [None, ObjPose( goPose )], robot = self.robot, suppressGrasp = True ), 
-                self, 
-                os.environ["_UPDATE_PERIOD_S"], 
+                self.symPln, 
+                env_var("_UPDATE_PERIOD_S"), 
                 initSenseStep = True 
             ),
         ])
         
-        btr = BT_Runner( btAction, os.environ["_BT_UPDATE_HZ"], os.environ["_BT_ACT_TIMEOUT_S"] )
+        btr = BT_Runner( btAction, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
         btr.setup_BT_for_running()
 
         while not btr.p_ended():
@@ -213,12 +219,19 @@ class TaskPlanner:
 
     def phase_3_Plan_Task( self ):
         """ Attempt to solve the symbolic problem """
-        self.symPln.plan_task( pdls_stream_map = {
-            ### Symbol Streams ###
-            'sample-above' : from_gen_fn( self.blcMod.get_above_pose_stream()     ), 
-            ### Symbol Tests ###
-            'test-free-placment': from_test( self.blcMod.get_free_placement_test() ),
-        })
+        self.symPln.set_update_funcs(
+            self.phase_1_Perceive,
+            self.p_belief_dist_OK
+        )
+        self.symPln.plan_task( 
+            pdls_stream_map = {
+                ### Symbol Streams ###
+                'sample-above' : from_gen_fn( self.blcMod.get_above_pose_stream()     ), 
+                ### Symbol Tests ###
+                'test-free-placment': from_test( self.blcMod.get_free_placement_test() ),
+            },
+            robot    = self.robot
+        )
         if (self.symPln.status == Status.FAILURE):
             self.status = Status.FAILURE
             self.logger.log_event( "Planning Failure" )
@@ -249,7 +262,7 @@ class TaskPlanner:
 
         self.logger.log_event( "BT END", str( btr.status ) )
 
-        print( f"Did the BT move a reading?: {self.world.move_reading_from_BT_plan( self.action )}" )
+        print( f"Did the BT move a reading?: {self.memory.move_reading_from_BT_plan( self.symPln.nxtAct )}" )
 
 
     def phase_5_Return_Home( self, goPose ):
@@ -426,6 +439,15 @@ _YCB_LANDSCAPE_CLOSE_BGN = repair_pose( np.array( [[-0.698,  0.378,  0.608, -0.5
                                                    [-0.666, -0.029, -0.746,  0.262],
                                                    [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
 
+_YCB_LANDSCAPE_FAR_BGN = repair_pose( np.array( [[-0.873,  0.238,  0.426, -0.474],
+                                                 [ 0.206,  0.971, -0.121, -0.212],
+                                                 [-0.442, -0.018, -0.897,  0.394],
+                                                 [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
+ 
+
+
+
+
 
 
 if __name__ == "__main__":
@@ -466,8 +488,8 @@ if __name__ == "__main__":
         print( f"########## Running Planner at {dateStr} ##########" )
 
         try:
-            planner = responsive_experiment_prep( _YCB_LANDSCAPE_CLOSE_BGN ) # _EXP_BGN_POSE
-            planner.solve_task( maxIter = 30, beginPlanPose = _YCB_LANDSCAPE_CLOSE_BGN )
+            planner = responsive_experiment_prep( _YCB_LANDSCAPE_FAR_BGN ) # _EXP_BGN_POSE
+            planner.solve_task( maxIter = 30, beginPlanPose = _YCB_LANDSCAPE_FAR_BGN )
             sleep( 2.5 )
             planner.shutdown()
             
