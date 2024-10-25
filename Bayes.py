@@ -9,16 +9,20 @@ now = time.time
 ### Special ###
 import numpy as np
 
+### MAGPIE Ctrl ###
+from magpie.poses import repair_pose, vec_unit
+from magpie.homog_utils import R_x, R_y, posn_from_xform
 
-### Local ###
+### ASPIRE ###
 from aspire.env_config import env_var
 from aspire.utils import ( extract_dct_values_in_order, sorted_obj_labels, multiclass_Bayesian_belief_update, 
                            get_confusion_matx, get_confused_class_reading )
 from aspire.symbols import ( euclidean_distance_between_symbols, extract_pose_as_homog, 
                              p_symbol_inside_workspace_bounds, ObjPose, GraspObj )
 
-from magpie.poses import repair_pose, vec_unit
-from magpie.homog_utils import R_x, R_y, posn_from_xform
+
+### Local ###
+from utils import set_quality_score
 
 
 
@@ -104,7 +108,7 @@ class ObjectMemory:
 
     def reset_beliefs( self ):
         """ Remove all references to the beliefs, then erase the beliefs """
-        self.beliefs = []
+        self.beliefs : list[GraspObj] = []
 
 
     def __init__( self ):
@@ -112,7 +116,7 @@ class ObjectMemory:
         self.reset_beliefs()
         
     
-    def accum_evidence_for_belief( self, evidence, belief ):
+    def accum_evidence_for_belief( self, evidence : GraspObj, belief : GraspObj ):
         """ Use Bayesian multiclass update on `belief`, destructive """
         evdnc = extract_class_dist_in_order( evidence )
         prior = extract_class_dist_in_order( belief   )
@@ -156,19 +160,20 @@ class ObjectMemory:
         if relevant:
             belBest.visited = True
             self.accum_evidence_for_belief( objReading, belBest )
-
             updtFrac = objReading.score / (belBest.score + objReading.score)
-            # belBest.pose  = objReading.pose # WARNING: ASSUME THE NEW NEAREST POSE IS CORRECT!
+            
+            ## Update Pose ##
             belPosn = posn_from_xform( extract_pose_as_homog( belBest.pose    ) )
             objPosn = posn_from_xform( extract_pose_as_homog( objReading.pose ) )
             updPosn = objPosn * updtFrac + belPosn * (1.0 - updtFrac)
             updPose = np.eye(4)
             updPose[0:3,3] = updPosn
             belBest.pose  = ObjPose( updPose )
-            # belBest.score = exp_filter( belBest.score, objReading.score, _SCORE_FILTER_EXP )
-            belBest.score = exp_filter( belBest.score, objReading.score, updtFrac )
-            
-            belBest.ts    = tsNow
+
+            ## Update Score ##
+            belBest.count += objReading.count
+            set_quality_score( belBest )
+            belBest.ts = tsNow
 
         # 2. If this evidence does not support an existing belief, it is a new belief
         elif p_symbol_inside_workspace_bounds( objReading ):
