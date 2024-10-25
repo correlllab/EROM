@@ -1,6 +1,7 @@
 ########## INIT ####################################################################################
 
 ### Standard ###
+import os
 from time import sleep
 from random import random
 
@@ -8,7 +9,7 @@ from random import random
 import numpy as np
 
 ### ASPIRE ###
-from aspire.symbols import GraspObj, extract_pose_as_homog
+from aspire.symbols import ObjPose, GraspObj, extract_pose_as_homog
 from aspire.env_config import env_var
 from aspire.utils import get_confusion_matx, match_name, roll_outcome
 
@@ -36,7 +37,7 @@ def expand_pose_from_vec( vec ):
 
 def select_confusion_row( confMatx, label ):
     """ Get the appropriate row of the confusion matrix """
-    i = env_var("_BLOCK_NAMES").find( match_name( label ) )
+    i = env_var("_BLOCK_NAMES").index( match_name( label ) )
     return confMatx[i,:]
 
 
@@ -65,12 +66,12 @@ class FakeReadingsGen:
         for locus in commonLoci:
             self.common.append( GraspObj(
                 label = locus['label'],
-                pose  = expand_pose_from_vec( locus['posn'] ),
+                pose  = ObjPose( expand_pose_from_vec( locus['posn'] ) ),
             ) )
         for locus in rareLoci:
             self.rare.append( GraspObj(
                 label = locus['label'],
-                pose  = expand_pose_from_vec( locus['posn'] ),
+                pose  = ObjPose( expand_pose_from_vec( locus['posn'] ) ),
             ) )
 
 
@@ -125,3 +126,5 @@ if __name__ == "__main__":
 
     for i in range(3):
         pprint( frg.generate() )
+
+    os.system( 'kill %d' % os.getpid() ) 
