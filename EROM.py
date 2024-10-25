@@ -1,3 +1,5 @@
+########## INIT ####################################################################################
+
 import time
 now = time.time
 from math import isnan
@@ -12,6 +14,8 @@ from magpie.poses import translation_diff
 
 ### Local ###
 from Bayes import ObjectMemory
+
+
 
 ########## HELPER FUNCTIONS ########################################################################
 
@@ -204,9 +208,6 @@ def gen_combos( objs : list[GraspObj], idx = 0 ):
                 lst_j.extend( cmb_j )
                 comboList.append( lst_j )
     return comboList
-
-
-
 
 
 def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non-null", cutScoreFrac = 0.5 ):
