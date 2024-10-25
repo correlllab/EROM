@@ -16,45 +16,13 @@ from magpie.poses import translation_diff
 
 ### Local ###
 from Bayes import ObjectMemory
+from utils import snap_z_to_nearest_block_unit_above_zero, set_quality_score, copy_readings_as_LKG
 
 
 
 ########## HELPER FUNCTIONS ########################################################################
 
-def copy_as_LKG( sym : GraspObj ):
-    """ Make a copy of this belief for the Last-Known-Good collection """
-    rtnObj = sym.copy()
-    rtnObj.LKG = True
-    return rtnObj
 
-
-def copy_readings_as_LKG( readLst ):
-    """ Return a list of readings intended for the Last-Known-Good collection """
-    rtnLst = list()
-    for r in readLst:
-        rtnLst.append( copy_as_LKG( r ) )
-    return rtnLst
-
-
-def entropy_factor( probs ):
-    """ Return a version of Shannon entropy scaled to [0,1] """
-    if isinstance( probs, dict ):
-        probs = list( probs.values() )
-    tot = 0.0
-    # N   = 0
-    for p in probs:
-        pPos = max( p, 0.00001 )
-        tot -= pPos * np.log( pPos )
-            # N   += 1
-    return tot / np.log( len( probs ) )
-
-
-def snap_z_to_nearest_block_unit_above_zero( z : float ):
-    """ SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE """
-    sHalf = (env_var("_BLOCK_SCALE")/2.0)
-    zUnit = np.rint( (z-sHalf+env_var("_Z_SNAP_BOOST")) / env_var("_BLOCK_SCALE") ) # Quantize to multiple of block unit length
-    zBloc = max( (zUnit*env_var("_BLOCK_SCALE"))+sHalf, sHalf )
-    return zBloc
 
 
 def observation_to_readings( obs : dict, xform = None ):
@@ -79,14 +47,18 @@ def observation_to_readings( obs : dict, xform = None ):
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         
         # Attempt to quantify how much we trust this reading
-        score_i = (1.0 - entropy_factor( dstrb )) * item['Count']
-        if isnan( score_i ):
-            print( f"\nWARN: Got a NaN score with count {item['Count']} and distribution {dstrb}\n" )
-            score_i = 0.0
+        
 
-        rtnBel.append( GraspObj( 
-            labels = dstrb, pose = ObjPose( objPose ), ts = tScan, count = item['Count'], score = score_i 
-        ) )
+        rtnObj = GraspObj( 
+            labels = dstrb, 
+            pose   = ObjPose( objPose ), 
+            ts     = tScan, 
+            count  = item['Count'], 
+            score = 0.0 
+        )
+        set_quality_score( rtnObj )
+
+        rtnBel.append( rtnObj )
     return rtnBel
 
 
