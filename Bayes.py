@@ -10,8 +10,8 @@ now = time.time
 import numpy as np
 
 ### MAGPIE Ctrl ###
-from magpie.poses import repair_pose, vec_unit
-from magpie.homog_utils import R_x, R_y, posn_from_xform
+from magpie_control.poses import repair_pose, vec_unit
+from magpie_control.homog_utils import R_x, R_y, posn_from_xform
 
 ### ASPIRE ###
 from aspire.env_config import env_var
@@ -160,7 +160,9 @@ class ObjectMemory:
         if relevant:
             belBest.visited = True
             self.accum_evidence_for_belief( objReading, belBest )
-            updtFrac = objReading.score / (belBest.score + objReading.score)
+
+            # updtFrac = objReading.score / (belBest.score + objReading.score)
+            updtFrac = 0.85
             
             ## Update Pose ##
             belPosn = posn_from_xform( extract_pose_as_homog( belBest.pose    ) )
