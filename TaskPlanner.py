@@ -25,9 +25,9 @@ from math import isnan
 import numpy as np
 from py_trees.common import Status
 # from py_trees.composites import Sequence
-from magpie.BT import Open_Gripper
-from magpie import ur5 as ur5
-from magpie.poses import repair_pose
+from magpie_control.BT import Open_Gripper
+from magpie_control import ur5 as ur5
+from magpie_control.poses import repair_pose
 # import open3d as o3d
 
 ### ASPIRE ###
@@ -43,7 +43,7 @@ from aspire.SymPlanner import SymPlanner
 
 ### Local ###
 from obj_ID_server import Perception_OWLViT
-from EROM import EROM
+from EROM import EROM, reify_chosen_beliefs
 
 
 
@@ -60,21 +60,27 @@ def set_experiment_env():
     _trgtGrn = ObjPose( _poseGrn )
     env_sto( "_DEF_NULL_SCORE"   , 0.75     )
     env_sto( "_NULL_EVIDENCE"    , True     )
-    env_sto( "_UPDATE_PERIOD_S"  ,   float(4.0)    )
+    env_sto( "_UPDATE_PERIOD_S"  ,   6.0    )
     env_sto( "_REIFY_SUPER_BEL"  ,   1.01   )
     env_sto( "_Z_SNAP_BOOST"     ,   0.00   )
-    env_sto( "_OBJ_TIMEOUT_S"    , 120.0    ) # Readings older than this are not considered
-    env_sto( "_SCORE_DECAY_TAU_S",  20.0    )
-    env_sto( "_CUT_MERGE_S_FRAC" ,   0.325  )
-    env_sto( "_CUT_SCORE_FRAC"   ,   0.25   )
+    env_sto( "_USE_TIMEOUT"      , False    )
+    env_sto( "_OBJ_TIMEOUT_S"    , 180.0    ) # Readings older than this are not considered
+    env_sto( "_SCORE_DECAY_TAU_S",  60.0    )
+    env_sto( "_CUT_LKG_S_FRAC"   ,   0.350  )    
+    env_sto( "_CUT_MERGE_S_FRAC" ,   0.333  )
+    env_sto( "_CUT_DETERM_S_FRAC",   0.333  )
     env_sto( "_N_XTRA_SPOTS"     ,   3      )
     env_sto( "_N_REQD_OBJS"      ,   3      )
     env_sto( "_CONFUSE_PROB"     ,   0.025  )
     env_sto( "_SCORE_FILTER_EXP" ,   0.75   )
     env_sto( "_NULL_THRESH"      ,   0.75   )
-    env_sto( "_SCORE_DIV_FAIL"   ,   2.0    )
-    env_sto( "_MAX_UPDATE_RAD_M" , 2.00*env_var("_BLOCK_SCALE") )
+    env_sto( "_SCORE_DIV_FAIL"   ,   4.0    )
+    env_sto( "_MAX_UPDATE_RAD_M" , 1.25*env_var("_BLOCK_SCALE") )
     env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
+
+    env_sto( "_ROBOT_FREE_SPEED",  0.125 ) 
+    env_sto( "_ROBOT_HOLD_SPEED",  0.125 )
+    env_sto( "_ACCEPT_POSN_ERR" ,  0.90*env_var( "_BLOCK_SCALE" ) )
     
     env_sto( "_GOAL" ,
         ( 'and',
@@ -87,6 +93,11 @@ def set_experiment_env():
             ('HandEmpty',),
         )
     )
+
+    env_sto( "_HACKED_OFFSET"  , np.array( [[ 1.0, 0.0, 0.0, -1.0/100.0, ],
+                                            [ 0.0, 1.0, 0.0, -0.5/100.0, ],
+                                            [ 0.0, 0.0, 1.0, 0.0, ],
+                                            [ 0.0, 0.0, 0.0, 1.0, ],] ) )
     
 
 
@@ -190,16 +201,25 @@ class TaskPlanner:
 
     ##### Task Planning Phases ############################################
 
-    def phase_1_Perceive( self, Nscans = 1, xform = None ):
+    def phase_1_Perceive( self, Nscans = 1 ):
         """ Take in evidence and form beliefs """
+
+        camPose = self.robot.get_cam_pose()
+        # camPose = camPose.dot( env_var("_HACKED_OFFSET") )
+
+        # camPose = env_var("_HACKED_OFFSET").dot( self.robot.get_cam_pose() )
+        
 
         for _ in range( Nscans ):
             self.memory.process_observations( 
-                self.perc.build_model(),
-                xform 
+                self.perc.build_model( shots = 1 ),
+                camPose 
             ) 
 
         self.symPln.symbols = self.memory.get_current_most_likely()
+
+        # reify_chosen_beliefs( self.memory.LKG , self.symPln.symbols, factor = env_var("_REIFY_SUPER_BEL") )
+
         if len( self.symPln.symbols ):
             self.status = Status.RUNNING
             if env_var("_VERBOSE"):
@@ -236,6 +256,8 @@ class TaskPlanner:
             self.status = Status.FAILURE
             self.logger.log_event( "Planning Failure" )
             print( f"Planning Failure!" )
+
+        # reify_chosen_beliefs( self.memory.LKG , self.symPln.symbols, factor = env_var("_REIFY_SUPER_BEL") )
 
 
     def phase_4_Execute_Action( self ):
@@ -301,12 +323,12 @@ class TaskPlanner:
         indicateSuccess = False
         t5              = now()
 
-        self.robot.moveL( beginPlanPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE
+        
 
         while (self.status != Status.SUCCESS) and (i < maxIter): # and (not self.PANIC):
 
             
-            # sleep(1)
+            self.status = Status.RUNNING
 
             print( f"### Iteration {i+1} ###" )
             
@@ -318,13 +340,20 @@ class TaskPlanner:
 
             # self.set_goal()
 
-            camPose = self.robot.get_cam_pose()
-
             expBgn = now()
             if (expBgn - t5) < env_var("_UPDATE_PERIOD_S"):
                 sleep( env_var("_UPDATE_PERIOD_S") - (expBgn - t5) )
-            
-            self.phase_1_Perceive( 1, camPose )
+
+            self.robot.moveL( beginPlanPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
+            self.phase_1_Perceive( 1 )
+
+            # if 1:    
+            #     self.robot.moveL( _SHOT_1, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
+            #     self.phase_1_Perceive( 1 )
+
+            # if 0:
+            #     self.robot.moveL( _SHOT_2, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
+            #     self.phase_1_Perceive( 1 )
             
             if self.status == Status.FAILURE:
                 print( f"LOOP, {self.status} ..." )
@@ -412,7 +441,7 @@ def responsive_experiment_prep( beginPlanPose = None ):
             beginPlanPose = _GOOD_VIEW_POSE
         else:
             beginPlanPose = _HIGH_VIEW_POSE
-
+    planner.robot.set_grip_N( 8.0 )
     planner.robot.open_gripper()
     return planner
 
@@ -425,7 +454,7 @@ def responsive_experiment_prep( beginPlanPose = None ):
 
 _TROUBLESHOOT   = 0
 _VISION_TEST    = 0
-_EXP_BGN_POSE   = _HIGH_VIEW_POSE
+
 _HIGH_TWO_POSE  = None
 
 
@@ -446,8 +475,31 @@ _YCB_LANDSCAPE_FAR_BGN = repair_pose( np.array( [[-0.873,  0.238,  0.426, -0.474
  
 
 
+_SHOT_1 = repair_pose( np.array( [[-0.635,  0.251,  0.731, -0.615,],
+                                  [ 0.172,  0.968, -0.182, -0.18 ,],
+                                  [-0.753,  0.011, -0.658,  0.302,],
+                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
 
 
+_SHOT_3 = repair_pose( np.array( [[-0.824,  0.078,  0.562, -0.498,],
+                                  [ 0.1  ,  0.995,  0.008, -0.26 ,],
+                                  [-0.558,  0.063, -0.827,  0.379,],
+                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
+
+
+_SHOT_2 = repair_pose( np.array( [[-0.905,  0.17 ,  0.391, -0.44 ,],
+                                  [ 0.116,  0.981, -0.158, -0.181,],
+                                  [-0.41 , -0.098, -0.907,  0.513,],
+                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
+
+
+_SHOT_4 = repair_pose( np.array( [[-0.843,  0.018,  0.538, -0.476,],
+                                  [ 0.056,  0.997,  0.054, -0.279,],
+                                  [-0.535,  0.075, -0.841,  0.338,],
+                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
+
+
+_EXP_BGN_POSE = _SHOT_4
 
 
 if __name__ == "__main__":
@@ -488,8 +540,8 @@ if __name__ == "__main__":
         print( f"########## Running Planner at {dateStr} ##########" )
 
         try:
-            planner = responsive_experiment_prep( _YCB_LANDSCAPE_FAR_BGN ) # _EXP_BGN_POSE
-            planner.solve_task( maxIter = 30, beginPlanPose = _YCB_LANDSCAPE_FAR_BGN )
+            planner = responsive_experiment_prep( _EXP_BGN_POSE ) # _EXP_BGN_POSE
+            planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSE )
             sleep( 2.5 )
             planner.shutdown()
             

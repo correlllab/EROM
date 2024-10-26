@@ -12,7 +12,7 @@ from aspire.utils import match_name
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, p_symbol_inside_workspace_bounds,
                              euclidean_distance_between_symbols )
 from aspire.actions import GroundedAction
-from magpie.poses import translation_diff
+from magpie_control.poses import translation_diff
 
 ### Local ###
 from Bayes import ObjectMemory
@@ -40,6 +40,7 @@ def observation_to_readings( obs : dict, xform = None ):
             dstrb[ env_var("_NULL_NAME") ] = 0.0
 
         if len( item['Pose'] ) == 16:
+            xform   = env_var("_HACKED_OFFSET").dot( xform )
             objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
             # HACK: SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE
             objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
@@ -54,7 +55,7 @@ def observation_to_readings( obs : dict, xform = None ):
             pose   = ObjPose( objPose ), 
             ts     = tScan, 
             count  = item['Count'], 
-            score = 0.0 
+            score  = 0.0 
         )
         set_quality_score( rtnObj )
 
@@ -67,9 +68,16 @@ def observation_to_readings( obs : dict, xform = None ):
 
 def cut_bottom_fraction( objs : list[GraspObj], frac ):
     """ Return a version of `objs` with the bottom `frac` scores removed """
-    rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
-    remNum  = int( frac * len( rtnObjs ) )
-    return rtnObjs[ 0:remNum ]
+    if len( objs ) > 1:
+        rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
+        remNum  = int( frac * len( rtnObjs ) )
+        # print( f"Cutting {frac} = {remNum}/{len(rtnObjs)} objects!" )
+        if remNum > 0:
+            return rtnObjs[ 0:-remNum ]
+        else:
+            return rtnObjs[:]
+    else:
+        return objs[:]
 
 
 def rectify_readings( objReadingList : list[GraspObj], useTimeout = True ):
@@ -86,6 +94,7 @@ def rectify_readings( objReadingList : list[GraspObj], useTimeout = True ):
         
         # HACK: ONLY CONSIDER OBJECTS INSIDE THE WORKSPACE
         if not p_symbol_inside_workspace_bounds( extract_pose_as_homog( objR ) ):
+            print( f"Object {objR} is outside the workspace!" )
             continue
 
         if (useTimeout and ((tCurr - objR.ts) > env_var("_OBJ_TIMEOUT_S"))):
@@ -97,18 +106,24 @@ def rectify_readings( objReadingList : list[GraspObj], useTimeout = True ):
             objM = totLst[m]
             if euclidean_distance_between_symbols( objR, objM ) < env_var("_LKG_SEP"):
                 conflict.append( objM )
+
+        print( f"Conflict: {len(conflict)}" )
+
         # 4. Sort overlapping indications and add only the top
         conflict.sort( key = lambda item: item.score, reverse = True )
         top    = conflict[0]
-        nuHash = id( conflict[0] )
+        nuHash = id( top )
         if (nuHash not in nuSet) and (nuHash not in rmSet):
             nuMem.append( top )
             nuSet.add( nuHash )
-            rmSet.update( set( [id(elem) for elem in conflict[1:]] ) )
+            if len( conflict ) > 1:
+                rmSet.update( set( [id(elem) for elem in conflict[1:]] ) )
+            print( f"Added {top} to the new memory!" )
+    print( f"Rectified {len(nuMem)} objects!" )
     return nuMem
 
 
-def merge_and_reconcile_object_memories( belLst : list[GraspObj], lkgLst : list[GraspObj], tau = None, cutScoreFrac = 0.5  ):
+def merge_and_reconcile_object_memories( belLst : list[GraspObj], lkgLst : list[GraspObj], tau = None ):
     """ Calculate a consistent object state from LKG Memory and Beliefs """
     rtnLst = list()
 
@@ -119,6 +134,7 @@ def merge_and_reconcile_object_memories( belLst : list[GraspObj], lkgLst : list[
     mrgLst.extend( lkgLst )
     tCurr   = now()
     
+    print( f"Number to decay: {len(mrgLst)}" )
     
     # Filter and Decay stale readings
     for r in mrgLst:
@@ -129,14 +145,10 @@ def merge_and_reconcile_object_memories( belLst : list[GraspObj], lkgLst : list[
         r.score = score_r
         rtnLst.append( r )
 
-    # if (1.0 > cutScoreFrac > 0.0):
-    #     rtnLst = cut_bottom_fraction( rtnLst, cutScoreFrac )
+    print( f"Number to reconcile: {len(rtnLst)}" )
     
     # Enforce consistency and return
-    return rectify_readings( rtnLst )
-
-
-
+    return rectify_readings( rtnLst, env_var("_USE_TIMEOUT") )
 
 
 def objs_choose_k( objs, k : int, bgn = None, end = None ):
@@ -194,9 +206,10 @@ def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non
     """ Get the `N` most likely combinations of object classes """
     
     ### Drop Worst Readings ###
-    # if (1.0 > cutScoreFrac > 0.0):
-    #     objs = cut_bottom_fraction( objList, cutScoreFrac )
-    objs = objList[:]
+    if (1.0 > cutScoreFrac > 0.0):
+        objs = cut_bottom_fraction( objList, cutScoreFrac )
+    else:
+        objs = objList[:]
 
     ### Combination Generator ###
     def gen_combos_top( objs : list[GraspObj], k : int ):
@@ -296,7 +309,7 @@ def reify_chosen_beliefs( objs : list[GraspObj], chosen, factor = env_var("_REIF
     for obj in objs:
         for cPose in posen:
             if (translation_diff( cPose, extract_pose_as_homog( obj ) ) <= env_var("_LKG_SEP")):
-                obj.score = maxSc * factor
+                # obj.score = maxSc * factor
                 obj.ts    = now()
 
 
@@ -308,10 +321,10 @@ class EROM:
 
     def reset_memory( self ):
         """ Erase memory components """
-        self.scan    = list()
+        self.scan : list[GraspObj]  = list()
         self.beliefs = ObjectMemory()
-        self.LKG     = list()
-        self.ranked  = list()
+        self.LKG    : list[GraspObj]    = list()
+        self.ranked : list[GraspObj] = list()
 
 
     def __init__( self ):
@@ -324,33 +337,43 @@ class EROM:
         # LKG and Belief are updated SEPARATELY and merged LATER as symbols
         # self.LKG     = rectify_readings( copy_readings_as_LKG( self.scan ) )
         self.LKG.extend( copy_readings_as_LKG( self.scan ) )
+        self.LKG = rectify_readings( self.LKG )
         self.beliefs.belief_update( self.scan, xform, maxRadius = env_var("_MAX_UPDATE_RAD_M") )
 
 
     def rank_combined_memory( self ):
         """ Reconcile and rank the two memory streams """
 
-        self.LKG = cut_bottom_fraction( self.LKG, env_var("_CUT_MERGE_S_FRAC") )
+        self.LKG = cut_bottom_fraction( self.LKG, env_var("_CUT_LKG_S_FRAC") )
 
-        self.ranked = sorted( 
-            merge_and_reconcile_object_memories( 
-                list( self.beliefs.beliefs ), 
-                list( self.LKG ), 
-                tau          = env_var("_SCORE_DECAY_TAU_S"), 
-                # cutScoreFrac = env_var("_CUT_MERGE_S_FRAC")
-            ), 
-            key = lambda item: item.score, 
-            reverse = True 
+        # self.ranked = sorted( 
+        #     merge_and_reconcile_object_memories( 
+        #         list( self.beliefs.beliefs ), 
+        #         list( self.LKG ), 
+        #         tau          = env_var("_SCORE_DECAY_TAU_S"), 
+        #     ), 
+        #     key = lambda item: item.score, 
+        #     reverse = True 
+        # )
+
+        self.ranked = merge_and_reconcile_object_memories( 
+            list( self.beliefs.beliefs ), 
+            list( self.LKG ), 
+            tau          = env_var("_SCORE_DECAY_TAU_S"), 
         )
+
+        self.ranked = cut_bottom_fraction( self.ranked, env_var("_CUT_MERGE_S_FRAC") )
+        print( f"Cut Ranking: {len(self.ranked)}" )
+
         return self.ranked
         
         
     def get_current_most_likely( self ):
         """ Generate symbols """
 
-        print( f"Beliefs: {len(self.beliefs.beliefs)}, LKG: {len(self.LKG)}, Total: {len(self.ranked)}" )
-
         self.rank_combined_memory()
+
+        print( f"Beliefs: {len(self.beliefs.beliefs)}, LKG: {len(self.LKG)}, Total: {len(self.ranked)}" )
 
         print( f"\nRanked: {len(self.ranked)}" )
         for obj in self.ranked:
@@ -361,7 +384,7 @@ class EROM:
             self.ranked, 
             env_var("_N_REQD_OBJS"),
             method       = "unique-non-null", # "unique", #"unique-non-null", 
-            cutScoreFrac = env_var("_CUT_SCORE_FRAC")
+            cutScoreFrac = env_var("_CUT_DETERM_S_FRAC")
         )
         # reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
 
@@ -369,6 +392,7 @@ class EROM:
 
         return rtnLst
     
+
     def move_reading_from_BT_plan( self, planBT : GroundedAction ):
         """ Infer reading to be updated by the robot action, Then update it """
         _verbose = True
@@ -378,29 +402,34 @@ class EROM:
         updated = False
         dMin    = 1e9
         endMin  = None
-        objMtch = None
+        objMtch = list()
         
         
         for act_i in planBT.children:
             if "MoveHolding" in act_i.__class__.__name__:
                 poseBgn, poseEnd, label = act_i.args
-                for objM in self.LKG:
+                # for objM in self.LKG:
+                for objM in self.ranked:
                     dist_ij = euclidean_distance_between_symbols( objM, poseBgn )
                     if (dist_ij <= env_var("_MIN_SEP")) and (dist_ij < dMin) and (label in objM.labels):
                         dMin    = dist_ij
                         endMin  = poseEnd
                         updated = True
-                        objMtch = objM
-                break
+                        objMtch.append( objM )
+                # break
         if updated:
             if planBT.status == Status.SUCCESS:
-                objMtch.pose = endMin
-                objMtch.ts   = now() # 2024-07-27: THIS IS EXTREMELY IMPORTANT ELSE THIS READING DIES --> BAD BELIEFS
-                # 2024-07-27: NEED TO DO SOME DEEP THINKING ABOUT THE FRESHNESS OF RELEVANT FACTS
-                if _verbose:
-                    print( f"`get_moved_reading_from_BT_plan`: BT {planBT.name} updated {objMtch}!" )  
+                for obj_m in objMtch:
+                    obj_m.pose = endMin
+                    obj_m.ts   = now() # 2024-07-27: THIS IS EXTREMELY IMPORTANT ELSE THIS READING DIES --> BAD BELIEFS
+                    obj_m.score *= env_var('_SCORE_DIV_FAIL') # 2024-07-27: THIS IS EXTREMELY IMPORTANT ELSE THIS READING DIES --> BAD BELIEFS
+                    # 2024-07-27: NEED TO DO SOME DEEP THINKING ABOUT THE FRESHNESS OF RELEVANT FACTS
+                    if _verbose:
+                        print( f"`get_moved_reading_from_BT_plan`: BT {planBT.name} updated {obj_m}!" )  
             else:
-                objMtch.score /= env_var('_SCORE_DIV_FAIL')
+                for obj_m in objMtch:
+                    # obj_m.score /= env_var('_SCORE_DIV_FAIL')
+                    obj_m.score = 0.0
         else:
             if _verbose:
                 print( f"`get_moved_reading_from_BT_plan`: NO update applied by BT {planBT.name}!" )    

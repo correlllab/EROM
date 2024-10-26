@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 ### MAGPIE ###
 from magpie_perception import pcd
-from magpie import realsense_wrapper as real
+from magpie_control import realsense_wrapper as real
 from magpie_perception.label_owlvit import LabelOWLViT
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False" #"True"
@@ -81,8 +81,8 @@ class Perception_OWLViT:
         [ 0, 0, 0, 1]
     ])
     tmat_gripper = np.array([
-        [1, 0, 0, (-1.15) / 100        ],
-        [0, 1, 0,  (1.3+0.75) / 100         ],
+        [1, 0, 0, -2.0 / 100        ],
+        [0, 1, 0, 0.0 / 100         ],
         [0, 0, 1, (309.63-195.0)/1000],
         [0, 0, 0, 1                  ]
     ])
@@ -386,7 +386,7 @@ class Perception_OWLViT:
             return {}
 
     @classmethod
-    def build_model(cls, rgbd_image=None): ###ADDED INPUT 
+    def build_model(cls, rgbd_image=None, shots=1): ###ADDED INPUT 
         """Builds the perception model."""
 
         # cls.label_vit.reset_prediction_state()
@@ -445,6 +445,34 @@ class Perception_OWLViT:
                         display=False,
                         viz_scale=1000
                     )
+
+                    if shots > 1:
+                        totPnts = np.asarray( cpcd.points )
+                        totClrs = np.asarray( cpcd.colors )
+
+                        for _ in range( shots-1 ):
+
+                            _, img_i = cls.rsc.getPCD()
+                            _, pcd_i, _, _ = pcd.get_segment(
+                                formatted_boxes,
+                                index,
+                                img_i,
+                                cls.rsc,
+                                type="box",
+                                method="iterative",
+                                display=False,
+                                viz_scale=1000
+                            )
+                            # cpcd.points = np.vstack( (cpcd.points, pcd_i.points) )
+                            # cpcd.points += pcd_i.points
+                            # cpcd.points.append( pcd_i.points )
+                            pnts_i  = np.asarray( pcd_i.points )
+                            clrs_i  = np.asarray( pcd_i.colors )
+                            totPnts = np.concatenate( (totPnts, pnts_i,), axis = 0 )
+                            totClrs = np.concatenate( (totClrs, clrs_i,), axis = 0 )
+                        cpcd.points = o3d.utility.Vector3dVector( totPnts )
+                        cpcd.colors = o3d.utility.Vector3dVector( totClrs )
+
                     if _VERBOSE:
                         print( f"\nPCD {cpcd} ...\n", flush=True, file=sys.stderr )
                 except Exception as e:
