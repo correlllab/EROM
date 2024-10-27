@@ -8,21 +8,44 @@ import numpy as np
 from py_trees.common import Status
 
 from aspire.env_config import env_var
-from aspire.utils import match_name
+from aspire.utils import match_name, normalize_dist
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, p_symbol_inside_workspace_bounds,
                              euclidean_distance_between_symbols )
 from aspire.actions import GroundedAction
+
 from magpie_control.poses import translation_diff
 
 ### Local ###
 from Bayes import ObjectMemory
-from utils import snap_z_to_nearest_block_unit_above_zero, set_quality_score, copy_readings_as_LKG
+from utils import snap_z_to_nearest_block_unit_above_zero, set_quality_score, mark_readings_LKG
 
 
 
 ########## HELPER FUNCTIONS ########################################################################
 
 
+def hacked_offset_map( pose ) -> np.ndarray:
+    """ Calculate a hack to the pose """
+    hackXfrm = np.eye(4)
+    offset   = np.zeros( (3,) )
+    vec      = pose[0:3,3]
+    # midX     = env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")*0.75
+    midY     = env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")*0.50
+    # lesY     = midY - env_var("_Y_WRK_SPAN")*0.25
+    minY     = env_var("_MIN_Y_OFFSET")
+    maxY     = env_var("_MAX_Y_OFFSET")
+    height   = 0.5*env_var("_BLOCK_SCALE")
+    hackMap  = [ [[env_var("_MIN_X_OFFSET"), midY, height], [-2.0/100.0, -0.5/100.0, 0.0]],
+                 [[env_var("_MAX_X_OFFSET"), minY, height], [-1.0/100.0, -1.5/100.0, 0.0]], 
+                 [[env_var("_MAX_X_OFFSET"), maxY, height], [-1.0/100.0, +1.0/100.0, 0.0]],]
+    weights = list()
+    for hack in hackMap:
+        weights.append( 1.0 / np.linalg.norm( np.subtract( vec, hack[0] ) ) )
+    tot = sum( weights )
+    for i, hack in enumerate( hackMap ):
+        offset += (weights[i]/tot) * np.array( hack[1] )
+    hackXfrm[0:3,3] = offset
+    return hackXfrm
 
 
 def observation_to_readings( obs : dict, xform = None ):
@@ -37,11 +60,14 @@ def observation_to_readings( obs : dict, xform = None ):
         for nam, prb in item['Probability'].items():
             dstrb[ match_name( nam ) ] = prb
         if env_var("_NULL_NAME") not in dstrb:
-            dstrb[ env_var("_NULL_NAME") ] = 0.0
+            dstrb[ env_var("_NULL_NAME") ] = env_var("_CONFUSE_PROB")
+
+        dstrb = normalize_dist( dstrb )
 
         if len( item['Pose'] ) == 16:
-            xform   = env_var("_HACKED_OFFSET").dot( xform )
-            objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
+            hackXfrm = hacked_offset_map( xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) )  )
+            xform    = hackXfrm.dot( xform ) #env_var("_HACKED_OFFSET").dot( xform )
+            objPose  = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
             # HACK: SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE
             objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
         else:
@@ -325,6 +351,7 @@ class EROM:
         self.beliefs = ObjectMemory()
         self.LKG    : list[GraspObj]    = list()
         self.ranked : list[GraspObj] = list()
+        # self.symbols: list[GraspObj] = list()
 
 
     def __init__( self ):
@@ -333,11 +360,25 @@ class EROM:
 
     def process_observations( self, obs, xform = None ):
         """ Integrate one noisy scan into the current beliefs """
-        self.scan = observation_to_readings( obs, xform )
+
+        # self.scan = observation_to_readings( obs, xform )
+        self.scan = cut_bottom_fraction( observation_to_readings( obs, xform ), env_var("_CUT_INTAKE_S_FRAC") )
+        # self.scan = rectify_readings( 
+        #     cut_bottom_fraction( observation_to_readings( obs, xform ), env_var("_CUT_INTAKE_S_FRAC") ), 
+        #     useTimeout = False 
+        # )
+        # self.scan = rectify_readings( 
+        #     observation_to_readings( obs, xform ), 
+        #     useTimeout = False 
+        # )
+        
+
         # LKG and Belief are updated SEPARATELY and merged LATER as symbols
         # self.LKG     = rectify_readings( copy_readings_as_LKG( self.scan ) )
-        self.LKG.extend( copy_readings_as_LKG( self.scan ) )
-        self.LKG = rectify_readings( self.LKG )
+        # self.LKG.extend( copy_readings_as_LKG( self.scan ) )
+        self.LKG.extend( self.scan )
+        mark_readings_LKG( self.LKG, val = True )
+        self.LKG = rectify_readings( self.LKG, useTimeout = env_var("_USE_TIMEOUT") )
         self.beliefs.belief_update( self.scan, xform, maxRadius = env_var("_MAX_UPDATE_RAD_M") )
 
 
@@ -366,11 +407,21 @@ class EROM:
         print( f"Cut Ranking: {len(self.ranked)}" )
 
         return self.ranked
+    
+
+    # def migrate_LKG_to_beliefs( self ):
+    #     """ Move applicable LKG to the belief memory """
+    #     nuLKG = list()
+    #     for lkg_i in self.LKG:
+    #         if not self.beliefs.integrate_one_reading( lkg_i, camXform = None, suppressNew = True ):
+    #             nuLKG.append( lkg_i )
+    #     self.LKG = nuLKG
         
         
     def get_current_most_likely( self ):
         """ Generate symbols """
 
+        # self.migrate_LKG_to_beliefs()
         self.rank_combined_memory()
 
         print( f"Beliefs: {len(self.beliefs.beliefs)}, LKG: {len(self.LKG)}, Total: {len(self.ranked)}" )
@@ -388,7 +439,8 @@ class EROM:
         )
         # reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
 
-        print( rtnLst )
+        # print( rtnLst )
+        # self.symbols = rtnLst
 
         return rtnLst
     
@@ -403,7 +455,8 @@ class EROM:
         dMin    = 1e9
         endMin  = None
         objMtch = list()
-        
+
+        # self.ranked = rectify_readings( self.ranked, useTimeout = False )
         
         for act_i in planBT.children:
             if "MoveHolding" in act_i.__class__.__name__:
@@ -422,7 +475,8 @@ class EROM:
                 for obj_m in objMtch:
                     obj_m.pose = endMin
                     obj_m.ts   = now() # 2024-07-27: THIS IS EXTREMELY IMPORTANT ELSE THIS READING DIES --> BAD BELIEFS
-                    obj_m.score *= env_var('_SCORE_DIV_FAIL') # 2024-07-27: THIS IS EXTREMELY IMPORTANT ELSE THIS READING DIES --> BAD BELIEFS
+                    obj_m.score *= env_var('_SCORE_DIV_FAIL') 
+                    # obj_m.score = env_var('_SCORE_BIGNUM') 
                     # 2024-07-27: NEED TO DO SOME DEEP THINKING ABOUT THE FRESHNESS OF RELEVANT FACTS
                     if _verbose:
                         print( f"`get_moved_reading_from_BT_plan`: BT {planBT.name} updated {obj_m}!" )  

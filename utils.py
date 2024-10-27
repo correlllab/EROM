@@ -26,6 +26,12 @@ def copy_readings_as_LKG( readLst ):
     return rtnLst
 
 
+def mark_readings_LKG( readLst : list[GraspObj], val : bool = True ):
+    """ Return a list of readings intended for the Last-Known-Good collection """
+    for r in readLst:
+        r.LKG = val
+
+
 def entropy_factor( probs ):
     """ Return a version of Shannon entropy scaled to [0,1] """
     if isinstance( probs, dict ):

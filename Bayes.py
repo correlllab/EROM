@@ -140,7 +140,8 @@ class ObjectMemory:
         return p_sphere_inside_plane_list( qPosn, blcRad, bounds )
 
 
-    def integrate_one_reading( self, objReading : GraspObj, camXform : np.ndarray, maxRadius = 3.0*env_var("_BLOCK_SCALE") ):
+    def integrate_one_reading( self, objReading : GraspObj, camXform : np.ndarray = None, 
+                               maxRadius = 3.0*env_var("_BLOCK_SCALE"), suppressNew = False ):
         """ Fuse this belief with the current beliefs """
         relevant = False
         tsNow    = now()
@@ -150,9 +151,11 @@ class ObjectMemory:
         belBest  = None
         for belief in self.beliefs:
             d = euclidean_distance_between_symbols( objReading, belief )
-            if not self.p_symbol_in_cam_view( camXform, belief ):
-                print( f"\t\t{belief} not in cam view!, Distance: {d}" )
-            if (d <= maxRadius) and (d < dMin) and self.p_symbol_in_cam_view( camXform, belief ):
+
+            # if not self.p_symbol_in_cam_view( camXform, belief ):
+            #     print( f"\t\t{belief} not in cam view!, Distance: {d}" )
+
+            if (d <= maxRadius) and (d < dMin) and ((camXform is None) or self.p_symbol_in_cam_view( camXform, belief )):
                 dMin     = d
                 belBest  = belief
                 relevant = True
@@ -178,9 +181,11 @@ class ObjectMemory:
             belBest.ts = tsNow
 
         # 2. If this evidence does not support an existing belief, it is a new belief
-        elif p_symbol_inside_workspace_bounds( objReading ):
+        elif p_symbol_inside_workspace_bounds( objReading ) and (not suppressNew):
             print( f"\tNO match for {objReading}, Append to beliefs!" )
-            self.beliefs.append( objReading.copy() ) 
+            nuBel = objReading.copy()
+            nuBel.LKG = False
+            self.beliefs.append( nuBel ) 
 
         # N. Return whether the reading was relevant to an existing belief
         return relevant
@@ -247,7 +252,7 @@ class ObjectMemory:
             # WARNING: ASSUMING EACH OBJECT IS REPRESENTED BY EXACTLY 1 READING
             for objEv in evdncLst:
                 if p_symbol_inside_workspace_bounds( objEv ):
-                    self.beliefs.append( objEv.copy() )
+                    self.beliefs.append( objEv )
         else:
             for objEv in evdncLst:
                 # if not objEv.visitRD:
