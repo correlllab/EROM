@@ -26,7 +26,7 @@ import numpy as np
 from py_trees.common import Status
 # from py_trees.composites import Sequence
 from magpie_control.BT import Open_Gripper
-from magpie_control import ur5 as ur5
+from magpie_control.ur5 import UR5_Interface
 from magpie_control.poses import repair_pose
 # import open3d as o3d
 
@@ -66,15 +66,21 @@ def set_experiment_env():
     env_sto( "_USE_TIMEOUT"      , False    )
     env_sto( "_OBJ_TIMEOUT_S"    , 180.0    ) # Readings older than this are not considered
     env_sto( "_SCORE_DECAY_TAU_S",  60.0    )
-    env_sto( "_CUT_LKG_S_FRAC"   ,   0.350  )    
+
+    env_sto( "_CUT_INTAKE_S_FRAC",   0.500  ) # 0.750
+    env_sto( "_CUT_LKG_S_FRAC"   ,   0.400  )    
     env_sto( "_CUT_MERGE_S_FRAC" ,   0.333  )
     env_sto( "_CUT_DETERM_S_FRAC",   0.333  )
+
     env_sto( "_N_XTRA_SPOTS"     ,   3      )
     env_sto( "_N_REQD_OBJS"      ,   3      )
     env_sto( "_CONFUSE_PROB"     ,   0.025  )
     env_sto( "_SCORE_FILTER_EXP" ,   0.75   )
-    env_sto( "_NULL_THRESH"      ,   0.75   )
-    env_sto( "_SCORE_DIV_FAIL"   ,   4.0    )
+    env_sto( "_NULL_THRESH"      ,   0.625  ) # 0.50 # 0.75
+
+    env_sto( "_SCORE_BIGNUM"     , 4000.0    )
+    env_sto( "_SCORE_DIV_FAIL"   ,    4.0    )
+
     env_sto( "_MAX_UPDATE_RAD_M" , 1.25*env_var("_BLOCK_SCALE") )
     env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
 
@@ -87,8 +93,7 @@ def set_experiment_env():
             
             ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
             ('Supported', 'ylwBlock', 'grnBlock'), 
-            ('Supported', 'bluBlock', 'ylwBlock'),
-            # ('Supported', 'redBlock', 'bluBlock'),
+            # ('Supported', 'bluBlock', 'ylwBlock'),
 
             ('HandEmpty',),
         )
@@ -98,6 +103,9 @@ def set_experiment_env():
                                             [ 0.0, 1.0, 0.0, -0.5/100.0, ],
                                             [ 0.0, 0.0, 1.0, 0.0, ],
                                             [ 0.0, 0.0, 0.0, 1.0, ],] ) )
+    
+
+
     
 
 
@@ -151,7 +159,7 @@ class TaskPlanner:
         self.reset_state()
         self.open_file()
         self.perc   = Perception_OWLViT
-        self.robot  = ur5.UR5_Interface() if (not noBot) else None
+        self.robot : UR5_Interface = UR5_Interface() if (not noBot) else None
         self.logger = DataLogger() if (not noBot) else None
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
@@ -167,6 +175,7 @@ class TaskPlanner:
         """ Stop the Perception Process and the UR5 connection """
         self.dump_to_file( openNext = False )
         if not self.noBot:
+            self.robot.reset_gripper_overload( restart = False )
             self.robot.stop()
             self.perc.shutdown()
 
@@ -216,9 +225,14 @@ class TaskPlanner:
                 camPose 
             ) 
 
-        self.symPln.symbols = self.memory.get_current_most_likely()
+        # self.memory.get_current_most_likely()
 
         # reify_chosen_beliefs( self.memory.LKG , self.symPln.symbols, factor = env_var("_REIFY_SUPER_BEL") )
+
+
+    def phase_2_Conditions( self ):
+        """ Get the necessary initial state, Check for goals already met """
+        self.symPln.symbols = self.memory.get_current_most_likely()
 
         if len( self.symPln.symbols ):
             self.status = Status.RUNNING
@@ -231,9 +245,6 @@ class TaskPlanner:
             if env_var("_VERBOSE"):
                 print( f"\tNO OBJECTS DETERMINIZED" )
 
-
-    def phase_2_Conditions( self ):
-        """ Get the necessary initial state, Check for goals already met """
         self.blcMod.instantiate_conditions( self.robot )
         
 
@@ -279,6 +290,8 @@ class TaskPlanner:
             if (btr.status == Status.FAILURE):
                 self.status = Status.FAILURE
                 self.logger.log_event( "Action Failure", btr.msg )
+            else:
+                self.status = Status.RUNNING
 
             btr.per_sleep()
 
@@ -398,6 +411,14 @@ class TaskPlanner:
                 sleep( env_var("_UPDATE_PERIOD_S") - (t4 - expBgn) )
             self.phase_4_Execute_Action()
 
+            if not self.p_failed():
+                self.blcMod.instantiate_conditions( self.robot )
+                if self.symPln.validate_goal_noisy( self.symPln.goal ):
+                    self.logger.log_event( "Believe Success", f"Iteration {i}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
+                    print( f"!!! Noisy success at iteration {i} !!!" )
+                    self.status = Status.SUCCESS
+                
+
             ##### Phase 5 ########################
 
             print( f"Phase 5, {self.status} ..." )
@@ -434,6 +455,7 @@ _HIGH_VIEW_POSE = None
 def responsive_experiment_prep( beginPlanPose = None ):
     """ Init system and return a ref to the planner """
     planner = TaskPlanner()
+    planner.robot.set_grip_N( 10.0 )
     print( planner.robot.get_tcp_pose() )
 
     if beginPlanPose is None:
@@ -441,7 +463,7 @@ def responsive_experiment_prep( beginPlanPose = None ):
             beginPlanPose = _GOOD_VIEW_POSE
         else:
             beginPlanPose = _HIGH_VIEW_POSE
-    planner.robot.set_grip_N( 8.0 )
+    
     planner.robot.open_gripper()
     return planner
 
@@ -530,7 +552,7 @@ if __name__ == "__main__":
 
         
         elif 1:
-            rbt = ur5.UR5_Interface()
+            rbt = UR5_Interface()
             rbt.start()
             sleep(2)
             print( f"Began at pose:\n{rbt.get_tcp_pose()}" )            
