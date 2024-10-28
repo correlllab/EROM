@@ -461,7 +461,9 @@ class EROM:
         for act_i in planBT.children:
             if "MoveHolding" in act_i.__class__.__name__:
                 poseBgn, poseEnd, label = act_i.args
-                # for objM in self.LKG:
+                
+                # BAD WARNING ERROR: RANKED LIST HAS ALREADY BEEN CUT, NEED TO MOVE BOTH LISTS
+
                 for objM in self.ranked:
                     dist_ij = euclidean_distance_between_symbols( objM, poseBgn )
                     if (dist_ij <= env_var("_MIN_SEP")) and (dist_ij < dMin) and (label in objM.labels):
