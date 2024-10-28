@@ -44,6 +44,7 @@ from aspire.SymPlanner import SymPlanner
 ### Local ###
 from obj_ID_server import Perception_OWLViT
 from EROM import EROM, reify_chosen_beliefs
+from draw_beliefs import render_memory_list
 
 
 
@@ -406,6 +407,10 @@ class TaskPlanner:
             ##### Phase 4 ########################
 
             print( f"Phase 4, {self.status} ..." )
+
+            if env_var("_USE_GRAPHICS"):
+                render_memory_list( self.memory.ranked )
+
             t4 = now()
             if (t4 - expBgn) < env_var("_UPDATE_PERIOD_S"):
                 sleep( env_var("_UPDATE_PERIOD_S") - (t4 - expBgn) )
