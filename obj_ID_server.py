@@ -87,6 +87,8 @@ class Perception_OWLViT:
         [0, 0, 0, 1                  ]
     ])
 
+    Ntot = 0
+
     captured_data = [] ################################################## NEW LIST TO SAVE DATA ACROSS RUNS
 
 
@@ -418,7 +420,7 @@ class Perception_OWLViT:
 
             clusters = cls.find_clusters(filtered_boxes, filtered_scores)
             clusters = [item for item in clusters if len( item )] # 2024-07-28: Some clusters are EMPTY
-            objIDstrTemp = {f'Object {objectnum + 1}': {} for objectnum in range(len(clusters))}
+            objIDstrTemp = {f'Object {cls.Ntot + objectnum + 1}': {} for objectnum in range(len(clusters))}
 
             index_to_segment = [max(cluster, key=lambda x: x[2])[3] for cluster in clusters]
             formatted_boxes = [box for box_list in filtered_coords for box in box_list]
@@ -492,10 +494,12 @@ class Perception_OWLViT:
                 #         print(f"Transformation error: {e}", flush=True, file=sys.stderr)
                 #     raise e
 
-                objIDstrTemp[f'Object {num + 1}']['Probability'] = cls.calculate_probability_dist(clusters[num])
-                objIDstrTemp[f'Object {num + 1}']['Pose']        = cls.get_pcd_pose( cpcd )
-                objIDstrTemp[f'Object {num + 1}']['Count']       = len( clusters[num] )
-                objIDstrTemp[f'Object {num + 1}']['Time']        = now()
+                idx = cls.Ntot + num + 1
+
+                objIDstrTemp[f'Object {idx}']['Probability'] = cls.calculate_probability_dist(clusters[num])
+                objIDstrTemp[f'Object {idx}']['Pose']        = cls.get_pcd_pose( cpcd )
+                objIDstrTemp[f'Object {idx}']['Count']       = len( clusters[num] )
+                objIDstrTemp[f'Object {idx}']['Time']        = now()
 
             if cls.visualize_boxes:
                 cls.plot_bounding_boxes(image, filtered_scores, filtered_boxes, filtered_labels, topk=False, show_plot=True)
@@ -503,7 +507,7 @@ class Perception_OWLViT:
             
             print( objIDstrTemp )
 
-
+            cls.Ntot += len(objIDstrTemp) 
             return objIDstrTemp
 
         except Exception as e:

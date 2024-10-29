@@ -61,17 +61,23 @@ def set_experiment_env():
     _trgtGrn = ObjPose( _poseGrn )
     env_sto( "_DEF_NULL_SCORE"   , 0.75     )
     env_sto( "_NULL_EVIDENCE"    , True     )
-    env_sto( "_UPDATE_PERIOD_S"  ,   6.0    )
+    env_sto( "_UPDATE_PERIOD_S"  , 600.0    )
     env_sto( "_REIFY_SUPER_BEL"  ,   1.01   )
-    env_sto( "_Z_SNAP_BOOST"     ,   0.00   )
+    
+    env_sto( "_Z_SNAP_BOOST"     ,   0.00*env_var("_BLOCK_SCALE")   )
+    env_sto( "_Z_STACK_BOOST"    ,   0.00*env_var("_BLOCK_SCALE")   )
+
     env_sto( "_USE_TIMEOUT"      , False    )
     env_sto( "_OBJ_TIMEOUT_S"    , 180.0    ) # Readings older than this are not considered
+    env_sto( "_USE_DECAY"        , True    )
     env_sto( "_SCORE_DECAY_TAU_S",  60.0    )
 
-    env_sto( "_CUT_INTAKE_S_FRAC",   0.500  ) # 0.750
-    env_sto( "_CUT_LKG_S_FRAC"   ,   0.400  )    
-    env_sto( "_CUT_MERGE_S_FRAC" ,   0.333  )
-    env_sto( "_CUT_DETERM_S_FRAC",   0.333  )
+    env_sto( "_N_INTAKE_SCANS"   ,   1     )
+
+    env_sto( "_CUT_INTAKE_S_FRAC",   0.400  ) # 0.125 # 0.250 # 0.333 # 0.5# 0.750
+    env_sto( "_CUT_LKG_S_FRAC"   ,   0.250  ) # 0.400   
+    env_sto( "_CUT_MERGE_S_FRAC" ,   0.250  ) # 0.333
+    env_sto( "_CUT_DETERM_S_FRAC",   0.250  ) # 0.333
 
     env_sto( "_N_XTRA_SPOTS"     ,   3      )
     env_sto( "_N_REQD_OBJS"      ,   3      )
@@ -80,14 +86,18 @@ def set_experiment_env():
     env_sto( "_NULL_THRESH"      ,   0.625  ) # 0.50 # 0.75
 
     env_sto( "_SCORE_BIGNUM"     , 4000.0    )
-    env_sto( "_SCORE_DIV_FAIL"   ,    4.0    )
+    env_sto( "_SCORE_DIV_FAIL"   ,    7.0    )
+    env_sto( "_N_MISS_PUNISH"   ,    2    )
 
-    env_sto( "_MAX_UPDATE_RAD_M" , 1.25*env_var("_BLOCK_SCALE") )
     env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
+    env_sto( "_MAX_UPDATE_RAD_M" , 1.25*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_XY_ACCEPT"   , 2.50*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_Z_ABOVE"     , 1.75*env_var("_BLOCK_SCALE") )
+    
 
     env_sto( "_ROBOT_FREE_SPEED",  0.125 ) 
     env_sto( "_ROBOT_HOLD_SPEED",  0.125 )
-    env_sto( "_ACCEPT_POSN_ERR" ,  0.90*env_var( "_BLOCK_SCALE" ) )
+    env_sto( "_ACCEPT_POSN_ERR" ,  0.60*env_var( "_BLOCK_SCALE" ) ) # 0.75 # 0.90
     
     env_sto( "_GOAL" ,
         ( 'and',
@@ -191,12 +201,13 @@ class TaskPlanner:
         btAction = GroundedAction( args = list(), robot = self.robot, name = "Return Home" )
         btAction.add_children([
             Open_Gripper( ctrl = self.robot ),
-            Interleaved_MoveFree_and_PerceiveScene( 
-                MoveFree( [None, ObjPose( goPose )], robot = self.robot, suppressGrasp = True ), 
-                self.symPln, 
-                env_var("_UPDATE_PERIOD_S"), 
-                initSenseStep = True 
-            ),
+            MoveFree( [None, ObjPose( goPose )], robot = self.robot, suppressGrasp = True ), 
+            # Interleaved_MoveFree_and_PerceiveScene( 
+            #     MoveFree( [None, ObjPose( goPose )], robot = self.robot, suppressGrasp = True ), 
+            #     self.symPln, 
+            #     env_var("_UPDATE_PERIOD_S"), 
+            #     initSenseStep = True 
+            # ),
         ])
         
         btr = BT_Runner( btAction, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
@@ -219,12 +230,14 @@ class TaskPlanner:
 
         # camPose = env_var("_HACKED_OFFSET").dot( self.robot.get_cam_pose() )
         
-
+        obsrv = dict()
         for _ in range( Nscans ):
-            self.memory.process_observations( 
-                self.perc.build_model( shots = 1 ),
-                camPose 
-            ) 
+            obsrv.update( self.perc.build_model( shots = 1 ) )
+
+        self.memory.process_observations( 
+            obsrv,
+            camPose 
+        ) 
 
         # self.memory.get_current_most_likely()
 
@@ -234,6 +247,7 @@ class TaskPlanner:
     def phase_2_Conditions( self ):
         """ Get the necessary initial state, Check for goals already met """
         self.symPln.symbols = self.memory.get_current_most_likely()
+        reify_chosen_beliefs( self.symPln.symbols )
 
         if len( self.symPln.symbols ):
             self.status = Status.RUNNING
@@ -268,6 +282,9 @@ class TaskPlanner:
             self.status = Status.FAILURE
             self.logger.log_event( "Planning Failure" )
             print( f"Planning Failure!" )
+        elif (self.symPln.status == Status.SUCCESS):
+            self.status = Status.RUNNING
+            print( f"\n\nPlanner thinks we SUCCEEDED!\n\n" )
 
         # reify_chosen_beliefs( self.memory.LKG , self.symPln.symbols, factor = env_var("_REIFY_SUPER_BEL") )
 
@@ -355,11 +372,11 @@ class TaskPlanner:
             # self.set_goal()
 
             expBgn = now()
-            if (expBgn - t5) < env_var("_UPDATE_PERIOD_S"):
-                sleep( env_var("_UPDATE_PERIOD_S") - (expBgn - t5) )
+            # if (expBgn - t5) < env_var("_UPDATE_PERIOD_S"):
+            #     sleep( env_var("_UPDATE_PERIOD_S") - (expBgn - t5) )
 
             self.robot.moveL( beginPlanPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
-            self.phase_1_Perceive( 1 )
+            self.phase_1_Perceive( env_var("_N_INTAKE_SCANS") )
 
             # if 1:    
             #     self.robot.moveL( _SHOT_1, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
@@ -395,6 +412,10 @@ class TaskPlanner:
             print( f"Phase 3, {self.status} ..." )
             self.phase_3_Plan_Task()
 
+            if self.status in (Status.SUCCESS, Status.FAILURE):
+                print( f"LOOP, {self.status} ..." )
+                continue
+
             # DEATH MONITOR
             if self.symPln.noSoln >= self.symPln.nonLim:
                 self.logger.log_event( "SOLVER BRAINDEATH", f"Iteration {i}: Solver has failed {self.symPln.noSoln} times in a row!" )
@@ -409,27 +430,27 @@ class TaskPlanner:
             print( f"Phase 4, {self.status} ..." )
 
             if env_var("_USE_GRAPHICS"):
-                render_memory_list( self.memory.ranked )
+                render_memory_list( self.memory.LKG + self.memory.beliefs.beliefs, self.symPln.symbols )
 
             t4 = now()
-            if (t4 - expBgn) < env_var("_UPDATE_PERIOD_S"):
-                sleep( env_var("_UPDATE_PERIOD_S") - (t4 - expBgn) )
+            # if (t4 - expBgn) < env_var("_UPDATE_PERIOD_S"):
+            #     sleep( env_var("_UPDATE_PERIOD_S") - (t4 - expBgn) )
             self.phase_4_Execute_Action()
 
-            if not self.p_failed():
-                self.blcMod.instantiate_conditions( self.robot )
-                if self.symPln.validate_goal_noisy( self.symPln.goal ):
-                    self.logger.log_event( "Believe Success", f"Iteration {i}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
-                    print( f"!!! Noisy success at iteration {i} !!!" )
-                    self.status = Status.SUCCESS
+            # if not self.p_failed():
+            #     self.blcMod.instantiate_conditions( self.robot )
+            #     if self.symPln.validate_goal_noisy( self.symPln.goal ):
+            #         self.logger.log_event( "Believe Success", f"Iteration {i}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
+            #         print( f"!!! Noisy success at iteration {i} !!!" )
+            #         self.status = Status.SUCCESS
                 
 
             ##### Phase 5 ########################
 
             print( f"Phase 5, {self.status} ..." )
             t5 = now()
-            if (t5 - t4) < env_var("_UPDATE_PERIOD_S"):
-                sleep( env_var("_UPDATE_PERIOD_S") - (t5 - t4) )
+            # if (t5 - t4) < env_var("_UPDATE_PERIOD_S"):
+            #     sleep( env_var("_UPDATE_PERIOD_S") - (t5 - t4) )
             self.phase_5_Return_Home( beginPlanPose )
 
             print()

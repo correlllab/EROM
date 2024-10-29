@@ -8,7 +8,7 @@ import numpy as np
 from py_trees.common import Status
 
 from aspire.env_config import env_var
-from aspire.utils import match_name, normalize_dist
+from aspire.utils import match_name, normalize_dist, get_confused_class_reading
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, p_symbol_inside_workspace_bounds,
                              euclidean_distance_between_symbols )
 from aspire.actions import GroundedAction
@@ -29,15 +29,24 @@ def hacked_offset_map( pose ) -> np.ndarray:
     hackXfrm = np.eye(4)
     offset   = np.zeros( (3,) )
     vec      = pose[0:3,3]
-    # midX     = env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")*0.75
+    
+    minX     = env_var("_MIN_X_OFFSET")
+    midX     = env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")*0.50
+    maxX     = env_var("_MAX_X_OFFSET")
+    
+    minY     = env_var("_MIN_Y_OFFSET")
     midY     = env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")*0.50
+    maxY     = env_var("_MAX_Y_OFFSET")
+
     # lesY     = midY - env_var("_Y_WRK_SPAN")*0.25
     minY     = env_var("_MIN_Y_OFFSET")
     maxY     = env_var("_MAX_Y_OFFSET")
     height   = 0.5*env_var("_BLOCK_SCALE")
-    hackMap  = [ [[env_var("_MIN_X_OFFSET"), midY, height], [-2.0/100.0, -0.5/100.0, 0.0]],
-                 [[env_var("_MAX_X_OFFSET"), minY, height], [-1.0/100.0, -1.5/100.0, 0.0]], 
-                 [[env_var("_MAX_X_OFFSET"), maxY, height], [-1.0/100.0, +1.0/100.0, 0.0]],]
+    hackMap  = [ [[minX, minY, height], [-3.0/100.0, -1.5/100.0, 0.0]],
+                 [[minX, maxY, height], [-3.0/100.0,  0.0/100.0, 0.0]],
+                 [[midX, midY, height], [-1.5/100.0,  0.0/100.0, 0.0]],
+                 [[maxX, minY, height], [ 0.0/100.0, -2.0/100.0, 0.0]], 
+                 [[maxX, maxY, height], [ 0.0/100.0, +1.5/100.0, 0.0]],]
     weights = list()
     for hack in hackMap:
         weights.append( 1.0 / np.linalg.norm( np.subtract( vec, hack[0] ) ) )
@@ -160,16 +169,23 @@ def merge_and_reconcile_object_memories( belLst : list[GraspObj], lkgLst : list[
     mrgLst.extend( lkgLst )
     tCurr   = now()
     
-    print( f"Number to decay: {len(mrgLst)}" )
+    if env_var("_USE_DECAY"):
+        print( f"\nNumber to decay: {len(mrgLst)}" )
     
     # Filter and Decay stale readings
     for r in mrgLst:
-        score_r = np.exp( -(tCurr - r.ts) / tau ) * r.score
-        if isnan( score_r ):
-            print( f"\nWARN: Got a NaN score with count {r.count}, distribution {r.labels}, and age {tCurr - r.ts}\n" )
-            score_r = 0.0
-        r.score = score_r
+        if env_var("_USE_DECAY"):
+            factor = np.exp( -(tCurr - r.ts) / tau )
+            print( f"Decay factor: {factor:.3f}" )
+            score_r = factor * r.score
+            if isnan( score_r ):
+                print( f"\nWARN: Got a NaN score with count {r.count}, distribution {r.labels}, and age {tCurr - r.ts}\n" )
+                score_r = 0.0
+            r.score = score_r
         rtnLst.append( r )
+
+    if env_var("_USE_DECAY"):
+        print()
 
     print( f"Number to reconcile: {len(rtnLst)}" )
     
@@ -210,7 +226,8 @@ def gen_combos( objs : list[GraspObj], idx = 0 ):
             comboList.append( [
                 GraspObj( label = label_i, pose  = objs[ idx ].pose, 
                           prob  = prob_i , score = objs[ idx ].score, labels = None,
-                          ts = objs[ idx ].ts , count = objs[ idx ].count ),
+                          ts = objs[ idx ].ts , count = objs[ idx ].count,
+                          parent = objs[ idx ] ),
             ] )
     else:
         # for label_i, prob_i in objs[ idx ].labels.items():
@@ -218,8 +235,9 @@ def gen_combos( objs : list[GraspObj], idx = 0 ):
         for label_i in sorted( list( objs[ idx ].labels.keys() ) ):
             prob_i = objs[ idx ].labels[ label_i ]
             obj_i = GraspObj( label = label_i, pose  = objs[ idx ].pose, 
-                               prob  = prob_i , score = objs[ idx ].score, labels = None,
-                               ts    = objs[ idx ].ts , count = objs[ idx ].count )
+                              prob  = prob_i , score = objs[ idx ].score, labels = None,
+                              ts    = objs[ idx ].ts , count = objs[ idx ].count,
+                              parent = objs[ idx ] )
             for cmb_j in gen_combos( objs, idx+1 ):
                 lst_j = [obj_i,]
                 lst_j.extend( cmb_j )
@@ -258,10 +276,10 @@ def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non
         reverse = 1
     )
 
-    print( f"\nTotal Combos: {len(totCombos)}" )
-    for combo in totCombos:
-        print( f"Combo: {prod(combo):.3f}, {combo}" )
-    print()
+    # print( f"\nTotal Combos: {len(totCombos)}" )
+    # for combo in totCombos:
+    #     print( f"Combo: {prod(combo):.3f}, {combo}" )
+    # print()
 
     ### Filtering Methods ###
 
@@ -277,25 +295,17 @@ def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non
             return False
         return len( lbls ) == len( objs )
     
-    def clean_dupes_prob( objLst : list[GraspObj] ):
-        """ Return a version of `objLst` with duplicate objects removed """
-        dctMax = {}
-        for sym in objLst:
-            if not sym.label in dctMax:
-                dctMax[ sym.label ] = sym
-            elif sym.prob > dctMax[ sym.label ].prob:
-                dctMax[ sym.label ] = sym
-        return list( dctMax.values() )
+    def p_unique_nonnull_nocollide( objs : list[GraspObj] ):
+        """ Return true if there are as many classes as there are objects """
+        if not p_unique_non_null_labels( objs ):
+            return False
+        for i, obj_i in enumerate( objs ):
+            for j, obj_j in enumerate( objs ):
+                if (i != j) and (euclidean_distance_between_symbols( obj_i, obj_j ) < env_var("_LKG_SEP")):
+                    return False
+        return True
     
-    def clean_dupes_score( objLst : list[GraspObj] ):
-        """ Return a version of `objLst` with duplicate objects removed """
-        dctMax = {}
-        for sym in objLst:
-            if not sym.label in dctMax:
-                dctMax[ sym.label ] = sym
-            elif sym.score > dctMax[ sym.label ].score:
-                dctMax[ sym.label ] = sym
-        return list( dctMax.values() )
+    
 
     ### Apply the chosen Filtering Method to all possible combinations ###
 
@@ -311,10 +321,11 @@ def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non
             if p_unique_non_null_labels( combo ):
                 rtnSymbols = combo
                 break
-    elif (method == "clean-dupes"):
-        rtnSymbols = clean_dupes_prob( totCombos[0] )
-    elif (method == "clean-dupes-score"):
-        rtnSymbols = clean_dupes_score( totCombos[0] )
+    elif (method == "unique-nonull-nocollide"):
+        for combo in totCombos:
+            if p_unique_nonnull_nocollide( combo ):
+                rtnSymbols = combo
+                break
     else:
         raise ValueError( f"`most_likely_objects`: Filtering method \"{method}\" is NOT recognized!" )
     
@@ -324,19 +335,18 @@ def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non
     return rtnSymbols
 
 
-def reify_chosen_beliefs( objs : list[GraspObj], chosen, factor = env_var("_REIFY_SUPER_BEL") )->None:
+def reify_chosen_beliefs( chosen : list[GraspObj] )->None:
     """ Super-believe in the beliefs we believed in. 
         That is: Refresh the timestamp and score of readings that ultimately became grounded symbols """
-    posen = [ extract_pose_as_homog( ch ) for ch in chosen ]
-    maxSc = 0.0
-    for obj in objs:
-        if obj.score > maxSc:
-            maxSc = obj.score
-    for obj in objs:
-        for cPose in posen:
-            if (translation_diff( cPose, extract_pose_as_homog( obj ) ) <= env_var("_LKG_SEP")):
-                # obj.score = maxSc * factor
-                obj.ts    = now()
+    nUpdt = 0
+    for chsn in chosen:
+        if chsn.parent is not None:
+            chsn.parent.ts    = now()
+            chsn.parent.score *= env_var("_SCORE_DIV_FAIL")
+            nUpdt += 1
+    print( f"\n### Reified {nUpdt} beliefs! ###\n" )
+        
+    
 
 
 
@@ -351,7 +361,7 @@ class EROM:
         self.beliefs = ObjectMemory()
         self.LKG    : list[GraspObj]    = list()
         self.ranked : list[GraspObj] = list()
-        # self.symbols: list[GraspObj] = list()
+        self.lastPose = dict()
 
 
     def __init__( self ):
@@ -362,11 +372,13 @@ class EROM:
         """ Integrate one noisy scan into the current beliefs """
 
         # self.scan = observation_to_readings( obs, xform )
-        self.scan = cut_bottom_fraction( observation_to_readings( obs, xform ), env_var("_CUT_INTAKE_S_FRAC") )
-        # self.scan = rectify_readings( 
-        #     cut_bottom_fraction( observation_to_readings( obs, xform ), env_var("_CUT_INTAKE_S_FRAC") ), 
-        #     useTimeout = False 
-        # )
+        if len( self.scan ) > 0:
+            self.scan = cut_bottom_fraction( observation_to_readings( obs, xform ), env_var("_CUT_INTAKE_S_FRAC") )
+        else:
+            self.scan = rectify_readings( 
+                cut_bottom_fraction( observation_to_readings( obs, xform ), env_var("_CUT_INTAKE_S_FRAC") ), 
+                useTimeout = False 
+            )
         # self.scan = rectify_readings( 
         #     observation_to_readings( obs, xform ), 
         #     useTimeout = False 
@@ -376,26 +388,17 @@ class EROM:
         # LKG and Belief are updated SEPARATELY and merged LATER as symbols
         # self.LKG     = rectify_readings( copy_readings_as_LKG( self.scan ) )
         # self.LKG.extend( copy_readings_as_LKG( self.scan ) )
+
         self.LKG.extend( self.scan )
         mark_readings_LKG( self.LKG, val = True )
+        self.LKG = cut_bottom_fraction( self.LKG, env_var("_CUT_LKG_S_FRAC") )
         self.LKG = rectify_readings( self.LKG, useTimeout = env_var("_USE_TIMEOUT") )
+        
         self.beliefs.belief_update( self.scan, xform, maxRadius = env_var("_MAX_UPDATE_RAD_M") )
 
 
     def rank_combined_memory( self ):
         """ Reconcile and rank the two memory streams """
-
-        self.LKG = cut_bottom_fraction( self.LKG, env_var("_CUT_LKG_S_FRAC") )
-
-        # self.ranked = sorted( 
-        #     merge_and_reconcile_object_memories( 
-        #         list( self.beliefs.beliefs ), 
-        #         list( self.LKG ), 
-        #         tau          = env_var("_SCORE_DECAY_TAU_S"), 
-        #     ), 
-        #     key = lambda item: item.score, 
-        #     reverse = True 
-        # )
 
         self.ranked = merge_and_reconcile_object_memories( 
             list( self.beliefs.beliefs ), 
@@ -434,7 +437,7 @@ class EROM:
         rtnLst = most_likely_objects( 
             self.ranked, 
             env_var("_N_REQD_OBJS"),
-            method       = "unique-non-null", # "unique", #"unique-non-null", 
+            method       = "unique-nonull-nocollide", # "unique-non-null", # "unique", #"unique-non-null", 
             cutScoreFrac = env_var("_CUT_DETERM_S_FRAC")
         )
         # reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
@@ -445,16 +448,30 @@ class EROM:
         return rtnLst
     
 
+    def check_reading_movement( self ):
+        """ Check if any readings have moved """
+        combined = self.ranked[:] + self.LKG[:]
+        print( "\n##### Readings Moved #####" )
+        for objM in combined:
+            if id( objM ) in self.lastPose:
+                movMag = translation_diff( self.lastPose[ id( objM ) ], extract_pose_as_homog( objM ) )
+                if movMag > 0.0001:
+                    print( f"{movMag:.3f}[m] movement by {objM}" )
+            self.lastPose[ id( objM ) ] = extract_pose_as_homog( objM )
+        print()
+    
+
     def move_reading_from_BT_plan( self, planBT : GroundedAction ):
         """ Infer reading to be updated by the robot action, Then update it """
         _verbose = True
         # NOTE: This should run after a BT successfully completes
         # NOTE: This function exits after the first object move
         # NOTE: This function assumes that the reading nearest to the beginning of the 
-        updated = False
-        dMin    = 1e9
-        endMin  = None
-        objMtch = list()
+        updated  = False
+        dMin     = 1e9
+        endMin   = None
+        objMtch  = list()
+        combined = self.ranked[:] + self.LKG[:]
 
         # self.ranked = rectify_readings( self.ranked, useTimeout = False )
         
@@ -464,9 +481,13 @@ class EROM:
                 
                 # BAD WARNING ERROR: RANKED LIST HAS ALREADY BEEN CUT, NEED TO MOVE BOTH LISTS
 
-                for objM in self.ranked:
+                # for objM in self.ranked:
+                for objM in combined:
                     dist_ij = euclidean_distance_between_symbols( objM, poseBgn )
-                    if (dist_ij <= env_var("_MIN_SEP")) and (dist_ij < dMin) and (label in objM.labels):
+
+                    # if (dist_ij <= env_var("_MIN_SEP")) and (dist_ij < dMin) and (label in objM.labels):
+                    # if (dist_ij <= (env_var("_MAX_UPDATE_RAD_M")*1.5) ) and (dist_ij < dMin) and (label in objM.labels):
+                    if (dist_ij <= env_var("_MAX_UPDATE_RAD_M") ) and (dist_ij < dMin) and (label in objM.labels):
                         dMin    = dist_ij
                         endMin  = poseEnd
                         updated = True
@@ -482,10 +503,25 @@ class EROM:
                     # 2024-07-27: NEED TO DO SOME DEEP THINKING ABOUT THE FRESHNESS OF RELEVANT FACTS
                     if _verbose:
                         print( f"`get_moved_reading_from_BT_plan`: BT {planBT.name} updated {obj_m}!" )  
+
+                self.check_reading_movement()
+                
             else:
                 for obj_m in objMtch:
                     # obj_m.score /= env_var('_SCORE_DIV_FAIL')
                     obj_m.score = 0.0
+                    nul_m = GraspObj( 
+                        label = env_var("_NULL_NAME"), 
+                        labels = get_confused_class_reading( env_var("_NULL_NAME"), env_var("_CONFUSE_PROB"), 
+                                                             env_var("_BLOCK_NAMES") ),
+                        pose = obj_m.pose, 
+                        prob = 1.0, 
+                        score = env_var("_DEF_NULL_SCORE"), 
+                        ts = now(), 
+                        count = 1 
+                    )
+                    for _ in range( env_var("_N_MISS_PUNISH") ):
+                        self.beliefs.integrate_one_reading( nul_m, camXform = None, suppressNew = True )
         else:
             if _verbose:
                 print( f"`get_moved_reading_from_BT_plan`: NO update applied by BT {planBT.name}!" )    
