@@ -342,7 +342,7 @@ def reify_chosen_beliefs( chosen : list[GraspObj] )->None:
     for chsn in chosen:
         if chsn.parent is not None:
             chsn.parent.ts    = now()
-            chsn.parent.score *= env_var("_SCORE_DIV_FAIL")
+            chsn.parent.score *= env_var("_SCORE_MULT_DETERM")
             nUpdt += 1
     print( f"\n### Reified {nUpdt} beliefs! ###\n" )
         
@@ -498,7 +498,7 @@ class EROM:
                 for obj_m in objMtch:
                     obj_m.pose = endMin
                     obj_m.ts   = now() # 2024-07-27: THIS IS EXTREMELY IMPORTANT ELSE THIS READING DIES --> BAD BELIEFS
-                    obj_m.score *= env_var('_SCORE_DIV_FAIL') 
+                    obj_m.score *= env_var('_SCORE_MULT_SUCCESS') 
                     # obj_m.score = env_var('_SCORE_BIGNUM') 
                     # 2024-07-27: NEED TO DO SOME DEEP THINKING ABOUT THE FRESHNESS OF RELEVANT FACTS
                     if _verbose:
