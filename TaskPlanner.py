@@ -308,6 +308,7 @@ class TaskPlanner:
             if (btr.status == Status.FAILURE):
                 self.status = Status.FAILURE
                 self.logger.log_event( "Action Failure", btr.msg )
+                self.robot.open_gripper()
             else:
                 self.status = Status.RUNNING
 
