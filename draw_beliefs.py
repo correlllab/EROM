@@ -163,7 +163,7 @@ def reading_geo( objReading : GraspObj ):
             colr_i.append( env_var("_BLOCK_ALPHA") )
 
             bloc_i = scene.visuals.Box( scal_i, scal_i, scal_i,  
-                                        color = colr_i, edge_color="white" , )
+                                        color = colr_i, edge_color = lkgClr if objReading.LKG else belClr , )
             bloc_i.transform = transforms.STTransform( translate = xfrm_i[:3,3] )
             rtnGeo.append( bloc_i )
     if objReading.prob > 0.0:
@@ -188,12 +188,42 @@ def reading_list_geo( objs : list[GraspObj] ):
     return rtnGeo
 
 
+def symbol_geo( sym : GraspObj ):
+    objXfrm = extract_pose_as_homog( sym, noRot = True )
+    wf1 = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
+                             color = Color( "black" ) )
+    wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    wf2 = wireframe_box_geo( env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, 
+                             color = Color( "black" ) )
+    wf2.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    scl  = env_var("_BLOCK_SCALE") * sym.prob
+    bClr = env_var("_CLR_TABLE")[ sym.label[:3] ]
+    bClr.append( env_var("_BLOCK_ALPHA") )
+    blc  = scene.visuals.Box( scl, scl, scl,  
+                              color = bClr, edge_color="black" )
+    blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    return [wf1, wf2, blc,] 
+
+
+def symbol_list_geo( objs : list[GraspObj], noTable = True ):
+    """ Get geo for a list of symbols """
+    if noTable:
+        rtnGeo = list()
+    else:
+        rtnGeo = [table_geo(),]
+    for obj in objs:
+        rtnGeo.extend( symbol_geo( obj ) )
+    return rtnGeo
+
+
 
 ########## RENDER MEMORY ###########################################################################
 
-def render_memory_list( objs : list[GraspObj] ):
+def render_memory_list( objs : list[GraspObj], syms = None ):
     """ Render the memory """
     objLst = reading_list_geo( objs )
+    if syms is not None:
+        objLst.extend( symbol_list_geo( syms, noTable = True ) )
     vispy_geo_list_window( objLst )
 
 
