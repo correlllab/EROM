@@ -69,15 +69,15 @@ def set_experiment_env():
 
     env_sto( "_USE_TIMEOUT"      , False    )
     env_sto( "_OBJ_TIMEOUT_S"    , 180.0    ) # Readings older than this are not considered
-    env_sto( "_USE_DECAY"        , True    )
-    env_sto( "_SCORE_DECAY_TAU_S",  60.0    )
+    env_sto( "_USE_DECAY"        , False    )
+    env_sto( "_SCORE_DECAY_TAU_S", 120.0    )
 
     env_sto( "_N_INTAKE_SCANS"   ,   1     )
 
-    env_sto( "_CUT_INTAKE_S_FRAC",   0.400  ) # 0.125 # 0.250 # 0.333 # 0.5# 0.750
-    env_sto( "_CUT_LKG_S_FRAC"   ,   0.250  ) # 0.400   
-    env_sto( "_CUT_MERGE_S_FRAC" ,   0.250  ) # 0.333
-    env_sto( "_CUT_DETERM_S_FRAC",   0.250  ) # 0.333
+    env_sto( "_CUT_INTAKE_S_FRAC",   0.400  ) # 0.125 # 0.250 # 0.333 # 0.400 # 0.500 # 0.600  # 0.750
+    env_sto( "_CUT_LKG_S_FRAC"   ,   0.250  ) # 0.125 # 0.333 # 0.400   
+    env_sto( "_CUT_MERGE_S_FRAC" ,   0.250  ) # 0.125 # 0.333
+    env_sto( "_CUT_DETERM_S_FRAC",   0.250  ) # 0.250 # 0.333
 
     env_sto( "_N_XTRA_SPOTS"     ,   3      )
     env_sto( "_N_REQD_OBJS"      ,   3      )
@@ -86,7 +86,7 @@ def set_experiment_env():
     env_sto( "_NULL_THRESH"      ,   0.625  ) # 0.50 # 0.75
 
     env_sto( "_SCORE_BIGNUM"     , 4000.0    )
-    env_sto( "_SCORE_DIV_FAIL"   ,    7.0    )
+    env_sto( "_SCORE_DIV_FAIL"   ,    5.0    )
     env_sto( "_N_MISS_PUNISH"   ,    2    )
 
     env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
@@ -104,7 +104,7 @@ def set_experiment_env():
             
             ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
             ('Supported', 'ylwBlock', 'grnBlock'), 
-            # ('Supported', 'bluBlock', 'ylwBlock'),
+            ('Supported', 'bluBlock', 'ylwBlock'),
 
             ('HandEmpty',),
         )
