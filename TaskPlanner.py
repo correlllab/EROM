@@ -85,9 +85,11 @@ def set_experiment_env():
     env_sto( "_SCORE_FILTER_EXP" ,   0.75   )
     env_sto( "_NULL_THRESH"      ,   0.625  ) # 0.50 # 0.75
 
-    env_sto( "_SCORE_BIGNUM"     , 4000.0    )
-    env_sto( "_SCORE_DIV_FAIL"   ,    5.0    )
-    env_sto( "_N_MISS_PUNISH"   ,    2    )
+    env_sto( "_SCORE_BIGNUM"      , 4000.00    )
+    env_sto( "_SCORE_MULT_SUCCESS",    5.00    )
+    env_sto( "_SCORE_MULT_DETERM" ,    1.25    )
+    env_sto( "_N_MISS_PUNISH"     ,    2       )
+    env_sto( "_WIPE_ON_FAILURE"   , True       )
 
     env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
     env_sto( "_MAX_UPDATE_RAD_M" , 1.25*env_var("_BLOCK_SCALE") )
@@ -308,7 +310,6 @@ class TaskPlanner:
             if (btr.status == Status.FAILURE):
                 self.status = Status.FAILURE
                 self.logger.log_event( "Action Failure", btr.msg )
-                self.robot.open_gripper()
             else:
                 self.status = Status.RUNNING
 
@@ -438,12 +439,10 @@ class TaskPlanner:
             #     sleep( env_var("_UPDATE_PERIOD_S") - (t4 - expBgn) )
             self.phase_4_Execute_Action()
 
-            # if not self.p_failed():
-            #     self.blcMod.instantiate_conditions( self.robot )
-            #     if self.symPln.validate_goal_noisy( self.symPln.goal ):
-            #         self.logger.log_event( "Believe Success", f"Iteration {i}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
-            #         print( f"!!! Noisy success at iteration {i} !!!" )
-            #         self.status = Status.SUCCESS
+            if self.p_failed():
+                self.robot.open_gripper()
+                if env_var("_WIPE_ON_FAILURE"):
+                    self.memory.reset_memory()
                 
 
             ##### Phase 5 ########################
