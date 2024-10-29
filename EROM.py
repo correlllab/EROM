@@ -43,8 +43,8 @@ def hacked_offset_map( pose ) -> np.ndarray:
     maxY     = env_var("_MAX_Y_OFFSET")
     height   = 0.5*env_var("_BLOCK_SCALE")
     hackMap  = [ [[minX, minY, height], [-3.0/100.0, -1.5/100.0, 0.0]],
-                 [[minX, maxY, height], [-3.0/100.0,  0.0/100.0, 0.0]],
-                 [[midX, midY, height], [-1.5/100.0,  0.0/100.0, 0.0]],
+                 [[minX, maxY, height], [-4.0/100.0, +1.5/100.0, 0.0]],
+                 [[midX, midY, height], [-1.0/100.0, -1.0/100.0, 0.0]],
                  [[maxX, minY, height], [ 0.0/100.0, -2.0/100.0, 0.0]], 
                  [[maxX, maxY, height], [ 0.0/100.0, +1.5/100.0, 0.0]],]
     weights = list()
