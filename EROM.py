@@ -17,7 +17,8 @@ from magpie_control.poses import translation_diff
 
 ### Local ###
 from Bayes import ObjectMemory
-from utils import snap_z_to_nearest_block_unit_above_zero, set_quality_score, mark_readings_LKG
+from utils import ( snap_z_to_nearest_block_unit_above_zero, set_quality_score, mark_readings_LKG, 
+                    LogPickler, deep_copy_memory_list )
 
 
 
@@ -248,8 +249,21 @@ def gen_combos( objs : list[GraspObj], idx = 0 ):
     return comboList
 
 
+def mark_parents_by_symbol( symList : list[GraspObj] ):
+    """ Mark objects that gave rise to symbols """
+    for obj in symList:
+        if obj.parent is not None:
+            obj.parent.SYM = True
 
-def most_likely_objects( objList : list[GraspObj], k : int, method = "unique-non-null", cutScoreFrac = 0.5 ):
+
+def unmark_symbol_parents( objList : list[GraspObj] ):
+    """ Remove the symbol flag from all items """
+    for obj in objList:
+        obj.SYM = False
+
+
+def most_likely_objects( objList : list[GraspObj], k : int, 
+                         method = "unique-non-null", cutScoreFrac = 0.5 ) -> list[GraspObj]:
     """ Get the `N` most likely combinations of object classes """
     
     ### Drop Worst Readings ###
@@ -349,8 +363,6 @@ def reify_chosen_beliefs( chosen : list[GraspObj] )->None:
             nUpdt += 1
     print( f"\n### Reified {nUpdt} beliefs! ###\n" )
         
-    
-
 
 
 ########## ENTROPY-RANKED OBJECT MEMORY ############################################################
@@ -365,39 +377,44 @@ class EROM:
         self.LKG    : list[GraspObj]    = list()
         self.ranked : list[GraspObj] = list()
         self.lastPose = dict()
+        self.history.dump_to_file( openNext = True )
 
 
     def __init__( self ):
+        self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
         self.reset_memory()
 
 
     def process_observations( self, obs, xform = None ):
         """ Integrate one noisy scan into the current beliefs """
 
-        # self.scan = observation_to_readings( obs, xform )
+        readings = observation_to_readings( obs, xform )
+
+
         if len( self.scan ) > 0:
-            self.scan = cut_bottom_fraction( observation_to_readings( obs, xform ), env_var("_CUT_INTAKE_S_FRAC") )
+            self.scan = cut_bottom_fraction( readings, env_var("_CUT_INTAKE_S_FRAC") )
         else:
             self.scan = rectify_readings( 
-                cut_bottom_fraction( observation_to_readings( obs, xform ), env_var("_CUT_INTAKE_S_FRAC") ), 
+                cut_bottom_fraction( readings, env_var("_CUT_INTAKE_S_FRAC") ), 
                 useTimeout = False 
             )
-        # self.scan = rectify_readings( 
-        #     observation_to_readings( obs, xform ), 
-        #     useTimeout = False 
-        # )
         
-
-        # LKG and Belief are updated SEPARATELY and merged LATER as symbols
-        # self.LKG     = rectify_readings( copy_readings_as_LKG( self.scan ) )
-        # self.LKG.extend( copy_readings_as_LKG( self.scan ) )
-
         self.LKG.extend( self.scan )
         mark_readings_LKG( self.LKG, val = True )
         self.LKG = cut_bottom_fraction( self.LKG, env_var("_CUT_LKG_S_FRAC") )
         self.LKG = rectify_readings( self.LKG, useTimeout = env_var("_USE_TIMEOUT") )
         
         self.beliefs.belief_update( self.scan, xform, maxRadius = env_var("_MAX_UPDATE_RAD_M") )
+
+        self.history.append( 
+            datum = {
+                "observation" : deep_copy_memory_list( readings             ),
+                "scan"        : deep_copy_memory_list( self.scan            ),
+                "LKG"         : deep_copy_memory_list( self.LKG             ),
+                "beliefs"     : deep_copy_memory_list( self.beliefs.beliefs ),
+            },
+            msg = "memory" 
+        )
 
 
     def rank_combined_memory( self ):
@@ -410,6 +427,12 @@ class EROM:
         )
 
         self.ranked = cut_bottom_fraction( self.ranked, env_var("_CUT_MERGE_S_FRAC") )
+
+        self.history.append( 
+            datum = deep_copy_memory_list( self.ranked ),
+            msg = "ranking" 
+        )
+
         print( f"Cut Ranking: {len(self.ranked)}" )
 
         return self.ranked
@@ -443,10 +466,18 @@ class EROM:
             method       = "unique-nonull-nocollide", # "unique-non-null", # "unique", #"unique-non-null", 
             cutScoreFrac = env_var("_CUT_DETERM_S_FRAC")
         )
-        # reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
 
-        # print( rtnLst )
-        # self.symbols = rtnLst
+        pairs = list()
+        for sym in rtnLst:
+            pairs.append({
+                'symbol' : sym.deep_copy(),
+                'parent' : sym.parent.deep_copy() if (sym.parent is not None) else None,
+            })
+
+        self.history.append( 
+            datum = pairs,
+            msg   = "symbols" 
+        )
 
         return rtnLst
     
@@ -481,8 +512,6 @@ class EROM:
         for act_i in planBT.children:
             if "MoveHolding" in act_i.__class__.__name__:
                 poseBgn, poseEnd, label = act_i.args
-                
-                # BAD WARNING ERROR: RANKED LIST HAS ALREADY BEEN CUT, NEED TO MOVE BOTH LISTS
 
                 # for objM in self.ranked:
                 for objM in combined:
@@ -508,6 +537,11 @@ class EROM:
                         print( f"`get_moved_reading_from_BT_plan`: BT {planBT.name} updated {obj_m}!" )  
 
                 self.check_reading_movement()
+
+                self.history.append( 
+                    datum = deep_copy_memory_list( objMtch ),
+                    msg   = "moved" 
+                )
                 
             else:
                 for obj_m in objMtch:
@@ -525,6 +559,11 @@ class EROM:
                     )
                     for _ in range( env_var("_N_MISS_PUNISH") ):
                         self.beliefs.integrate_one_reading( nul_m, camXform = None, suppressNew = True )
+                        
+                self.history.append( 
+                    datum = deep_copy_memory_list( objMtch ),
+                    msg   = "demoted" 
+                )
         else:
             if _verbose:
                 print( f"`get_moved_reading_from_BT_plan`: NO update applied by BT {planBT.name}!" )    
