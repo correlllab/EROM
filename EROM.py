@@ -388,12 +388,16 @@ class EROM:
         self.LKG    : list[GraspObj]    = list()
         self.ranked : list[GraspObj] = list()
         self.lastPose = dict()
-        self.history.dump_to_file( openNext = True )
 
 
     def __init__( self ):
         self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
         self.reset_memory()
+
+
+    def shutdown( self ):
+        """ Save the memory """
+        self.history.dump_to_file( openNext = False )
 
 
     def process_observations( self, obs, xform = None ):
