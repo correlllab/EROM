@@ -147,9 +147,9 @@ class TaskPlanner:
 
     ##### Init ############################################################
 
-    def reset_memory( self ):
-        """ Erase belief memory """
-        self.reset_memory()
+    # def reset_memory( self ):
+    #     """ Erase belief memory """
+    #     self.memory.reset_memory()
 
 
     def reset_state( self ):
@@ -163,7 +163,6 @@ class TaskPlanner:
         set_experiment_env()
         self.outFil = None
         self.noBot  = noBot
-        self.outDir = "data/"
         self.memory  = EROM() # Entropy-Ranked Object Memory
         self.status = Status.INVALID # Running status
         self.perc   = Perception_OWLViT
@@ -275,7 +274,7 @@ class TaskPlanner:
         )
         if (self.symPln.status == Status.FAILURE):
             self.status = Status.FAILURE
-            self.logger.log_event( "Planning Failure" )
+            self.memory.history.append( msg = "Planning Failure" )
             print( f"Planning Failure!" )
         elif (self.symPln.status == Status.SUCCESS):
             self.status = Status.RUNNING
@@ -297,18 +296,18 @@ class TaskPlanner:
             
             currTip = btr.tick_once()
             if currTip != lastTip:
-                self.logger.log_event( f"Behavior: {currTip}", str(btr.status) )
+                self.memory.history.append( msg = f"Behavior: {currTip}, {str(btr.status)}" )
             lastTip = currTip
             
             if (btr.status == Status.FAILURE):
                 self.status = Status.FAILURE
-                self.logger.log_event( "Action Failure", btr.msg )
+                self.memory.history.append( msg = f"Action Failure: {btr.msg}" )
             else:
                 self.status = Status.RUNNING
 
             btr.per_sleep()
 
-        self.logger.log_event( "BT END", str( btr.status ) )
+        self.memory.history.append( msg = f"BT END: {btr.status}" )
 
         
 
@@ -344,7 +343,7 @@ class TaskPlanner:
         
         self.symPln.set_goal( env_var("_GOAL") )
 
-        self.logger.begin_trial()
+        self.memory.history.append( msg = "Task Start" )
 
         indicateSuccess = False
         t5              = now()
@@ -393,7 +392,7 @@ class TaskPlanner:
 
             if self.symPln.validate_goal_noisy( self.symPln.goal ):
                 indicateSuccess = True
-                self.logger.log_event( "Believe Success", f"Iteration {i}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
+                self.memory.history.append( msg = f"Believe Success, Iteration {i}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
                 print( f"!!! Noisy success at iteration {i} !!!" )
                 self.status = Status.SUCCESS
             else:
@@ -414,7 +413,7 @@ class TaskPlanner:
 
             # DEATH MONITOR
             if self.symPln.noSoln >= self.symPln.nonLim:
-                self.logger.log_event( "SOLVER BRAINDEATH", f"Iteration {i}: Solver has failed {self.symPln.noSoln} times in a row!" )
+                self.memory.history.append( msg = f"SOLVER BRAINDEATH: Iteration {i}: Solver has failed {self.symPln.noSoln} times in a row!" )
                 break
 
             if self.p_failed():
@@ -459,19 +458,9 @@ class TaskPlanner:
 
             print()
 
-        if 0: #self.PANIC:
-            print( "\n\nWARNING: User-requested shutdown or other fault!\n\n" )
-            self.logger.end_trial(
-                False,
-                {'PANIC': True, 'end_symbols' : list( self.symPln.symbols ), }
-            )
-        else:
-            self.logger.end_trial(
-                indicateSuccess,
-                {'end_symbols' : list( self.symPln.symbols ) }
-            )
-
-        self.logger.save( "data/Baseline" )
+        self.memory.history.append( msg =
+            f"Task End, Succes?: {indicateSuccess}, end_symbols : {list( self.symPln.symbols )}"
+        )
 
         print( f"\n##### PLANNER END with status {self.status} after iteration {i} #####\n\n\n" )
 
