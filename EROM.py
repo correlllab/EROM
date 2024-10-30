@@ -106,23 +106,26 @@ def observation_to_readings( obs : dict, xform = None ):
 ########## OBJECT PERMANENCE #######################################################################
 
 def cut_bottom_fraction( objs : list[GraspObj], frac ):
-    """ Return a version of `objs` with the bottom `frac` scores removed """
-    if len( objs ) > 1:
+    """ Return a version of `objs` with the bottom `frac` scores removed, Also return removed list """
+    N = len( objs )
+    if N:
         rtnObjs = sorted( objs, key = lambda item: item.score, reverse = True )
-        remNum  = int( frac * len( rtnObjs ) )
-        # print( f"Cutting {frac} = {remNum}/{len(rtnObjs)} objects!" )
+        remNum  = int( frac * N )
+        keepNm  = N - remNum
+
         if remNum > 0:
-            return rtnObjs[ 0:-remNum ]
+            return rtnObjs[ 0:-remNum ], rtnObjs[ keepNm: ]
         else:
-            return rtnObjs[:]
+            return rtnObjs[:], list()
     else:
-        return objs[:]
+        return objs[:], list()
 
 
 def rectify_readings( objReadingList : list[GraspObj], useTimeout = True ):
     """ Accept/Reject/Update noisy readings from the system, used by both LKG and EROM """
     tCurr  = now()
     nuMem  = list()
+    rmMem  = list()
     nuSet  = set([])
     rmSet  = set([])
     totLst = objReadingList[:]
@@ -158,8 +161,14 @@ def rectify_readings( objReadingList : list[GraspObj], useTimeout = True ):
             if len( conflict ) > 1:
                 rmSet.update( set( [id(elem) for elem in conflict[1:]] ) )
             print( f"Added {top} to the new memory!" )
+
     print( f"Rectified {len(nuMem)} objects!" )
-    return nuMem
+
+    for r, objR in enumerate( totLst ):
+        if id( objR ) in rmSet:
+            rmMem.append( objR )
+
+    return nuMem, rmMem
 
 
 def merge_and_reconcile_object_memories( belLst : list[GraspObj], lkgLst : list[GraspObj], tau = None ):
@@ -195,6 +204,8 @@ def merge_and_reconcile_object_memories( belLst : list[GraspObj], lkgLst : list[
     
     # Enforce consistency and return
     return rectify_readings( rtnLst, env_var("_USE_TIMEOUT") )
+    # recLst, _ = rectify_readings( rtnLst, env_var("_USE_TIMEOUT") )
+    # return recLst
 
 
 def objs_choose_k( objs, k : int, bgn = None, end = None ):
@@ -268,7 +279,7 @@ def most_likely_objects( objList : list[GraspObj], k : int,
     
     ### Drop Worst Readings ###
     if (1.0 > cutScoreFrac > 0.0):
-        objs = cut_bottom_fraction( objList, cutScoreFrac )
+        objs, _ = cut_bottom_fraction( objList, cutScoreFrac )
     else:
         objs = objList[:]
 
@@ -349,7 +360,7 @@ def most_likely_objects( objList : list[GraspObj], k : int,
     ### Return all non-null symbols ###
     # rtnLst = [sym for sym in rtnSymbols if sym.label != env_var("_NULL_NAME")]
     print( f"\nDeterminized {len(rtnSymbols)} objects!\n" )
-    return rtnSymbols
+    return rtnSymbols, totCombos
 
 
 def reify_chosen_beliefs( chosen : list[GraspObj] )->None:
@@ -389,20 +400,20 @@ class EROM:
         """ Integrate one noisy scan into the current beliefs """
 
         readings = observation_to_readings( obs, xform )
-
+        nuScan, _ = cut_bottom_fraction( readings, env_var("_CUT_INTAKE_S_FRAC") )
 
         if len( self.scan ) > 0:
-            self.scan = cut_bottom_fraction( readings, env_var("_CUT_INTAKE_S_FRAC") )
+            self.scan = nuScan
         else:
-            self.scan = rectify_readings( 
-                cut_bottom_fraction( readings, env_var("_CUT_INTAKE_S_FRAC") ), 
+            self.scan, _ = rectify_readings( 
+                nuScan, 
                 useTimeout = False 
             )
         
         self.LKG.extend( self.scan )
         mark_readings_LKG( self.LKG, val = True )
-        self.LKG = cut_bottom_fraction( self.LKG, env_var("_CUT_LKG_S_FRAC") )
-        self.LKG = rectify_readings( self.LKG, useTimeout = env_var("_USE_TIMEOUT") )
+        self.LKG, LKGrec = cut_bottom_fraction( self.LKG, env_var("_CUT_LKG_S_FRAC") )
+        self.LKG, LKGcut = rectify_readings( self.LKG, useTimeout = env_var("_USE_TIMEOUT") )
         
         self.beliefs.belief_update( self.scan, xform, maxRadius = env_var("_MAX_UPDATE_RAD_M") )
 
@@ -411,6 +422,8 @@ class EROM:
                 "observation" : deep_copy_memory_list( readings             ),
                 "scan"        : deep_copy_memory_list( self.scan            ),
                 "LKG"         : deep_copy_memory_list( self.LKG             ),
+                "LKGrec"      : deep_copy_memory_list( LKGrec               ),
+                "LKGcut"      : deep_copy_memory_list( LKGcut               ),
                 "beliefs"     : deep_copy_memory_list( self.beliefs.beliefs ),
             },
             msg = "memory" 
@@ -420,20 +433,24 @@ class EROM:
     def rank_combined_memory( self ):
         """ Reconcile and rank the two memory streams """
 
-        self.ranked = merge_and_reconcile_object_memories( 
+        self.ranked, rankRct = merge_and_reconcile_object_memories( 
             list( self.beliefs.beliefs ), 
             list( self.LKG ), 
-            tau          = env_var("_SCORE_DECAY_TAU_S"), 
+            tau = env_var("_SCORE_DECAY_TAU_S"), 
         )
 
-        self.ranked = cut_bottom_fraction( self.ranked, env_var("_CUT_MERGE_S_FRAC") )
-
-        self.history.append( 
-            datum = deep_copy_memory_list( self.ranked ),
-            msg = "ranking" 
-        )
+        self.ranked, rankCut = cut_bottom_fraction( self.ranked, env_var("_CUT_MERGE_S_FRAC") )
 
         print( f"Cut Ranking: {len(self.ranked)}" )
+
+        self.history.append( 
+            datum = {
+                "ranking" : deep_copy_memory_list( self.ranked ),
+                "remRec"  : deep_copy_memory_list( rankRct     ),
+                "remCut"  : deep_copy_memory_list( rankCut     ),
+            },
+            msg = "totalRank" 
+        )
 
         return self.ranked
     
@@ -460,7 +477,7 @@ class EROM:
             print( obj )
         print()
 
-        rtnLst = most_likely_objects( 
+        rtnLst, combos = most_likely_objects( 
             self.ranked, 
             env_var("_N_REQD_OBJS"),
             method       = "unique-nonull-nocollide", # "unique-non-null", # "unique", #"unique-non-null", 
@@ -473,11 +490,21 @@ class EROM:
                 'symbol' : sym.deep_copy(),
                 'parent' : sym.parent.deep_copy() if (sym.parent is not None) else None,
             })
+        stoCmb = list()
+        for c in combos:
+            stoCmb.append( deep_copy_memory_list( c ) )
 
         self.history.append( 
-            datum = pairs,
+            datum = {
+                'pairs'  : pairs,
+                'combos' : stoCmb,
+            },
             msg   = "symbols" 
         )
+
+        combined = self.beliefs.beliefs[:] + self.LKG[:]
+        unmark_symbol_parents( combined )
+        mark_parents_by_symbol( rtnLst )
 
         return rtnLst
     
@@ -507,8 +534,6 @@ class EROM:
         objMtch  = list()
         combined = self.ranked[:] + self.LKG[:]
 
-        # self.ranked = rectify_readings( self.ranked, useTimeout = False )
-        
         for act_i in planBT.children:
             if "MoveHolding" in act_i.__class__.__name__:
                 poseBgn, poseEnd, label = act_i.args
@@ -559,7 +584,7 @@ class EROM:
                     )
                     for _ in range( env_var("_N_MISS_PUNISH") ):
                         self.beliefs.integrate_one_reading( nul_m, camXform = None, suppressNew = True )
-                        
+
                 self.history.append( 
                     datum = deep_copy_memory_list( objMtch ),
                     msg   = "demoted" 
