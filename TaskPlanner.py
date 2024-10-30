@@ -46,6 +46,9 @@ from obj_ID_server import Perception_OWLViT
 from EROM import EROM, reify_chosen_beliefs
 from draw_beliefs import render_memory_list
 
+### Demo ###
+from zb_Demo import get_bt_scene_rearranger
+
 
 
 ########## HELPER FUNCTIONS ########################################################################
@@ -54,9 +57,11 @@ from draw_beliefs import render_memory_list
 def set_experiment_env():
     """ Params for this experiment """
 
+     # 3D Printed Blocks
+
     _poseGrn = np.eye(4)
-    _poseGrn[0:3,3] = [ -0.091-0.070, # env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
-                        -0.304, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
+    _poseGrn[0:3,3] = [ -0.211, # env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
+                        -0.463, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
                          0.5*env_var("_BLOCK_SCALE"), ]
     _trgtGrn = ObjPose( _poseGrn )
     env_sto( "_DEF_NULL_SCORE"   , 0.75     )
@@ -74,10 +79,10 @@ def set_experiment_env():
 
     env_sto( "_N_INTAKE_SCANS"   ,   1     )
 
-    env_sto( "_CUT_INTAKE_S_FRAC",   0.400  ) # 0.125 # 0.250 # 0.333 # 0.400 # 0.500 # 0.600  # 0.750
-    env_sto( "_CUT_LKG_S_FRAC"   ,   0.250  ) # 0.125 # 0.333 # 0.400   
-    env_sto( "_CUT_MERGE_S_FRAC" ,   0.250  ) # 0.125 # 0.333
-    env_sto( "_CUT_DETERM_S_FRAC",   0.250  ) # 0.250 # 0.333
+    env_sto( "_CUT_INTAKE_S_FRAC",   0.500  ) # 0.125 # 0.250 # 0.333 # 0.400 # 0.500 # 0.600  # 0.750
+    env_sto( "_CUT_LKG_S_FRAC"   ,   0.250  ) # 0.125 # 0.250 # 0.333 # 0.400   
+    env_sto( "_CUT_MERGE_S_FRAC" ,   0.125  ) # 0.125 # 0.250 # 0.333
+    env_sto( "_CUT_DETERM_S_FRAC",   0.333  ) # 0.125 # 0.250 # 0.333 # 0.400
 
     env_sto( "_N_XTRA_SPOTS"     ,   3      )
     env_sto( "_N_REQD_OBJS"      ,   3      )
@@ -86,14 +91,18 @@ def set_experiment_env():
     env_sto( "_NULL_THRESH"      ,   0.625  ) # 0.50 # 0.75
 
     env_sto( "_SCORE_BIGNUM"      , 4000.00    )
-    env_sto( "_SCORE_MULT_SUCCESS",    5.00    )
-    env_sto( "_SCORE_MULT_DETERM" ,    1.25    )
+    env_sto( "_SCORE_MULT_SUCCESS",    7.00    )
+    env_sto( "_SCORE_MULT_DETERM" ,    5.00    )
     env_sto( "_N_MISS_PUNISH"     ,    2       )
     env_sto( "_WIPE_ON_FAILURE"   , True       )
 
     env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
     env_sto( "_MAX_UPDATE_RAD_M" , 1.25*env_var("_BLOCK_SCALE") )
-    env_sto( "_WIDE_XY_ACCEPT"   , 2.50*env_var("_BLOCK_SCALE") )
+
+    env_sto( "_PLACE_XY_ACCEPT"  , 0.30*env_var("_BLOCK_SCALE") )
+    # env_sto( "_WIDE_XY_ACCEPT"   , 2.00*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_XY_ACCEPT"   , 0.75*env_var("_BLOCK_SCALE") )
+
     env_sto( "_WIDE_Z_ABOVE"     , 1.75*env_var("_BLOCK_SCALE") )
     
 
@@ -106,7 +115,10 @@ def set_experiment_env():
             
             ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
             ('Supported', 'ylwBlock', 'grnBlock'), 
-            ('Supported', 'bluBlock', 'ylwBlock'),
+            # ('Supported', 'ylwBlock', 'redBlock'), 
+            ('Supported', 'bluBlock', 'ylwBlock'), 
+            # ('Supported', 'ornBlock', 'grnBlock'), 
+            # ('Supported', 'vioBlock', 'ornBlock'),
 
             ('HandEmpty',),
         )
@@ -116,10 +128,18 @@ def set_experiment_env():
                                             [ 0.0, 1.0, 0.0, -0.5/100.0, ],
                                             [ 0.0, 0.0, 1.0, 0.0, ],
                                             [ 0.0, 0.0, 0.0, 1.0, ],] ) )
+    env_sto( "_ANGRY_PUSH_M", 0.035 ) 
     
 
 
-    
+def basic_BT_run( btAction ):
+    """ Run a basic BT with `BT_Runner` defaults """
+    btr = BT_Runner( btAction, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
+    btr.setup_BT_for_running()
+
+    while not btr.p_ended():
+        btr.tick_once()
+        btr.per_sleep()        
 
 
 ########## PLANNER #################################################################################
@@ -200,6 +220,10 @@ class TaskPlanner:
 
     def return_home( self, goPose ):
         """ Get ready for next iteration while updating beliefs """
+
+        if isinstance( goPose, list ):
+            goPose = goPose[0]
+
         btAction = GroundedAction( args = list(), robot = self.robot, name = "Return Home" )
         btAction.add_children([
             Open_Gripper( ctrl = self.robot ),
@@ -212,12 +236,7 @@ class TaskPlanner:
             # ),
         ])
         
-        btr = BT_Runner( btAction, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
-        btr.setup_BT_for_running()
-
-        while not btr.p_ended():
-            btr.tick_once()
-            btr.per_sleep()
+        basic_BT_run( btAction )
 
         print( f"\nRobot returned to \n{goPose}\n" )
 
@@ -317,7 +336,7 @@ class TaskPlanner:
 
         self.logger.log_event( "BT END", str( btr.status ) )
 
-        print( f"Did the BT move a reading?: {self.memory.move_reading_from_BT_plan( self.symPln.nxtAct )}" )
+        
 
 
     def phase_5_Return_Home( self, goPose ):
@@ -338,9 +357,9 @@ class TaskPlanner:
         
         if beginPlanPose is None:
             if env_var("_BLOCK_SCALE") < 0.030:
-                beginPlanPose = env_var("_GOOD_VIEW_POSE")
+                beginPlanPose = [env_var("_GOOD_VIEW_POSE"),]
             else:
-                beginPlanPose = env_var("_HIGH_VIEW_POSE")
+                beginPlanPose = [env_var("_HIGH_VIEW_POSE"),]
 
         i = 0
 
@@ -377,8 +396,9 @@ class TaskPlanner:
             # if (expBgn - t5) < env_var("_UPDATE_PERIOD_S"):
             #     sleep( env_var("_UPDATE_PERIOD_S") - (expBgn - t5) )
 
-            self.robot.moveL( beginPlanPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
-            self.phase_1_Perceive( env_var("_N_INTAKE_SCANS") )
+            for bgnPose in beginPlanPose:
+                self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
+                self.phase_1_Perceive( env_var("_N_INTAKE_SCANS") )
 
             # if 1:    
             #     self.robot.moveL( _SHOT_1, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
@@ -439,10 +459,20 @@ class TaskPlanner:
             #     sleep( env_var("_UPDATE_PERIOD_S") - (t4 - expBgn) )
             self.phase_4_Execute_Action()
 
+            moved, mvPose = self.memory.move_reading_from_BT_plan( self.symPln.nxtAct )
+
+            print( f"Did the BT move a reading?: {moved}" )
+
             if self.p_failed():
                 self.robot.open_gripper()
                 if env_var("_WIPE_ON_FAILURE"):
                     self.memory.reset_memory()
+
+                if mvPose[2,3] > env_var("_BLOCK_SCALE")*1.75:
+                    angryBT = get_bt_scene_rearranger( self.symPln.symbols, ctrl = self.robot, zSAFE = env_var("_Z_SAFE") )
+                    basic_BT_run( angryBT )
+                    sleep( 2.5 )
+                self.robot.open_gripper()
                 
 
             ##### Phase 5 ########################
@@ -480,6 +510,10 @@ _HIGH_VIEW_POSE = None
 
 def responsive_experiment_prep( beginPlanPose = None ):
     """ Init system and return a ref to the planner """
+
+    if isinstance( beginPlanPose, list ):
+        beginPlanPose = beginPlanPose[0]
+
     planner = TaskPlanner()
     planner.robot.set_grip_N( 10.0 )
     print( planner.robot.get_tcp_pose() )
@@ -547,7 +581,18 @@ _SHOT_4 = repair_pose( np.array( [[-0.843,  0.018,  0.538, -0.476,],
                                   [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
 
 
-_EXP_BGN_POSE = _SHOT_4
+_SHOT_5 = repair_pose( np.array( [[-0.705, -0.694,  0.144, -0.365],
+                                  [-0.708,  0.678, -0.197, -0.322],
+                                  [ 0.039, -0.24 , -0.97 ,  0.439],
+                                  [ 0.   ,  0.   ,  0.   ,  1.   ],] ))
+
+_SHOT_6 = repair_pose( np.array( [[-0.07,  -0.951, -0.3 ,  -0.059],
+                                 [-0.995,  0.086 ,-0.04 , -0.38 ],
+                                 [ 0.064,  0.296 ,-0.953,  0.457],
+                                 [ 0.   ,  0.    , 0.   ,  1.   ],] ))
+ 
+
+_EXP_BGN_POSES = [_SHOT_6, _SHOT_6]
 
 
 if __name__ == "__main__":
@@ -588,8 +633,8 @@ if __name__ == "__main__":
         print( f"########## Running Planner at {dateStr} ##########" )
 
         try:
-            planner = responsive_experiment_prep( _EXP_BGN_POSE ) # _EXP_BGN_POSE
-            planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSE )
+            planner = responsive_experiment_prep( _EXP_BGN_POSES ) # _EXP_BGN_POSE
+            planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSES )
             sleep( 2.5 )
             planner.shutdown()
             
