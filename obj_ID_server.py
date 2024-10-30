@@ -199,7 +199,7 @@ class Perception_OWLViT:
         _, rgbd_image = cls.rsc.getPCD()
         image = np.array( rgbd_image.color )
 
-        cls.label_vit.set_threshold(0.005)
+        cls.label_vit.set_threshold(0.004)
         _, _, scores, labels = cls.label_vit.label(image, query, abbrevq, topk=True, plot=False)
 
         scores = sorted(scores, reverse=True)

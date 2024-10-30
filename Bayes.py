@@ -165,7 +165,7 @@ class ObjectMemory:
             self.accum_evidence_for_belief( objReading, belBest )
 
             # updtFrac = objReading.score / (belBest.score + objReading.score)
-            updtFrac = 0.85
+            updtFrac = 0.45
             
             ## Update Pose ##
             belPosn = posn_from_xform( extract_pose_as_homog( belBest.pose    ) )

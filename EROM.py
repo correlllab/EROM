@@ -42,11 +42,11 @@ def hacked_offset_map( pose ) -> np.ndarray:
     minY     = env_var("_MIN_Y_OFFSET")
     maxY     = env_var("_MAX_Y_OFFSET")
     height   = 0.5*env_var("_BLOCK_SCALE")
-    hackMap  = [ [[minX, minY, height], [-3.0/100.0, -1.5/100.0, 0.0]],
-                 [[minX, maxY, height], [-4.0/100.0, +1.5/100.0, 0.0]],
-                 [[midX, midY, height], [-1.0/100.0, -1.0/100.0, 0.0]],
-                 [[maxX, minY, height], [ 0.0/100.0, -2.0/100.0, 0.0]], 
-                 [[maxX, maxY, height], [ 0.0/100.0, +1.5/100.0, 0.0]],]
+    hackMap  = [ [[minX, minY, height], [ 1.0/100.0, 1.0/100.0, 0.0]],
+                 [[minX, maxY, height], [ 1.0/100.0, 0.0/100.0, 0.0]],
+                 [[midX, midY, height], [ 1.0/100.0, 1.0/100.0, 0.0]],
+                 [[maxX, minY, height], [ 1.0/100.0, 1.0/100.0, 0.0]], 
+                 [[maxX, maxY, height], [ 1.0/100.0, 0.0/100.0, 0.0]],]
     weights = list()
     for hack in hackMap:
         weights.append( 1.0 / np.linalg.norm( np.subtract( vec, hack[0] ) ) )
@@ -67,7 +67,10 @@ def observation_to_readings( obs : dict, xform = None ):
         tScan = item['Time']
 
         for nam, prb in item['Probability'].items():
-            dstrb[ match_name( nam ) ] = prb
+            if prb > 0.0001:
+                dstrb[ match_name( nam ) ] = prb
+            else:
+                dstrb[ match_name( nam ) ] = env_var("_CONFUSE_PROB")
         if env_var("_NULL_NAME") not in dstrb:
             dstrb[ env_var("_NULL_NAME") ] = env_var("_CONFUSE_PROB")
 
@@ -362,6 +365,7 @@ class EROM:
         self.LKG    : list[GraspObj]    = list()
         self.ranked : list[GraspObj] = list()
         self.lastPose = dict()
+        self.lstPRM = list()
 
 
     def __init__( self ):
@@ -388,6 +392,14 @@ class EROM:
         # LKG and Belief are updated SEPARATELY and merged LATER as symbols
         # self.LKG     = rectify_readings( copy_readings_as_LKG( self.scan ) )
         # self.LKG.extend( copy_readings_as_LKG( self.scan ) )
+
+        self.lstPRM = list()
+
+        combined = self.beliefs.beliefs[:] + self.LKG[:]
+        for c in combined:
+            if c.PRM:
+                self.lstPRM.append( c )
+
 
         self.LKG.extend( self.scan )
         mark_readings_LKG( self.LKG, val = True )
@@ -434,12 +446,19 @@ class EROM:
             print( obj )
         print()
 
-        rtnLst = most_likely_objects( 
+        rtnLst = self.lstPRM[:]
+
+        addLst = most_likely_objects( 
             self.ranked, 
             env_var("_N_REQD_OBJS"),
             method       = "unique-nonull-nocollide", # "unique-non-null", # "unique", #"unique-non-null", 
             cutScoreFrac = env_var("_CUT_DETERM_S_FRAC")
         )
+
+        if len( addLst ) > len( rtnLst ):
+            rtnLst.extend( addLst[len( rtnLst ):] )
+
+
         # reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
 
         # print( rtnLst )
@@ -499,6 +518,7 @@ class EROM:
                     obj_m.pose = endMin
                     obj_m.ts   = now() # 2024-07-27: THIS IS EXTREMELY IMPORTANT ELSE THIS READING DIES --> BAD BELIEFS
                     obj_m.score *= env_var('_SCORE_MULT_SUCCESS') 
+                    obj_m.PRM = True
                     # obj_m.score = env_var('_SCORE_BIGNUM') 
                     # 2024-07-27: NEED TO DO SOME DEEP THINKING ABOUT THE FRESHNESS OF RELEVANT FACTS
                     if _verbose:
@@ -526,7 +546,7 @@ class EROM:
             if _verbose:
                 print( f"`get_moved_reading_from_BT_plan`: NO update applied by BT {planBT.name}!" )    
 
-        return updated
+        return updated, extract_pose_as_homog( endMin )
 
 
     
