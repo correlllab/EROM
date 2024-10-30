@@ -73,7 +73,7 @@ class LogPickler:
     def open_file( self ):
         """ Set the name of the current file """
         dateStr     = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
-        self.outNam = f"{self.prefix}_{dateStr}.json"
+        self.outNam = f"{self.prefix}_{dateStr}.pkl"
         if (self.outFil is not None) and (not self.outFil.closed):
             self.outFil.close()
         self.outFil = open( os.path.join( self.outDir, self.outNam ), 'wb' )
@@ -84,6 +84,7 @@ class LogPickler:
         self.prefix = str( prefix )
         self.outDir = outDir if (outDir is not None) else '.'
         self.log    = deque()
+        self.outFil = None
         self.open_file()
 
 
@@ -92,8 +93,8 @@ class LogPickler:
         if len( self.log ):
             if (self.outFil is None) or self.outFil.closed:
                 self.open_file()
-                pickle.dump( list( self.log ), self.outFil )
-                self.outFil.close()
+            pickle.dump( list( self.log ), self.outFil )
+            self.outFil.close()
             self.log = deque()
         if openNext:
             self.open_file()
