@@ -10,14 +10,14 @@
 
 
 ########## INIT && LOAD DATA #######################################################################
-import pickle
+import pickle, os
 
 from aspire.symbols import ObjPose, GraspObj, extract_pose_as_homog
 from aspire.BlocksTask import set_blocks_env
 
 from TaskPlanner import set_experiment_env
 
-path = ""
+path = "/home/james/EROM/data/EROM-Memories_10-30-2024_16-51-47.pkl"
 data = list()
 with open( path, 'rb' ) as f:
     data = pickle.load( f )
@@ -41,7 +41,7 @@ def get_symbol_parents( objLst : list[GraspObj] ):
 
 
 
-""" ##### [?] Did the recording work? ##################################### """
+""" ##### [Y] Did the recording work?: Yes ##################################### """
 # Print all metadata
 for i, datum in enumerate( data ):
     print( f"{datum['t']}:{i}: {datum['msg']}, {type(datum['data'])}" )
@@ -62,13 +62,14 @@ for i, datum in enumerate( data ):
 
         sym = { 't': datum['t'] }
         for pair in datum['data']['pairs']:
-            sym[ pair['symbol'].label ] = { 
-                'prob'   : pair['symbol'].prob,
-                'score'  : pair['symbol'].score,
-                'pose'   : extract_pose_as_homog( pair['symbol'] ),
-                'parIdx' : pair['parent'].index,
-                'parS'   : pair['parent'].score,
-            }
+            if pair['symbol'] is not None:
+                sym[ pair['symbol'].label ] = { 
+                    'prob'   : pair['symbol'].prob,
+                    'score'  : pair['symbol'].score,
+                    'pose'   : extract_pose_as_homog( pair['symbol'] ),
+                    'parIdx' : pair['parent'].index,
+                    'parS'   : pair['parent'].score,
+                }
         symbolStability.append( sym )
 
         combosPerAction.append({ 
@@ -96,3 +97,4 @@ for i, datum in enumerate( data ):
         symbolDeletions.append( symDel )
 
 
+os.system( 'kill %d' % os.getpid() ) 
