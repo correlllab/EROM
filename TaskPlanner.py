@@ -100,7 +100,6 @@ def set_experiment_env():
     env_sto( "_MAX_UPDATE_RAD_M" , 1.25*env_var("_BLOCK_SCALE") )
 
     env_sto( "_PLACE_XY_ACCEPT"  , 0.30*env_var("_BLOCK_SCALE") )
-    # env_sto( "_WIDE_XY_ACCEPT"   , 2.00*env_var("_BLOCK_SCALE") )
     env_sto( "_WIDE_XY_ACCEPT"   , 0.75*env_var("_BLOCK_SCALE") )
 
     env_sto( "_WIDE_Z_ABOVE"     , 1.75*env_var("_BLOCK_SCALE") )
@@ -147,32 +146,12 @@ def basic_BT_run( btAction ):
 class TaskPlanner:
     """ Basic task planning loop """
 
-    ##### File Ops ########################################################
-
-    def open_file( self ):
-        """ Set the name of the current file """
-        dateStr     = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
-        self.outNam = f"Task-Planner_{dateStr}.json"
-        if (self.outFil is not None) and (not self.outFil.closed):
-            self.outFil.close()
-        self.outFil = open( os.path.join( self.outDir, self.outNam ), 'w' )
-
-
-    def dump_to_file( self, openNext = False ):
-        """ Write all data lines to a file """
-        # self.outFil.writelines( [f"{str(line)}\n" for line in self.datLin] )        
-        json.dump( self.datLin, self.outFil )
-        self.outFil.close()
-        self.datLin = list()
-        if openNext:
-            self.open_file()
-
 
     ##### Init ############################################################
 
     def reset_memory( self ):
         """ Erase belief memory """
-        self.memory  = EROM() # Entropy-Ranked Object Memory
+        self.reset_memory()
 
 
     def reset_state( self ):
@@ -184,13 +163,11 @@ class TaskPlanner:
         """ Create a pre-determined collection of poses and plan skeletons """
         set_blocks_env()
         set_experiment_env()
-        self.datLin = list() # Data to write
         self.outFil = None
         self.noBot  = noBot
         self.outDir = "data/"
-        self.reset_memory()
-        self.reset_state()
-        self.open_file()
+        self.memory  = EROM() # Entropy-Ranked Object Memory
+        self.status = Status.INVALID # Running status
         self.perc   = Perception_OWLViT
         self.robot : UR5_Interface = UR5_Interface() if (not noBot) else None
         self.logger = DataLogger() if (not noBot) else None
@@ -207,6 +184,7 @@ class TaskPlanner:
     def shutdown( self ):
         """ Stop the Perception Process and the UR5 connection """
         self.dump_to_file( openNext = False )
+        self.memory.history.dump_to_file()
         if not self.noBot:
             self.robot.reset_gripper_overload( restart = False )
             self.robot.stop()
