@@ -33,7 +33,6 @@ from magpie_control.poses import repair_pose
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
 from aspire.symbols import ( ObjPose, )
-from aspire.utils import ( DataLogger, )
 from aspire.actions import ( BT_Runner, Interleaved_MoveFree_and_PerceiveScene, MoveFree, GroundedAction, )
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
 
@@ -170,7 +169,6 @@ class TaskPlanner:
         self.status = Status.INVALID # Running status
         self.perc   = Perception_OWLViT
         self.robot : UR5_Interface = UR5_Interface() if (not noBot) else None
-        self.logger = DataLogger() if (not noBot) else None
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
             os.path.join( os.path.dirname( __file__ ), "pddl", "stream.pddl" )
@@ -183,7 +181,6 @@ class TaskPlanner:
 
     def shutdown( self ):
         """ Stop the Perception Process and the UR5 connection """
-        self.dump_to_file( openNext = False )
         self.memory.history.dump_to_file()
         if not self.noBot:
             self.robot.reset_gripper_overload( restart = False )
