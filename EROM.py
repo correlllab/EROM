@@ -365,7 +365,6 @@ class EROM:
         self.LKG    : list[GraspObj]    = list()
         self.ranked : list[GraspObj] = list()
         self.lastPose = dict()
-        self.lstPRM = list()
 
 
     def __init__( self ):
@@ -392,14 +391,6 @@ class EROM:
         # LKG and Belief are updated SEPARATELY and merged LATER as symbols
         # self.LKG     = rectify_readings( copy_readings_as_LKG( self.scan ) )
         # self.LKG.extend( copy_readings_as_LKG( self.scan ) )
-
-        self.lstPRM = list()
-
-        combined = self.beliefs.beliefs[:] + self.LKG[:]
-        for c in combined:
-            if c.PRM:
-                self.lstPRM.append( c )
-
 
         self.LKG.extend( self.scan )
         mark_readings_LKG( self.LKG, val = True )
@@ -446,19 +437,12 @@ class EROM:
             print( obj )
         print()
 
-        rtnLst = self.lstPRM[:]
-
-        addLst = most_likely_objects( 
+        rtnLst = most_likely_objects( 
             self.ranked, 
             env_var("_N_REQD_OBJS"),
             method       = "unique-nonull-nocollide", # "unique-non-null", # "unique", #"unique-non-null", 
             cutScoreFrac = env_var("_CUT_DETERM_S_FRAC")
         )
-
-        if len( addLst ) > len( rtnLst ):
-            rtnLst.extend( addLst[len( rtnLst ):] )
-
-
         # reify_chosen_beliefs( self.ranked, rtnLst, factor = env_var("_REIFY_SUPER_BEL") )
 
         # print( rtnLst )
@@ -518,7 +502,6 @@ class EROM:
                     obj_m.pose = endMin
                     obj_m.ts   = now() # 2024-07-27: THIS IS EXTREMELY IMPORTANT ELSE THIS READING DIES --> BAD BELIEFS
                     obj_m.score *= env_var('_SCORE_MULT_SUCCESS') 
-                    obj_m.PRM = True
                     # obj_m.score = env_var('_SCORE_BIGNUM') 
                     # 2024-07-27: NEED TO DO SOME DEEP THINKING ABOUT THE FRESHNESS OF RELEVANT FACTS
                     if _verbose:
