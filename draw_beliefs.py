@@ -105,17 +105,74 @@ def wireframe_box_geo( xScl, yScl, zScl, color = None ):
     ])
     ndces = np.array([
         [0,4,],
-        [1,5,],
-        [2,6,],
-        [3,7,],
+        [4,5,],
+        [5,6,],
+        [6,7,],
+
         [0,1,],
         [1,2,],
         [2,3,],
         [3,0,],
-        [4,5,],
+
+        [7,4,],
+        [1,5,],
+        [2,6,],
+        [3,7,],
+    ])
+    wireBox = scene.visuals.Line(
+        pos     = verts,
+        connect = ndces,
+        color   = color,
+    )
+    return wireBox
+
+
+def wireframe_box_neg( xScl, yScl, zScl, color = None ):
+    """ Draw a wireframe cuboid """
+    if color is None:
+        color = [0,0,0,1]
+    xHf = xScl/2.0
+    yHf = yScl/2.0
+    zHf = zScl/2.0
+    verts = np.array([
+        [ -xHf, -yHf, +zHf ], # 0
+        [ +xHf, -yHf, +zHf ], # 1
+        [ +xHf, +yHf, +zHf ], # 2
+        [ -xHf, +yHf, +zHf ], # 3
+        [ -xHf, -yHf, -zHf ], # 4
+        [ +xHf, -yHf, -zHf ], # 5
+        [ +xHf, +yHf, -zHf ], # 6
+        [ -xHf, +yHf, -zHf ], # 7   
+    ])
+    ndces = np.array([
+        
+        [4,5,], # Cycle 1
         [5,6,],
         [6,7,],
         [7,4,],
+
+        [1,2,], # Cycle 2
+        [2,3,],
+        [3,0,],
+        [0,1,],
+        
+        [0,4,], # Pillars
+        [1,5,],
+        [2,6,],
+        [3,7,],
+
+        [4,6,], # Cross-beams
+        [5,7,],
+        [1,3,],
+        [2,0,],
+        [4,3,],
+        [4,1,],
+        [5,0,],
+        [5,2,],
+        [6,3,],
+        [6,1,],
+        [7,0,],
+        [7,2,],
     ])
     wireBox = scene.visuals.Line(
         pos     = verts,
@@ -189,6 +246,23 @@ def reading_list_geo( objs : list[GraspObj] ):
 
 
 def symbol_geo( sym : GraspObj ):
+    objXfrm = extract_pose_as_homog( sym, noRot = True )
+    wf1 = wireframe_box_neg( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
+                             color = Color( "black" ) )
+    wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    wf2 = wireframe_box_neg( env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, 
+                             color = Color( "black" ) )
+    wf2.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    scl  = env_var("_BLOCK_SCALE") * 0.200
+    bClr = env_var("_CLR_TABLE")[ sym.label[:3] ]
+    bClr.append( env_var("_BLOCK_ALPHA") )
+    blc  = scene.visuals.Box( scl, scl, scl,  
+                              color = bClr, edge_color="black" )
+    blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    return [wf1, wf2, blc,] 
+
+
+def symbol_neg( sym : GraspObj ):
     objXfrm = extract_pose_as_homog( sym, noRot = True )
     wf1 = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
                              color = Color( "black" ) )
