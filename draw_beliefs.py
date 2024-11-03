@@ -182,6 +182,10 @@ def wireframe_box_neg( xScl, yScl, zScl, color = None ):
     return wireBox
 
 
+def quality_bar( objReading : GraspObj, maxScl = None, maxLen = None ):
+    pass
+
+
 def reading_geo( objReading : GraspObj ):
     """ Get geo for a single observation """
     belClr = [0.5, 0.0, 1.0, 1.0,]
@@ -237,6 +241,9 @@ def reading_geo( objReading : GraspObj ):
     return rtnGeo
 
 
+
+
+
 def reading_list_geo( objs : list[GraspObj] ):
     """ Get geo for a list of observations """
     rtnGeo = [table_geo(),]
@@ -260,6 +267,9 @@ def symbol_geo( sym : GraspObj ):
                               color = bClr, edge_color="black" )
     blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
     return [wf1, wf2, blc,] 
+
+
+
 
 
 def symbol_neg( sym : GraspObj ):
@@ -302,40 +312,13 @@ def render_memory_list( objs : list[GraspObj], syms = None ):
 
 
 
-# def reading_dict_geo( objReading, lineColor = None, baseAlpha = 1.0 ):
-#     """ Get geo for a single observation """
-#     if lineColor is None:
-#         lineColor = "black"
-#     hasLabel  = ('label' in objReading)
-#     labelSort = zip_dict_sorted_by_decreasing_value( objReading['labels'] )
-#     objXfrm   = extract_pose_as_homog( objReading['pose'], noRot = True )
-#     objPosn   = posn_from_xform( objXfrm ) #- hf
-#     if hasLabel:
-#         blcColor = env_var("_CLR_TABLE")[ objReading['label'][:3] ]
-#     else:
-#         blcColor = env_var("_CLR_TABLE")[ labelSort[0][0][:3]     ]
+########## MAIN ####################################################################################
+if __name__ == "__main__":
+    from aspire.env_config import set_blocks_env
+    set_blocks_env()
 
-#     blcColor = (np.array( blcColor )*baseAlpha + np.array( [1,1,1,] )*(1.0-baseAlpha)).tolist()
-
-#     block = scene.visuals.Box( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
-#                                color = blcColor, edge_color = lineColor )
-#     block.transform = transforms.STTransform( translate = objPosn )
-
-#     clnDct = dict()
-#     for k, v in objReading['labels'].items():
-#         clnDct[ k[:3] ] = np.round( v, 2 )
-
-#     text = scene.visuals.Text(
-#         str( clnDct ), 
-#         # parent = block,
-#         color  = 'black',
-#     )
-#     text.font_size = 3
-#     # text.pos = [_BLOCK_SCALE*1.5, _BLOCK_SCALE*1.5, 0.0,]
-#     text.pos = np.add( objPosn, [0.0, 0.0, env_var("_BLOCK_SCALE")*0.65,] )
-
-#     return block, text
-    
+    neg = wireframe_box_neg( 0.050, 0.050, 0.050, color = "green" )
+    vispy_geo_list_window( [neg,] )
     
 
     
