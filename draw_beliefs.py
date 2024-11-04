@@ -2,17 +2,31 @@
 from pprint import pprint
 
 import numpy as np
-from vispy import scene
+
+import vispy
+vispy.use( "osmesa" )
+from vispy import scene, gloo
+gloo.wrappers.GlooFunctions.set_cull_face( mode = 'back' )
 from vispy.visuals import transforms
 from vispy.color import Color
+
 import numpy as np
 
 ### Local ###
-from aspire.env_config import env_var
+from aspire.env_config import env_var, env_sto
 from aspire.homog_utils import posn_from_xform, vec_unit, homog_xform
 from aspire.symbols import extract_pose_as_homog, GraspObj
 
 _TABLE_THIC = 0.015
+
+
+
+
+########## ENVIRONMENT #############################################################################
+
+def set_render_env():
+    """ Set vars used to draw EROM memories """
+    env_sto( "_SCAN_ALPHA", 0.5 )
 
 
 
@@ -56,7 +70,16 @@ def vispy_geo_list_window( geoLst ):
     # Set up a viewbox to display the cube with interactive arcball
     view = canvas.central_widget.add_view()
     view.bgcolor = '#ffffff'
-    view.camera = 'arcball'
+
+    view.camera  = scene.ArcballCamera() #'arcball'
+    view.camera.up = np.array( [0.0, 0.0, 1.0] )
+    view.camera.center = np.array([
+        env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
+        env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, 
+        0.0
+    ])
+    view.camera.distance = 0.75
+
     view.padding = 100
     # view.camera.transform.matrix = look_at_matrix( target, eye )
     view.add( scene.visuals.XYZAxis() )
