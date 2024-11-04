@@ -4,9 +4,8 @@ from pprint import pprint
 import numpy as np
 
 import vispy
-vispy.use( "osmesa" )
-from vispy import scene, gloo
-gloo.wrappers.GlooFunctions.set_cull_face( mode = 'back' )
+from vispy import scene
+from vispy import gloo
 from vispy.visuals import transforms
 from vispy.color import Color
 
@@ -64,6 +63,8 @@ def look_at_matrix( target, eye, up = None ):
 
 def vispy_geo_list_window( geoLst ):
     canvas = scene.SceneCanvas( keys='interactive', size=(1000, 900), show=True )
+    # Enable backface culling
+    gloo.set_state( cull_face = True )
     # vispy.gloo.wrappers.set_state( cull_face = True )
     # vispy.gloo.wrappers.set_cull_face( mode = 'back' )
 
@@ -71,24 +72,21 @@ def vispy_geo_list_window( geoLst ):
     view = canvas.central_widget.add_view()
     view.bgcolor = '#ffffff'
 
-    view.camera  = scene.ArcballCamera() #'arcball'
+    view.camera = scene.ArcballCamera() #'arcball'
     view.camera.up = np.array( [0.0, 0.0, 1.0] )
     view.camera.center = np.array([
         env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
         env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, 
-        0.0
+        0.0,
     ])
     view.camera.distance = 0.75
 
     view.padding = 100
-    # view.camera.transform.matrix = look_at_matrix( target, eye )
     view.add( scene.visuals.XYZAxis() )
 
     for geo in geoLst:
         view.add( geo )
-        # canvas.draw_visual( geo )
     
-    # view.update()
 
     canvas.app.run()
 
@@ -209,7 +207,7 @@ def quality_bar( objReading : GraspObj, maxScl = None, maxLen = None ):
     pass
 
 
-def reading_geo( objReading : GraspObj ):
+def reading_geo( objReading : GraspObj, alpha = None ):
     """ Get geo for a single observation """
     belClr = [0.5, 0.0, 1.0, 1.0,]
     lkgClr = [1.0, 0.0, 0.0, 1.0,]
@@ -225,9 +223,10 @@ def reading_geo( objReading : GraspObj ):
         homog_xform( np.eye(3), [ hf+hf, hf+hf, env_var("_BLOCK_SCALE"),] ),
     ]
     rtnGeo  = list()
-    
+    clr = lkgClr if objReading.LKG else belClr 
+    clr[-1] = env_var("_BLOCK_ALPHA") if (alpha is None) else alpha
     wir = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
-                             color = lkgClr if objReading.LKG else belClr )
+                             color = clr )
     wir.transform = transforms.STTransform( translate = objXfrm[:3,3] )
     rtnGeo.extend( [wir,] )
     
@@ -244,8 +243,8 @@ def reading_geo( objReading : GraspObj ):
 
             # pprint( env_var("_CLR_TABLE") )
             colr_i = env_var("_CLR_TABLE")[ labelSort[i][0][:3] ]
-            colr_i.append( env_var("_BLOCK_ALPHA") )
-
+            colr_i.append( 1.0 )
+            colr_i[-1] = env_var("_BLOCK_ALPHA") if (alpha is None) else alpha
             bloc_i = scene.visuals.Box( scal_i, scal_i, scal_i,  
                                         color = colr_i, edge_color = lkgClr if objReading.LKG else belClr , )
             bloc_i.transform = transforms.STTransform( translate = xfrm_i[:3,3] )
@@ -253,7 +252,8 @@ def reading_geo( objReading : GraspObj ):
     if objReading.prob > 0.0:
         scl  = env_var("_BLOCK_SCALE") * objReading.prob
         bClr = env_var("_CLR_TABLE")[ objReading.label[:3] ]
-        bClr.append( env_var("_BLOCK_ALPHA") )
+        bClr.append( 1.0 )
+        bClr[-1] = env_var("_BLOCK_ALPHA") if (alpha is None) else alpha
         blc  = scene.visuals.Box( scl, scl, scl,  
                                   color = bClr, edge_color="black" )
         for i in range(3):
@@ -264,14 +264,19 @@ def reading_geo( objReading : GraspObj ):
     return rtnGeo
 
 
-
-
-
 def reading_list_geo( objs : list[GraspObj] ):
     """ Get geo for a list of observations """
     rtnGeo = [table_geo(),]
     for obj in objs:
         rtnGeo.extend( reading_geo( obj ) )
+    return rtnGeo
+
+
+def scan_list_geo( objs : list[GraspObj] ):
+    """ Get geo for a list of observations """
+    rtnGeo = [table_geo(),]
+    for obj in objs:
+        rtnGeo.extend( reading_geo( obj, alpha = env_var("_SCAN_ALPHA") ) )
     return rtnGeo
 
 
@@ -290,9 +295,6 @@ def symbol_geo( sym : GraspObj ):
                               color = bClr, edge_color="black" )
     blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
     return [wf1, wf2, blc,] 
-
-
-
 
 
 def symbol_neg( sym : GraspObj ):

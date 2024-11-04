@@ -11,11 +11,13 @@
 
 ########## INIT && LOAD DATA #######################################################################
 import pickle, os
+from pprint import pprint
 
 from aspire.symbols import ObjPose, GraspObj, extract_pose_as_homog
 from aspire.BlocksTask import set_blocks_env
 
 from TaskPlanner import set_experiment_env
+from draw_beliefs import set_render_env
 
 path = "/home/james/EROM/data/EROM-Memories_10-30-2024_16-51-47.pkl"
 data = list()
@@ -24,6 +26,7 @@ with open( path, 'rb' ) as f:
 
 set_blocks_env()
 set_experiment_env()
+set_render_env()
 
 
 ########## HELPER FUNCTIONS ########################################################################
@@ -96,5 +99,15 @@ for i, datum in enumerate( data ):
     if added:
         symbolDeletions.append( symDel )
 
+
+
+########## DRAW SCANS ##############################################################################
+
+for i, datum in enumerate( data ):
+    if datum['msg'] == 'memory':
+        # pprint( datum['data']['observation'] )
+        # pprint( datum['data']['scan'] )
+        # pprint( datum['data']['scan'] )
+        pprint( datum['data']['LKGrec'] )
 
 os.system( 'kill %d' % os.getpid() ) 
