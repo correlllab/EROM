@@ -500,6 +500,10 @@ class Perception_OWLViT:
                 objIDstrTemp[f'Object {idx}']['Pose']        = cls.get_pcd_pose( cpcd )
                 objIDstrTemp[f'Object {idx}']['Count']       = len( clusters[num] )
                 objIDstrTemp[f'Object {idx}']['Time']        = now()
+                objIDstrTemp[f'Object {idx}']['CPCD']        = {
+                    'points' : np.asarray( cpcd.points ).copy(),
+                    'colors' : np.asarray( cpcd.colors ).copy(),
+                }
 
             if cls.visualize_boxes:
                 cls.plot_bounding_boxes(image, filtered_scores, filtered_boxes, filtered_labels, topk=False, show_plot=True)
