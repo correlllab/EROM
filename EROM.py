@@ -94,7 +94,8 @@ def observation_to_readings( obs : dict, xform = None ):
             pose   = ObjPose( objPose ), 
             ts     = tScan, 
             count  = item['Count'], 
-            score  = 0.0 
+            score  = 0.0,
+            cpcd   = item['CPCD'],
         )
         set_quality_score( rtnObj )
 
