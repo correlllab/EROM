@@ -11,10 +11,13 @@ from vispy.color import Color
 
 import numpy as np
 
-### Local ###
+### ASPIRE ###
 from aspire.env_config import env_var, env_sto
-from aspire.homog_utils import posn_from_xform, vec_unit, homog_xform
+from aspire.homog_utils import homog_xform
 from aspire.symbols import extract_pose_as_homog, GraspObj
+
+### Local ###
+from utils import zip_dict_sorted_by_decreasing_value
 
 _TABLE_THIC = 0.015
 
@@ -26,36 +29,6 @@ _TABLE_THIC = 0.015
 def set_render_env():
     """ Set vars used to draw EROM memories """
     env_sto( "_SCAN_ALPHA", 0.5 )
-
-
-
-########## HELPER FUNCTIONS ########################################################################
-
-def zip_dict_sorted_by_decreasing_value( dct ):
-    """ Return a list of (k,v) tuples sorted by decreasing value """
-    keys = list()
-    vals = list()
-    for k, v in dct.items():
-        keys.append(k)
-        vals.append(v)
-    return sorted( zip( keys, vals ), key=lambda x: x[1], reverse=1)
-
-
-def look_at_matrix( target, eye, up = None ):
-    """ Construct the camera transformation """
-    if up is None:
-        up = [0,0,1,]
-    else:
-        up = vec_unit( up )
-    zBasis = vec_unit( np.subtract( target, eye ) )
-    xBasis = vec_unit( np.cross( up, zBasis ) )
-    yBasis = np.cross( zBasis, xBasis )
-    rtnMtx = np.eye(4)
-    rtnMtx[0:3,0] = xBasis
-    rtnMtx[0:3,1] = yBasis
-    rtnMtx[0:3,2] = zBasis
-    rtnMtx[0:3,3] = eye
-    return np.transpose( rtnMtx )
 
 
 
