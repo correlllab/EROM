@@ -19,7 +19,7 @@ set_blocks_env()
 set_experiment_env()
 
 ### Local ###
-from EROM import EROM
+from Memory import EROM
 
 
 

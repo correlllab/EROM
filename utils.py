@@ -13,6 +13,19 @@ from aspire.env_config import env_var
 
 
 
+########## HELPER FUNCTIONS ########################################################################
+
+def zip_dict_sorted_by_decreasing_value( dct ):
+    """ Return a list of (k,v) tuples sorted by decreasing value """
+    keys = list()
+    vals = list()
+    for k, v in dct.items():
+        keys.append(k)
+        vals.append(v)
+    return sorted( zip( keys, vals ), key=lambda x: x[1], reverse=1)
+
+
+
 ########## MEMORY FUNCTIONS ########################################################################
 
 def copy_as_LKG( sym : GraspObj ):

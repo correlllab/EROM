@@ -41,7 +41,7 @@ from aspire.SymPlanner import SymPlanner
 
 ### Local ###
 from obj_ID_server import Perception_OWLViT
-from EROM import EROM, reify_chosen_beliefs
+from Memory import Memory
 from draw_beliefs import render_memory_list
 
 ### Demo ###
@@ -62,40 +62,15 @@ def set_experiment_env():
                         -0.463, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
                          0.5*env_var("_BLOCK_SCALE"), ]
     _trgtGrn = ObjPose( _poseGrn )
-    env_sto( "_DEF_NULL_SCORE"   , 0.75     )
-    env_sto( "_NULL_EVIDENCE"    , True     )
-    env_sto( "_UPDATE_PERIOD_S"  , 600.0    )
-    env_sto( "_REIFY_SUPER_BEL"  ,   1.01   )
     
     env_sto( "_Z_SNAP_BOOST"     ,   0.00*env_var("_BLOCK_SCALE")   )
     env_sto( "_Z_STACK_BOOST"    ,   0.00*env_var("_BLOCK_SCALE")   )
 
-    env_sto( "_USE_TIMEOUT"      , False    )
-    env_sto( "_OBJ_TIMEOUT_S"    , 180.0    ) # Readings older than this are not considered
-    env_sto( "_USE_DECAY"        , False    )
-    env_sto( "_SCORE_DECAY_TAU_S", 120.0    )
-
     env_sto( "_N_INTAKE_SCANS"   ,   1     )
-
-    env_sto( "_CUT_INTAKE_S_FRAC",   0.500  ) # 0.125 # 0.250 # 0.333 # 0.400 # 0.500 # 0.600  # 0.750
-    env_sto( "_CUT_LKG_S_FRAC"   ,   0.250  ) # 0.125 # 0.250 # 0.333 # 0.400   
-    env_sto( "_CUT_MERGE_S_FRAC" ,   0.125  ) # 0.125 # 0.250 # 0.333
-    env_sto( "_CUT_DETERM_S_FRAC",   0.333  ) # 0.125 # 0.250 # 0.333 # 0.400
 
     env_sto( "_N_XTRA_SPOTS"     ,   3      )
     env_sto( "_N_REQD_OBJS"      ,   3      )
     env_sto( "_CONFUSE_PROB"     ,   0.025  )
-    env_sto( "_SCORE_FILTER_EXP" ,   0.75   )
-    env_sto( "_NULL_THRESH"      ,   0.625  ) # 0.50 # 0.75
-
-    env_sto( "_SCORE_BIGNUM"      , 4000.00    )
-    env_sto( "_SCORE_MULT_SUCCESS",    7.00    )
-    env_sto( "_SCORE_MULT_DETERM" ,    5.00    )
-    env_sto( "_N_MISS_PUNISH"     ,    2       )
-    env_sto( "_WIPE_ON_FAILURE"   , True       )
-
-    env_sto( "_LKG_SEP"          , 0.80*env_var("_BLOCK_SCALE") )  # 0.40 # 0.60 # 0.70 # 0.75
-    env_sto( "_MAX_UPDATE_RAD_M" , 1.25*env_var("_BLOCK_SCALE") )
 
     env_sto( "_PLACE_XY_ACCEPT"  , 0.30*env_var("_BLOCK_SCALE") )
     env_sto( "_WIDE_XY_ACCEPT"   , 0.75*env_var("_BLOCK_SCALE") )
@@ -112,11 +87,7 @@ def set_experiment_env():
             
             ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
             ('Supported', 'ylwBlock', 'grnBlock'), 
-            # ('Supported', 'ylwBlock', 'redBlock'), 
             ('Supported', 'bluBlock', 'ylwBlock'), 
-            # ('Supported', 'ornBlock', 'grnBlock'), 
-            # ('Supported', 'vioBlock', 'ornBlock'),
-
             ('HandEmpty',),
         )
     )
@@ -139,6 +110,7 @@ def basic_BT_run( btAction ):
         btr.per_sleep()        
 
 
+
 ########## PLANNER #################################################################################
 
 class TaskPlanner:
@@ -147,9 +119,9 @@ class TaskPlanner:
 
     ##### Init ############################################################
 
-    # def reset_memory( self ):
-    #     """ Erase belief memory """
-    #     self.memory.reset_memory()
+    def reset_memory( self ):
+        """ Erase belief memory """
+        self.memory.reset_memory()
 
 
     def reset_state( self ):
@@ -161,11 +133,11 @@ class TaskPlanner:
         """ Create a pre-determined collection of poses and plan skeletons """
         set_blocks_env()
         set_experiment_env()
-        self.outFil = None
-        self.noBot  = noBot
-        self.memory  = EROM() # Entropy-Ranked Object Memory
-        self.status = Status.INVALID # Running status
-        self.perc   = Perception_OWLViT
+        self.outFil  = None
+        self.noBot   = noBot
+        self.memory  = Memory() 
+        self.status  = Status.INVALID # Running status
+        self.perc    = Perception_OWLViT
         self.robot : UR5_Interface = UR5_Interface() if (not noBot) else None
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
@@ -193,24 +165,14 @@ class TaskPlanner:
 
     def return_home( self, goPose ):
         """ Get ready for next iteration while updating beliefs """
-
         if isinstance( goPose, list ):
             goPose = goPose[0]
-
         btAction = GroundedAction( args = list(), robot = self.robot, name = "Return Home" )
         btAction.add_children([
             Open_Gripper( ctrl = self.robot ),
             MoveFree( [None, ObjPose( goPose )], robot = self.robot, suppressGrasp = True ), 
-            # Interleaved_MoveFree_and_PerceiveScene( 
-            #     MoveFree( [None, ObjPose( goPose )], robot = self.robot, suppressGrasp = True ), 
-            #     self.symPln, 
-            #     env_var("_UPDATE_PERIOD_S"), 
-            #     initSenseStep = True 
-            # ),
         ])
-        
         basic_BT_run( btAction )
-
         print( f"\nRobot returned to \n{goPose}\n" )
 
 
@@ -220,11 +182,7 @@ class TaskPlanner:
         """ Take in evidence and form beliefs """
 
         camPose = self.robot.get_cam_pose()
-        # camPose = camPose.dot( env_var("_HACKED_OFFSET") )
-
-        # camPose = env_var("_HACKED_OFFSET").dot( self.robot.get_cam_pose() )
-        
-        obsrv = dict()
+        obsrv   = dict()
         for _ in range( Nscans ):
             obsrv.update( self.perc.build_model( shots = 1 ) )
 
@@ -233,15 +191,11 @@ class TaskPlanner:
             camPose 
         ) 
 
-        # self.memory.get_current_most_likely()
-
-        # reify_chosen_beliefs( self.memory.LKG , self.symPln.symbols, factor = env_var("_REIFY_SUPER_BEL") )
 
 
     def phase_2_Conditions( self ):
         """ Get the necessary initial state, Check for goals already met """
         self.symPln.symbols = self.memory.get_current_most_likely()
-        reify_chosen_beliefs( self.symPln.symbols )
 
         if len( self.symPln.symbols ):
             self.status = Status.RUNNING
@@ -259,10 +213,6 @@ class TaskPlanner:
 
     def phase_3_Plan_Task( self ):
         """ Attempt to solve the symbolic problem """
-        self.symPln.set_update_funcs(
-            self.phase_1_Perceive,
-            self.p_belief_dist_OK
-        )
         self.symPln.plan_task( 
             pdls_stream_map = {
                 ### Symbol Streams ###
@@ -270,7 +220,7 @@ class TaskPlanner:
                 ### Symbol Tests ###
                 'test-free-placment': from_test( self.blcMod.get_free_placement_test() ),
             },
-            robot    = self.robot
+            robot = self.robot
         )
         if (self.symPln.status == Status.FAILURE):
             self.status = Status.FAILURE
@@ -279,8 +229,6 @@ class TaskPlanner:
         elif (self.symPln.status == Status.SUCCESS):
             self.status = Status.RUNNING
             print( f"\n\nPlanner thinks we SUCCEEDED!\n\n" )
-
-        # reify_chosen_beliefs( self.memory.LKG , self.symPln.symbols, factor = env_var("_REIFY_SUPER_BEL") )
 
 
     def phase_4_Execute_Action( self ):
@@ -309,8 +257,6 @@ class TaskPlanner:
 
         self.memory.history.append( msg = f"BT END: {btr.status}" )
 
-        
-
 
     def phase_5_Return_Home( self, goPose ):
         """ Get ready for next iteration while updating beliefs """
@@ -325,33 +271,22 @@ class TaskPlanner:
         return True
 
 
-    def solve_task( self, maxIter = 100, beginPlanPose = None ):
+    def solve_task( self, maxIter, beginPlanPose ):
         """ Solve the goal """
-        
-        if beginPlanPose is None:
-            if env_var("_BLOCK_SCALE") < 0.030:
-                beginPlanPose = [env_var("_GOOD_VIEW_POSE"),]
-            else:
-                beginPlanPose = [env_var("_HIGH_VIEW_POSE"),]
+        if not isinstance( beginPlanPose, list ):
+            beginPlanPose = [beginPlanPose,]
 
         i = 0
 
         print( "\n\n\n##### TASK BEGIN #####\n" )
 
-        # self.reset_beliefs() 
         self.reset_state() 
         
         self.symPln.set_goal( env_var("_GOAL") )
 
         self.memory.history.append( msg = "Task Start" )
 
-        indicateSuccess = False
-        t5              = now()
-
-        
-
         while (self.status != Status.SUCCESS) and (i < maxIter): # and (not self.PANIC):
-
             
             self.status = Status.RUNNING
 
@@ -363,27 +298,9 @@ class TaskPlanner:
 
             print( f"Phase 1, {self.status} ..." )
 
-            # self.set_goal()
-
-            expBgn = now()
-            # if (expBgn - t5) < env_var("_UPDATE_PERIOD_S"):
-            #     sleep( env_var("_UPDATE_PERIOD_S") - (expBgn - t5) )
-
             for bgnPose in beginPlanPose:
                 self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
                 self.phase_1_Perceive( env_var("_N_INTAKE_SCANS") )
-
-            # if 1:    
-            #     self.robot.moveL( _SHOT_1, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
-            #     self.phase_1_Perceive( 1 )
-
-            # if 0:
-            #     self.robot.moveL( _SHOT_2, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
-            #     self.phase_1_Perceive( 1 )
-            
-            if self.status == Status.FAILURE:
-                print( f"LOOP, {self.status} ..." )
-                continue
 
             ##### Phase 2 ########################
 
@@ -391,12 +308,9 @@ class TaskPlanner:
             self.phase_2_Conditions()
 
             if self.symPln.validate_goal_noisy( self.symPln.goal ):
-                indicateSuccess = True
                 self.memory.history.append( msg = f"Believe Success, Iteration {i}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
                 print( f"!!! Noisy success at iteration {i} !!!" )
                 self.status = Status.SUCCESS
-            else:
-                indicateSuccess = False
 
             if self.status in (Status.SUCCESS, Status.FAILURE):
                 print( f"LOOP, {self.status} ..." )
@@ -411,11 +325,6 @@ class TaskPlanner:
                 print( f"LOOP, {self.status} ..." )
                 continue
 
-            # DEATH MONITOR
-            if self.symPln.noSoln >= self.symPln.nonLim:
-                self.memory.history.append( msg = f"SOLVER BRAINDEATH: Iteration {i}: Solver has failed {self.symPln.noSoln} times in a row!" )
-                break
-
             if self.p_failed():
                 print( f"LOOP, {self.status} ..." )
                 continue
@@ -425,41 +334,24 @@ class TaskPlanner:
             print( f"Phase 4, {self.status} ..." )
 
             if env_var("_USE_GRAPHICS"):
-                render_memory_list( self.memory.LKG + self.memory.beliefs.beliefs, self.symPln.symbols )
+                render_memory_list( self.symPln.symbols )
 
-            t4 = now()
-            # if (t4 - expBgn) < env_var("_UPDATE_PERIOD_S"):
-            #     sleep( env_var("_UPDATE_PERIOD_S") - (t4 - expBgn) )
             self.phase_4_Execute_Action()
 
-            moved, mvPose = self.memory.move_reading_from_BT_plan( self.symPln.nxtAct )
-
-            print( f"Did the BT move a reading?: {moved}" )
-
             if self.p_failed():
-                self.robot.open_gripper()
-                if env_var("_WIPE_ON_FAILURE"):
-                    self.memory.reset_memory()
-
-                if mvPose[2,3] > env_var("_BLOCK_SCALE")*1.75:
-                    angryBT = get_bt_scene_rearranger( self.symPln.symbols, ctrl = self.robot, zSAFE = env_var("_Z_SAFE") )
-                    basic_BT_run( angryBT )
-                    sleep( 2.5 )
                 self.robot.open_gripper()
                 
 
             ##### Phase 5 ########################
 
             print( f"Phase 5, {self.status} ..." )
-            t5 = now()
-            # if (t5 - t4) < env_var("_UPDATE_PERIOD_S"):
-            #     sleep( env_var("_UPDATE_PERIOD_S") - (t5 - t4) )
             self.phase_5_Return_Home( beginPlanPose )
 
             print()
 
-        self.memory.history.append( msg =
-            f"Task End, Succes?: {indicateSuccess}, end_symbols : {list( self.symPln.symbols )}"
+        self.memory.history.append( 
+            msg   = f"Task End, Succes?: {self.status}, end_symbols : {list( self.symPln.symbols )}",
+            datum = list( self.symPln.symbols )
         )
 
         print( f"\n##### PLANNER END with status {self.status} after iteration {i} #####\n\n\n" )
@@ -471,7 +363,7 @@ class TaskPlanner:
 _GOOD_VIEW_POSE = None
 _HIGH_VIEW_POSE = None
 
-def responsive_experiment_prep( beginPlanPose = None ):
+def experiment_prep( beginPlanPose = None ):
     """ Init system and return a ref to the planner """
 
     if isinstance( beginPlanPose, list ):
@@ -490,17 +382,12 @@ def responsive_experiment_prep( beginPlanPose = None ):
     planner.robot.open_gripper()
     return planner
 
-
-
-
     
 
 ########## MAIN ####################################################################################
 
 _TROUBLESHOOT   = 0
-_VISION_TEST    = 0
 
-_HIGH_TWO_POSE  = None
 
 
 _CONF_CAM_POSE_ANGLED1 = repair_pose( np.array( [[ 0.55 , -0.479,  0.684, -0.45 ],
@@ -596,7 +483,7 @@ if __name__ == "__main__":
         print( f"########## Running Planner at {dateStr} ##########" )
 
         try:
-            planner = responsive_experiment_prep( _EXP_BGN_POSES ) # _EXP_BGN_POSE
+            planner = experiment_prep( _EXP_BGN_POSES ) # _EXP_BGN_POSE
             planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSES )
             sleep( 2.5 )
             planner.shutdown()
