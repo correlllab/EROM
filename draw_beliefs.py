@@ -46,7 +46,7 @@ def vispy_geo_list_window( geoLst ):
     view.bgcolor = '#ffffff'
 
     view.camera = scene.ArcballCamera() #'arcball'
-    view.camera.up = np.array( [0.0, 0.0, 1.0] )
+    view.camera.up = 'z' #np.array( [0.0, 0.0, 1.0] )
     view.camera.center = np.array([
         env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
         env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, 
@@ -255,10 +255,10 @@ def scan_list_geo( objs : list[GraspObj] ):
 
 def symbol_geo( sym : GraspObj ):
     objXfrm = extract_pose_as_homog( sym, noRot = True )
-    wf1 = wireframe_box_neg( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
+    wf1 = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
                              color = Color( "black" ) )
     wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    wf2 = wireframe_box_neg( env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, 
+    wf2 = wireframe_box_geo( env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, 
                              color = Color( "black" ) )
     wf2.transform = transforms.STTransform( translate = objXfrm[:3,3] )
     scl  = env_var("_BLOCK_SCALE") * 0.200
@@ -268,6 +268,24 @@ def symbol_geo( sym : GraspObj ):
                               color = bClr, edge_color="black" )
     blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
     return [wf1, wf2, blc,] 
+
+
+def scan_geo( sym : GraspObj ):
+    objXfrm = extract_pose_as_homog( sym, noRot = True )
+    wf1 = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
+                             color = Color( "black" ) )
+    wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    
+    labelSort = zip_dict_sorted_by_decreasing_value( sym.labels )
+    lbl = labelSort[0][0]
+    prb = labelSort[0][1]
+    scl  = env_var("_BLOCK_SCALE") * prb
+    bClr = env_var("_CLR_TABLE")[ lbl[:3] ]
+    bClr.append( env_var("_SCAN_ALPHA") )
+    blc  = scene.visuals.Box( scl, scl, scl,  
+                              color = bClr, edge_color="black" )
+    blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    return [wf1, blc,] 
 
 
 def symbol_neg( sym : GraspObj ):
@@ -298,6 +316,16 @@ def symbol_list_geo( objs : list[GraspObj], noTable = True ):
     return rtnGeo
 
 
+def scan_list_geo( objs : list[GraspObj], noTable = True ):
+    """ Get geo for a list of symbols """
+    if noTable:
+        rtnGeo = list()
+    else:
+        rtnGeo = [table_geo(),]
+    for obj in objs:
+        rtnGeo.extend( scan_geo( obj ) )
+    return rtnGeo
+
 
 ########## RENDER MEMORY ###########################################################################
 
@@ -306,6 +334,12 @@ def render_memory_list( objs : list[GraspObj], syms = None ):
     objLst = reading_list_geo( objs )
     if syms is not None:
         objLst.extend( symbol_list_geo( syms, noTable = True ) )
+    vispy_geo_list_window( objLst )
+
+
+def render_scan_list( objs : list[GraspObj] ):
+    """ Render the memory """
+    objLst = scan_list_geo( objs, noTable = False )
     vispy_geo_list_window( objLst )
 
 
