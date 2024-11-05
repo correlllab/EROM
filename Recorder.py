@@ -29,7 +29,7 @@ def record_readings( shotList : list[np.ndarray], N : int ):
         for j, shotPose in enumerate( shotList ):
             mem.history.append( msg = "step", datum = [i,j,] )
             rbt.moveL( shotPose, asynch = False )
-            sleep( 0.5 )
+            sleep( 2.0 )
             camPose = rbt.get_cam_pose()
             mem.history.append( msg = "camera", datum = camPose.copy() )
             obsrv = prc.build_model( shots = 1 )
@@ -46,7 +46,7 @@ def record_readings( shotList : list[np.ndarray], N : int ):
 
 if __name__ == "__main__":
     try:
-        record_readings( [_SHOT_1, _SHOT_2, _SHOT_3, _SHOT_4, _SHOT_5, _SHOT_6,], 1 )
+        record_readings( [_SHOT_1, _SHOT_2, _SHOT_3, _SHOT_4, _SHOT_5, _SHOT_6,], 4 )
     except Exception as e:
         print( f"BAD THING: {e}" )
     except KeyboardInterrupt:

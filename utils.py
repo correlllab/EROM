@@ -126,5 +126,5 @@ def deep_copy_memory_list( mem : list[GraspObj] ):
     """ Make a deep copy of the memory list """
     rtnLst = list()
     for m in mem:
-        rtnLst.append( m.deep_copy() )
+        rtnLst.append( m.copy() )
     return rtnLst
