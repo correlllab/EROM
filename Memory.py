@@ -157,7 +157,16 @@ class Memory:
 
     def get_current_most_likely( self ):
         """ Generate symbols """
-        return random_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
+        symbols = random_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
+
+        self.history.append( 
+            datum = {
+                "scan": deep_copy_memory_list( symbols ),
+            },
+            msg = "symbols" 
+        )
+
+        return symbols
         
 
 

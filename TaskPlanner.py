@@ -44,8 +44,6 @@ from obj_ID_server import Perception_OWLViT
 from Memory import Memory
 from draw_beliefs import render_memory_list
 
-### Demo ###
-from zb_Demo import get_bt_scene_rearranger
 
 
 
