@@ -334,7 +334,7 @@ def symbol_neg( sym : GraspObj ):
     return [wf1, wf2, blc,] 
 
 
-def cpcd_geo( sym : GraspObj, camPose : np.ndarray = None, size = 0.0025, div = 20 ):
+def cpcd_geo( sym : GraspObj, camPose : np.ndarray = None, size = 0.00125, div = 20 ):
     """ Draw a monochrome pointcloud of one object """
     if camPose is not None:
         sym.cpcd.transform( camPose )
