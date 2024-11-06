@@ -17,7 +17,8 @@ from aspire.symbols import ObjPose, GraspObj, extract_pose_as_homog
 from aspire.BlocksTask import set_blocks_env
 
 from TaskPlanner import set_experiment_env
-from draw_beliefs import set_render_env, render_memory_list, render_scan_list
+from draw_beliefs import ( set_render_env, render_memory_list, render_scan_list, vispy_geo_list_window, 
+                           table_geo, cpcd_geo )
 
 path = "/home/james/EROM/data/EROM-Memories_11-05-2024_13-43-39.pkl"
 data = list()
@@ -71,7 +72,11 @@ for i, datum in enumerate( data ):
         totMem.extend( datum['data']['scan'] )
         # render_memory_list( datum['data']['scan'] )
 
-render_scan_list( totMem )
+rdng = totMem[0]
+
+vispy_geo_list_window( [table_geo(), cpcd_geo( rdng )] )
+
+# render_scan_list( totMem )
 
 
 os.system( 'kill %d' % os.getpid() ) 
