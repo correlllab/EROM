@@ -3,6 +3,18 @@
 ### Standard ###
 import sys, gc, time, traceback
 now = time.time
+from os import environ
+
+# print( f"PYTORCH_CUDA_ALLOC_CONF: {environ['PYTORCH_CUDA_ALLOC_CONF']}" )
+environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+environ["CUBLASLT_WORKSPACE_SIZE"] = "16"
+
+# print( environ["CUBLASLT_WORKSPACE_SIZE"] )
+import torch
+# print( torch.cuda.memory_summary( device = None, abbreviated = False ))
+torch.cuda.empty_cache()
+# torch.backends.cuda.matmul.allow_tf32 = True
+# torch.backends.cudnn.allow_tf32 = True
 
 ### Special ###
 import numpy as np

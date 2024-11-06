@@ -28,7 +28,7 @@ def record_readings( shotList : list[np.ndarray], N : int ):
     set_experiment_env()
 
     if _USE_OWL_2:
-        prc = Perception_OWLv2
+        prc = Perception_OWLv2()
     else:
         prc = Perception_OWLViT
 
