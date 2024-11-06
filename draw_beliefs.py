@@ -3,9 +3,8 @@ from pprint import pprint
 
 import numpy as np
 
-import vispy
-from vispy import scene
-from vispy import gloo
+# import vispy
+from vispy import scene, gloo, visuals
 from vispy.visuals import transforms
 from vispy.color import Color
 
@@ -14,7 +13,7 @@ import numpy as np
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
 from aspire.homog_utils import homog_xform
-from aspire.symbols import extract_pose_as_homog, GraspObj
+from aspire.symbols import extract_pose_as_homog, GraspObj, CPCD
 
 ### Local ###
 from utils import zip_dict_sorted_by_decreasing_value
@@ -305,6 +304,21 @@ def symbol_neg( sym : GraspObj ):
     return [wf1, wf2, blc,] 
 
 
+def cpcd_geo( sym : GraspObj ):
+    """ Draw a monochrome pointcloud of one object """
+    clr = np.mean( sym.cpcd.colors, axis = 0 ).tolist()
+    clr = clr + [1.0,] if (len( clr ) == 3) else clr
+    scatter = visuals.MarkersVisual()
+    scatter.set_data(
+        sym.cpcd.points, 
+        edge_width = 0, 
+        face_color = clr, 
+        size       = 5, 
+        symbol     = 'o'
+    )
+    return scatter
+
+
 def symbol_list_geo( objs : list[GraspObj], noTable = True ):
     """ Get geo for a list of symbols """
     if noTable:
@@ -350,6 +364,7 @@ if __name__ == "__main__":
     set_blocks_env()
 
     neg = wireframe_box_neg( 0.050, 0.050, 0.050, color = "green" )
+
     vispy_geo_list_window( [neg,] )
     
 
