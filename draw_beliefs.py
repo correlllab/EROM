@@ -1,11 +1,16 @@
 ########## INIT ####################################################################################
 from pprint import pprint
+from collections import deque
 
 import numpy as np
 
-# import vispy
+import vispy
+# print(vispy.sys_info())
+vispy.use('pyglet')
+# vispy.use('glfw')
 from vispy import scene, gloo, visuals
 from vispy.visuals import transforms
+from vispy.visuals.collections import PointCollection
 from vispy.color import Color
 
 import numpy as np
@@ -77,6 +82,31 @@ def table_geo():
         -_TABLE_THIC/2.0
     ) )
     return table
+
+
+def cross_geo( posn, size, color ):
+    """ Return a cross made of line segments """
+    hs = size/2.0
+    pX, pY, pZ = posn
+    verts = np.array([
+        [ pX-hs, pY, pZ ], # 0
+        [ pX+hs, pY, pZ ], # 1
+        [ pX, pY-hs, pZ ], # 2
+        [ pX, pY+hs, pZ ], # 3
+        [ pX, pY, pZ-hs ], # 4
+        [ pX, pY, pZ+hs ], # 5
+    ])
+    ndces = np.array([
+        [0,1,],
+        [2,3,],
+        [4,5,],
+    ])
+    cross = scene.visuals.Line(
+        pos     = verts,
+        connect = ndces,
+        color   = color,
+    )
+    return cross
 
 
 def wireframe_box_geo( xScl, yScl, zScl, color = None ):
@@ -304,19 +334,25 @@ def symbol_neg( sym : GraspObj ):
     return [wf1, wf2, blc,] 
 
 
-def cpcd_geo( sym : GraspObj ):
+def cpcd_geo( sym : GraspObj, camPose : np.ndarray = None, size = 0.0025, div = 20 ):
     """ Draw a monochrome pointcloud of one object """
+    if camPose is not None:
+        sym.cpcd.transform( camPose )
     clr = np.mean( sym.cpcd.colors, axis = 0 ).tolist()
     clr = clr + [1.0,] if (len( clr ) == 3) else clr
-    scatter = visuals.MarkersVisual()
-    scatter.set_data(
-        sym.cpcd.points, 
-        edge_width = 0, 
-        face_color = clr, 
-        size       = 5, 
-        symbol     = 'o'
-    )
-    return scatter
+    
+    rtnPts = deque()
+
+    for i, pnt_i in enumerate( sym.cpcd.points ):
+        if ((i%div)==0):
+            clr_i = sym.cpcd.colors[i,:]
+            rtnPts.append( cross_geo( pnt_i, size, clr_i ) )
+
+    print( f"There are {len(sym.cpcd.points)} points!" )
+    print( sym.cpcd.points.shape )
+    print( sym.cpcd.points )
+
+    return list( rtnPts )
 
 
 def symbol_list_geo( objs : list[GraspObj], noTable = True ):
