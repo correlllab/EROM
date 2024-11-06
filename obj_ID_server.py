@@ -20,8 +20,10 @@ import matplotlib.pyplot as plt
 from magpie_perception import pcd
 from magpie_control import realsense_wrapper as real
 from magpie_perception.label_owlvit import LabelOWLViT
-
 os.environ["TOKENIZERS_PARALLELISM"] = "False" #"True"
+
+### Local ###
+from OWLv2_Segment import _QUERIES
 
 ########## PERCEPTION SETTINGS #####################################################################
 
