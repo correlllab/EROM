@@ -78,7 +78,7 @@ for i, datum in enumerate( data ):
         totMem.extend( datum['data']['scan'] )
         break
 
-rdng = totMem[0]
+rdng = totMem[-5]
 
 vispy_geo_list_window(
     # table_geo(), 
