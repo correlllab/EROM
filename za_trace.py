@@ -13,6 +13,8 @@
 import pickle, os
 from pprint import pprint
 
+import numpy as np
+
 from aspire.symbols import ObjPose, GraspObj, extract_pose_as_homog
 from aspire.BlocksTask import set_blocks_env
 
@@ -64,17 +66,24 @@ for i, datum in enumerate( data ):
 
 ########## DRAW SCANS ##############################################################################
 
-totMem = list()
+totMem  = list()
+camPose = np.eye(4)
 
 for i, datum in enumerate( data ):
+
+    if datum['msg'] == 'camera':
+        camPose = datum['data']
     if datum['msg'] == 'memory':
         # pprint(  )
         totMem.extend( datum['data']['scan'] )
-        # render_memory_list( datum['data']['scan'] )
+        break
 
 rdng = totMem[0]
 
-vispy_geo_list_window( [table_geo(), cpcd_geo( rdng )] )
+vispy_geo_list_window(
+    # table_geo(), 
+    cpcd_geo( rdng, camPose ),
+)
 
 # render_scan_list( totMem )
 
