@@ -8,8 +8,8 @@ from copy import deepcopy
 from collections import defaultdict
 
 # print( f"PYTORCH_CUDA_ALLOC_CONF: {environ['PYTORCH_CUDA_ALLOC_CONF']}" )
-environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-environ["CUBLASLT_WORKSPACE_SIZE"] = "16"
+# environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+# environ["CUBLASLT_WORKSPACE_SIZE"] = "16"
 
 # print( environ["CUBLASLT_WORKSPACE_SIZE"] )
 import torch
@@ -38,7 +38,7 @@ _VERBOSE = 1
 _QUERIES = [ 
     # {'query': "a photo of a violet block", 'abbrv': "vio", },
     {'query': "a photo of a blue block"  , 'abbrv': "blu", },
-    # {'query': "a photo of a red block"   , 'abbrv': "red", },
+    {'query': "a photo of a red block"   , 'abbrv': "red", },
     {'query': "a photo of a yellow block", 'abbrv': "ylw", },
     {'query': "a photo of a green block" , 'abbrv': "grn", },
     # {'query': "a photo of a orange block", 'abbrv': "orn", },
@@ -57,11 +57,11 @@ def set_perc_env():
     env_sto( "_OWL2_THRESH"  , 0.005 )
     env_sto( "_OWL2_CPU"     , False )
     env_sto( "_OWL2_PATH"    , "google/owlv2-base-patch16-ensemble" ) 
-    env_sto( "_OWL2_MAX_HITS", 20 ) 
-    env_sto( "_OWL2_MAX_FRAC", 0.05 ) 
-    
-    env_sto( "_SEG_SCORE_THRESH" , 0.100 )
-    env_sto( "_SEG_IOU_THRESH"   , 0.750 )
+
+    env_sto( "_SEG_MAX_HITS"    , 20     ) 
+    env_sto( "_SEG_MAX_FRAC"    ,  0.05  ) 
+    env_sto( "_SEG_SCORE_THRESH",  0.100 ) # 0.075
+    env_sto( "_SEG_IOU_THRESH"  ,  0.750 )
 
 
 
@@ -195,7 +195,7 @@ class Perception_OWLv2:
         for i in range( len( scores ) ):
             if (scores[i] >= env_var("_SEG_SCORE_THRESH")) and \
             self.filter_by_area( 
-                env_var("_OWL2_MAX_FRAC"), 
+                env_var("_SEG_MAX_FRAC"), 
                 self.label_vit.sorted_labeled_boxes_coords[i][0], 
                 image.shape[0]*image.shape[1] 
             ):
@@ -209,7 +209,7 @@ class Perception_OWLv2:
                     'query'  : query,
                     'abbrv'  : abbrevq,
                 })
-            if len( rtnHits ) >= env_var("_OWL2_MAX_HITS"):
+            if len( rtnHits ) >= env_var("_SEG_MAX_HITS"):
                 break
 
         return {
