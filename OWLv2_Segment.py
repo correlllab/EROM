@@ -4,6 +4,7 @@
 import sys, gc, time, traceback
 now = time.time
 from os import environ
+from copy import deepcopy
 
 # print( f"PYTORCH_CUDA_ALLOC_CONF: {environ['PYTORCH_CUDA_ALLOC_CONF']}" )
 environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -47,11 +48,13 @@ _QUERIES = [
 
 def set_perc_env():
     """ Set perception params """
-    env_sto( "_OWL2_TOPK"   , 3     )
-    env_sto( "_OWL2_THRESH" , 0.005 )
-    env_sto( "_OWL2_CPU"    , False )
-    env_sto( "_OWL2_PATH"   , "google/owlv2-base-patch16-ensemble" ) 
-    env_sto( "_RSC_VIZ_SCL" , 1000 ) 
+    env_sto( "_OWL2_TOPK"    , 3     )
+    env_sto( "_OWL2_THRESH"  , 0.005 )
+    env_sto( "_OWL2_CPU"     , False )
+    env_sto( "_OWL2_PATH"    , "google/owlv2-base-patch16-ensemble" ) 
+    env_sto( "_OWL2_MAX_HITS", 20 ) 
+    env_sto( "_OWL2_MAX_FRAC", 0.05 ) 
+    env_sto( "_RSC_VIZ_SCL"  , 1000 ) 
 
 
 
@@ -130,6 +133,17 @@ class Perception_OWLv2:
         return pose_vector.reshape( (16,) ).tolist()
     
 
+    def calculate_area( self, box ):
+        """Calculates the area of the bounding box."""
+        return abs(box[3] - box[1]) * abs(box[2] - box[0])
+
+
+    def filter_by_area( self, tolerance, box, total_area ):
+        """Filters the bounding box by area."""
+        area = self.calculate_area(box)
+        return abs(area / total_area) <= tolerance
+
+
     def bound( self, query, abbrevq ):
         """Bounds the given query with the OWLViT model."""
         _, rgbd_image = self.rsc.getPCD()
@@ -137,23 +151,28 @@ class Perception_OWLv2:
 
         self.label_vit.set_threshold( env_var("_OWL2_THRESH") )
 
-        _, boxes, scores, labels = self.label_vit.label( image, query, abbrevq, topk = True, plot = False )
+        _, _, scores, labels = self.label_vit.label( image, query, abbrevq, topk = True, plot = False )
 
         rtnHits = list()
-        for i, box_i in enumerate( boxes ):
-            rtnHits.append({
-                'bbox'  : box_i,
-                'score' : scores[i],
-                'label' : labels[i],
-            })
+        for i in range( len( scores ) ):
+            if self.filter_by_area( env_var("_OWL2_MAX_FRAC"), self.label_vit.sorted_labeled_boxes_coords[i][0], image.shape[0]*image.shape[1] ):
+                rtnHits.append({
+                    'bbox'   : self.label_vit.sorted_boxes[i],
+                    'score'  : scores[i],
+                    'label'  : labels[i],
+                    'coords' : self.label_vit.sorted_labeled_boxes_coords[i],
+                })
+            if len( rtnHits ) >= env_var("_OWL2_MAX_HITS"):
+                break
 
         return rgbd_image, image, rtnHits
     
     
-    def segment( self, queries : list[dict] ) -> list[dict]: 
+    def segment( self, queries : list[dict] ) -> tuple[list[dict], list[dict]]: 
         """ Get poses from the camera """
 
-        rtnObjs = list()
+        rtnObjs  = list()
+        metadata = list()
 
         try:
 
@@ -163,6 +182,7 @@ class Perception_OWLv2:
                 abbrv = q['abbrv']
 
                 rgbd, image, rtnHits = self.bound( query, abbrv )
+                metadata.append( { 'query': query, 'abbrv': abbrv, 'image': image.copy(), 'hits': deepcopy( rtnHits ), 't': now(), } )
 
                 print( f"Obtained {len(rtnHits)} boxes!" )
 
@@ -172,9 +192,17 @@ class Perception_OWLv2:
                     cpcd = None
 
                     try:
+                        # print( hit_i['coords'] )
+
+                        # formatted_boxes = [box for box_list in hit_i['coords'] for box in box_list]
+                        # formatted_boxes = []
+
+                        # print( f"Formatted boxes: {formatted_boxes}" )
                         _, cpcd, _, _ = pcd.get_segment(
-                            hit_i['bbox'],
-                            i,
+                            # formatted_boxes,
+                            # [hit_i['coords'][0],],
+                            [hit_i['coords'],],
+                            0,
                             rgbd,
                             self.rsc,
                             type      = "box",
@@ -196,7 +224,7 @@ class Perception_OWLv2:
                                          'colors' : np.asarray( cpcd.colors ).copy(), }
                     })
                 
-            return rtnObjs
+            return rtnObjs, metadata
 
         except Exception as e:
             print(f"Error building model: {e}", flush=True, file=sys.stderr)
