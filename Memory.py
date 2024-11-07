@@ -51,24 +51,31 @@ def hacked_offset_map( pose ) -> np.ndarray:
     return hackXfrm
 
 
-def observation_to_readings( obs : dict, xform = None ):
+def observation_to_readings( obs, xform = None ):
     """ Parse the Perception Process output struct """
     rtnBel = []
     if xform is None:
         xform = np.eye(4)
-    for item in obs.values():
+
+    if isinstance( obs, dict ):
+        obs = list( obs.values() )
+
+    for item in obs:
         dstrb = {}
         tScan = item['Time']
 
         # WARNING: CLASSES WITH A ZERO PRIOR WILL NOT ACCUMULATE EVIDENCE!
-        for nam, prb in item['Probability'].items():
-            if prb > 0.0001:
-                dstrb[ match_name( nam ) ] = prb
-            else:
-                dstrb[ match_name( nam ) ] = env_var("_CONFUSE_PROB")
-        if env_var("_NULL_NAME") not in dstrb:
-            dstrb[ env_var("_NULL_NAME") ] = env_var("_CONFUSE_PROB")
-        dstrb = normalize_dist( dstrb )
+
+        if isinstance( item['Probability'], dict ):
+            for nam, prb in item['Probability'].items():
+                if prb > 0.0001:
+                    dstrb[ match_name( nam ) ] = prb
+                else:
+                    dstrb[ match_name( nam ) ] = env_var("_CONFUSE_PROB")
+
+            if env_var("_NULL_NAME") not in dstrb:
+                dstrb[ env_var("_NULL_NAME") ] = env_var("_CONFUSE_PROB")
+            dstrb = normalize_dist( dstrb )
 
         if len( item['Pose'] ) == 16:
             # HACK: THERE IS A PERSISTENT GRASP OFFSET IN THE SCENE
@@ -109,9 +116,10 @@ def random_symbols_from_readings( objLst : list[GraspObj], N : int ):
             picked.add( sID )
             rtnSym.append( sym )
     for s in rtnSym:
-        probs = zip_dict_sorted_by_decreasing_value( s.labels )
-        s.label = probs[0][0]
-        s.prob  = probs[0][1]
+        if len( s.labels ):
+            probs = zip_dict_sorted_by_decreasing_value( s.labels )
+            s.label = probs[0][0]
+            s.prob  = probs[0][1]
     return [sym.copy_child() for sym in rtnSym]
         
 

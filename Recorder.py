@@ -2,6 +2,7 @@
 
 import os
 from time import sleep
+from traceback import print_exc
 
 import numpy as np
 
@@ -48,7 +49,8 @@ def record_readings( shotList : list[np.ndarray], N : int ):
             mem.history.append( msg = "camera", datum = camPose.copy() )
 
             if _USE_OWL_2:
-                obsrv = prc.segment( _QUERIES )
+                obsrv, meta = prc.segment( _QUERIES )
+                mem.history.append( msg = "meta", datum = meta )
             else:
                 obsrv = prc.build_model( shots = 1 )
             
@@ -68,6 +70,7 @@ if __name__ == "__main__":
         record_readings( [_SHOT_1, _SHOT_2, _SHOT_3, _SHOT_4, _SHOT_5, _SHOT_6,], 4 )
     except Exception as e:
         print( f"BAD THING: {e}" )
+        print_exc()
     except KeyboardInterrupt:
         print( "\nSTOPPED by user!\n" )
 
