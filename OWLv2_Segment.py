@@ -5,6 +5,7 @@ import sys, gc, time, traceback
 now = time.time
 from os import environ
 from copy import deepcopy
+from collections import defaultdict
 
 # print( f"PYTORCH_CUDA_ALLOC_CONF: {environ['PYTORCH_CUDA_ALLOC_CONF']}" )
 environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -28,6 +29,7 @@ from magpie_perception.label_owlv2 import LabelOWLv2
 
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
+from aspire.utils import normalize_dist
 
 
 ########## PERCEPTION SETTINGS #####################################################################
@@ -48,13 +50,48 @@ _QUERIES = [
 
 def set_perc_env():
     """ Set perception params """
+    
+    env_sto( "_RSC_VIZ_SCL"  , 1000 ) 
+    
     env_sto( "_OWL2_TOPK"    , 3     )
     env_sto( "_OWL2_THRESH"  , 0.005 )
     env_sto( "_OWL2_CPU"     , False )
     env_sto( "_OWL2_PATH"    , "google/owlv2-base-patch16-ensemble" ) 
     env_sto( "_OWL2_MAX_HITS", 20 ) 
     env_sto( "_OWL2_MAX_FRAC", 0.05 ) 
-    env_sto( "_RSC_VIZ_SCL"  , 1000 ) 
+    
+    env_sto( "_SEG_SCORE_THRESH" , 0.100 )
+    env_sto( "_SEG_IOU_THRESH"   , 0.750 )
+
+
+
+########## HELPER FUNCTIONS ########################################################################
+
+def give_0():
+    """ Return Float Zero """
+    return 0.0
+    
+
+def bb_intersection_over_union( boxA, boxB ):
+    """ Return IoU """
+    # Author: Adrian Rosebrock, https://pyimagesearch.com/2016/11/07/intersection-over-union-iou-for-object-detection/
+	# determine the (x, y)-coordinates of the intersection rectangle
+	xA = max(boxA[0], boxB[0])
+	yA = max(boxA[1], boxB[1])
+	xB = min(boxA[2], boxB[2])
+	yB = min(boxA[3], boxB[3])
+	# compute the area of intersection rectangle
+	interArea = max(0, xB - xA + 1) * max(0, yB - yA + 1)
+	# compute the area of both the prediction and ground-truth
+	# rectangles
+	boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
+	boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
+	# compute the intersection over union by taking the intersection
+	# area and dividing it by the sum of prediction + ground-truth
+	# areas - the interesection area
+	iou = interArea / float(boxAArea + boxBArea - interArea)
+	# return the intersection over union value
+	return iou
 
 
 
@@ -148,6 +185,7 @@ class Perception_OWLv2:
         """Bounds the given query with the OWLViT model."""
         _, rgbd_image = self.rsc.getPCD()
         image = np.array( rgbd_image.color )
+        depth = np.array( rgbd_image.depth )
 
         self.label_vit.set_threshold( env_var("_OWL2_THRESH") )
 
@@ -155,55 +193,75 @@ class Perception_OWLv2:
 
         rtnHits = list()
         for i in range( len( scores ) ):
-            if self.filter_by_area( env_var("_OWL2_MAX_FRAC"), self.label_vit.sorted_labeled_boxes_coords[i][0], image.shape[0]*image.shape[1] ):
+            if (scores[i] >= env_var("_SEG_SCORE_THRESH")) and \
+            self.filter_by_area( 
+                env_var("_OWL2_MAX_FRAC"), 
+                self.label_vit.sorted_labeled_boxes_coords[i][0], 
+                image.shape[0]*image.shape[1] 
+            ):
+                coords  = self.label_vit.sorted_boxes[i]
+                indices = [int(c) for c in coords]
                 rtnHits.append({
-                    'bbox'   : self.label_vit.sorted_boxes[i],
+                    'bbox'   : coords,
                     'score'  : scores[i],
                     'label'  : labels[i],
-                    'coords' : self.label_vit.sorted_labeled_boxes_coords[i],
+                    'image'  : image[indices[1]:indices[3], indices[0]:indices[2]].copy(),
+                    'query'  : query,
+                    'abbrv'  : abbrevq,
                 })
             if len( rtnHits ) >= env_var("_OWL2_MAX_HITS"):
                 break
 
-        return rgbd_image, image, rtnHits
+        return {
+            'rgbd' : rgbd_image,
+            'image': image,
+            'hits' : rtnHits,
+        }
     
     
     def segment( self, queries : list[dict] ) -> tuple[list[dict], list[dict]]: 
         """ Get poses from the camera """
 
-        rtnObjs  = list()
+        hits     = list()
         metadata = list()
+        rtnObjs  = list()
+        result   = None
 
         try:
 
             for q in queries:
 
-                query = q['query']
-                abbrv = q['abbrv']
+                query  = q['query']
+                abbrv  = q['abbrv']
+                result = self.bound( query, abbrv ) 
 
-                rgbd, image, rtnHits = self.bound( query, abbrv )
-                metadata.append( { 'query': query, 'abbrv': abbrv, 'image': image.copy(), 'hits': deepcopy( rtnHits ), 't': now(), } )
+                metadata.append( { 'query': query, 'abbrv': abbrv, 
+                                   'image': result['image'].copy(), 
+                                   'hits': deepcopy( result['hits'] ), 
+                                   't': now(), } )
+                hits.extend( deepcopy( result['hits'] ) )
 
-                print( f"Obtained {len(rtnHits)} boxes!" )
 
-
-                for i, hit_i in enumerate( rtnHits ):
+            for i, hit_i in enumerate( hits ):
+                match = False
+                ## If Match, Then Update Object ##
+                for obj in rtnObjs:
+                    if bb_intersection_over_union( hit_i['bbox'], obj['bbox'] ) >= env_var("_SEG_IOU_THRESH"):
+                        obj['Score'].append( hit_i['score'] )
+                        obj['Probability'][ hit_i['abbrv'] ] += hit_i['score']
+                        obj['Count'] += 1
+                        match = True
+                        break
+                ## Else, New Obejct ##
+                if not match:
 
                     cpcd = None
 
                     try:
-                        # print( hit_i['coords'] )
-
-                        # formatted_boxes = [box for box_list in hit_i['coords'] for box in box_list]
-                        # formatted_boxes = []
-
-                        # print( f"Formatted boxes: {formatted_boxes}" )
                         _, cpcd, _, _ = pcd.get_segment(
-                            # formatted_boxes,
-                            # [hit_i['coords'][0],],
-                            [hit_i['coords'],],
+                            [hit_i['bbox'],],
                             0,
-                            rgbd,
+                            result['rgbd'], # Just use the last image in the series
                             self.rsc,
                             type      = "box",
                             method    = "iterative",
@@ -214,15 +272,24 @@ class Perception_OWLv2:
                     except Exception as e:
                         print(f"Segmentation error: {e}", flush=True, file=sys.stderr)
                         raise e
-                    
-                    rtnObjs.append({
-                        'Probability': hit_i['score'],
-                        'Pose'       : self.get_pcd_pose( cpcd ),
+
+                    item = {
+                        ## Updated ##
+                        'Score'      : [hit_i['score'],],
+                        'Probability': defaultdict( give_0 ),
                         'Count'      : 1,
+                        ## Frozen ##
+                        'bbox'       : hit_i['bbox']
+                        'Pose'       : self.get_pcd_pose( cpcd ),
                         'Time'       : now(),
                         'CPCD'       : { 'points' : np.asarray( cpcd.points ).copy(),
                                          'colors' : np.asarray( cpcd.colors ).copy(), }
-                    })
+                    }
+                    item['Probability'][ hit_i['abbrv'] ] = hit_i['score']
+                    rtnObjs.append( item )
+
+            for obj in rtnObjs:
+                obj['Probability'] = normalize_dist( obj['Probability'] )
                 
             return rtnObjs, metadata
 
@@ -232,5 +299,5 @@ class Perception_OWLv2:
             raise e
         
         except KeyboardInterrupt as e:
-            print( f"\n`build_model` was stopped by user: {e}\n", flush=True, file=sys.stderr )
+            print( f"\n`segment` was stopped by user: {e}\n", flush=True, file=sys.stderr )
             raise e

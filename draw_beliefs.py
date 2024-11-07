@@ -305,16 +305,19 @@ def scan_geo( sym : GraspObj ):
                              color = Color( "black" ) )
     wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
     
-    labelSort = zip_dict_sorted_by_decreasing_value( sym.labels )
-    lbl = labelSort[0][0]
-    prb = labelSort[0][1]
-    scl  = env_var("_BLOCK_SCALE") * prb
-    bClr = env_var("_CLR_TABLE")[ lbl[:3] ]
-    bClr.append( env_var("_SCAN_ALPHA") )
-    blc  = scene.visuals.Box( scl, scl, scl,  
-                              color = bClr, edge_color="black" )
-    blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    return [wf1, blc,] 
+    if len( sym.labels ):
+        labelSort = zip_dict_sorted_by_decreasing_value( sym.labels )
+        lbl = labelSort[0][0]
+        prb = labelSort[0][1]
+        scl  = env_var("_BLOCK_SCALE") * prb
+        bClr = env_var("_CLR_TABLE")[ lbl[:3] ]
+        bClr.append( env_var("_SCAN_ALPHA") )
+        blc  = scene.visuals.Box( scl, scl, scl,  
+                                color = bClr, edge_color="black" )
+        blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+        return [wf1, blc,] 
+    else:
+        return [wf1,] 
 
 
 def symbol_neg( sym : GraspObj ):
