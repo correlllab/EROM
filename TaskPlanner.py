@@ -40,9 +40,11 @@ from aspire.pddlstream.pddlstream.language.generator import from_gen_fn, from_te
 from aspire.SymPlanner import SymPlanner
 
 ### Local ###
-from obj_ID_server import Perception_OWLViT
+# from obj_ID_server import Perception_OWLViT
+from OWLv2_Segment import Perception_OWLv2, _QUERIES
+
 from Memory import Memory
-from draw_beliefs import render_memory_list
+from draw_beliefs import render_memory_list, render_scan_list
 
 
 
@@ -131,7 +133,10 @@ class TaskPlanner:
         self.noBot   = noBot
         self.memory  = Memory() 
         self.status  = Status.INVALID # Running status
-        self.perc    = Perception_OWLViT
+
+        # self.perc    = Perception_OWLViT
+        self.perc = Perception_OWLv2()
+
         self.robot : UR5_Interface = UR5_Interface() if (not noBot) else None
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
@@ -175,15 +180,25 @@ class TaskPlanner:
     def phase_1_Perceive( self, Nscans = 1 ):
         """ Take in evidence and form beliefs """
 
-        camPose = self.robot.get_cam_pose()
-        obsrv   = dict()
+        camPose  = self.robot.get_cam_pose()
+        obsrv    = list()
+        metadata = list()
+
         for _ in range( Nscans ):
-            obsrv.update( self.perc.build_model( shots = 1 ) )
+            # obsrv.update( self.perc.build_model( shots = 1 ) )
+            obs, mta = self.perc.segment( _QUERIES )
+            obsrv.extend( obs )
+            metadata.extend( mta )
+
+        self.memory.history.append( msg = "ObsMeta", datum = metadata )
 
         self.memory.process_observations( 
             obsrv,
             camPose 
         ) 
+
+        
+        
 
 
 
@@ -296,6 +311,9 @@ class TaskPlanner:
                 self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
                 self.phase_1_Perceive( env_var("_N_INTAKE_SCANS") )
 
+            if env_var("_USE_GRAPHICS"):
+                render_scan_list( self.memory.scan )
+
             ##### Phase 2 ########################
 
             print( f"Phase 2, {self.status} ..." )
@@ -328,7 +346,7 @@ class TaskPlanner:
             print( f"Phase 4, {self.status} ..." )
 
             if env_var("_USE_GRAPHICS"):
-                render_memory_list( self.symPln.symbols )
+                render_memory_list( syms = self.symPln.symbols )
 
             self.phase_4_Execute_Action()
 

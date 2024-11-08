@@ -38,7 +38,7 @@ _VERBOSE = 1
 _QUERIES = [ 
     # {'query': "a photo of a violet block", 'abbrv': "vio", },
     {'query': "a photo of a blue block"  , 'abbrv': "blu", },
-    {'query': "a photo of a red block"   , 'abbrv': "red", },
+    # {'query': "a photo of a red block"   , 'abbrv': "red", },
     {'query': "a photo of a yellow block", 'abbrv': "ylw", },
     {'query': "a photo of a green block" , 'abbrv': "grn", },
     # {'query': "a photo of a orange block", 'abbrv': "orn", },
