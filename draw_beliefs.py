@@ -79,7 +79,7 @@ def table_geo():
     table.transform = transforms.STTransform( translate = (
         env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
         env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, 
-        -_TABLE_THIC/2.0
+        -_TABLE_THIC/2.0+env_var("_Z_TABLE")
     ) )
     return table
 
@@ -382,11 +382,16 @@ def scan_list_geo( objs : list[GraspObj], noTable = True ):
 
 ########## RENDER MEMORY ###########################################################################
 
-def render_memory_list( objs : list[GraspObj], syms = None ):
+def render_memory_list( objs : list[GraspObj] = None, syms = None ):
     """ Render the memory """
-    objLst = reading_list_geo( objs )
+    if objs is not None:
+        objLst       = reading_list_geo( objs )
+        missingTable = False
+    else:
+        objLst       = list()
+        missingTable = True
     if syms is not None:
-        objLst.extend( symbol_list_geo( syms, noTable = True ) )
+        objLst.extend( symbol_list_geo( syms, noTable = (not missingTable) ) )
     vispy_geo_list_window( objLst )
 
 

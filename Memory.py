@@ -37,9 +37,9 @@ def hacked_offset_map( pose ) -> np.ndarray:
 
     hackMap  = [ [[minX, minY, height], [ 1.0/100.0, 1.0/100.0, 0.0]],
                  [[minX, maxY, height], [ 1.0/100.0, 0.0/100.0, 0.0]],
-                 [[midX, midY, height], [ 1.0/100.0, 1.0/100.0, 0.0]],
-                 [[maxX, minY, height], [ 1.0/100.0, 1.0/100.0, 0.0]], 
-                 [[maxX, maxY, height], [ 1.0/100.0, 0.0/100.0, 0.0]],]
+                 [[midX, midY, height], [ 2.0/100.0, 1.0/100.0, 0.0]],
+                 [[maxX, minY, height], [ 2.0/100.0, 1.0/100.0, 0.0]], 
+                 [[maxX, maxY, height], [ 2.0/100.0, 0.0/100.0, 0.0]],]
     
     weights = list()
     for hack in hackMap:
@@ -115,13 +115,14 @@ def strongest_symbols_from_readings( objLst : list[GraspObj], N : int ):
         print( obj.score )
         obj.score = np.mean( obj.score )
         labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
-        lbl       = labelDist[0][0]
-        prb       = labelDist[0][1]
-        if (lbl not in picked) or (prb > picked[ lbl ].prob):
-            nu = obj.copy_child()
-            nu.label = lbl
-            nu.prob  = prb
-            picked[ lbl ] = nu
+        
+        for lbl_i, prb_i in labelDist:
+            if (lbl_i not in picked) or (prb_i > picked[ lbl_i ].prob):
+                nu = obj.copy_child()
+                nu.label = lbl_i
+                nu.prob  = prb_i
+                picked[ lbl_i ] = nu
+                break
         
     return list( picked.values() )
         
