@@ -74,8 +74,9 @@ def set_quality_score( obj : GraspObj ):
 def snap_z_to_nearest_block_unit_above_zero( z : float ):
     """ SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE """
     sHalf = (env_var("_BLOCK_SCALE")/2.0)
-    zUnit = np.rint( (z-sHalf+env_var("_Z_SNAP_BOOST")) / env_var("_BLOCK_SCALE") ) # Quantize to multiple of block unit length
-    zBloc = max( (zUnit*env_var("_BLOCK_SCALE"))+sHalf, sHalf )
+    zBump = sHalf + env_var("_Z_TABLE")
+    zUnit = np.rint( (z-zBump+env_var("_Z_SNAP_BOOST")) / env_var("_BLOCK_SCALE") ) # Quantize to multiple of block unit length
+    zBloc = max( (zUnit*env_var("_BLOCK_SCALE"))+zBump, zBump )
     return zBloc
 
 ########## LOGGER ##################################################################################
