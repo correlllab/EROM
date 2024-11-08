@@ -32,7 +32,7 @@ from magpie_control.poses import repair_pose
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
 from aspire.symbols import ( ObjPose, )
-from aspire.actions import ( BT_Runner, Interleaved_MoveFree_and_PerceiveScene, MoveFree, GroundedAction, )
+from aspire.actions import ( BT_Runner, MoveFree, GroundedAction, )
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
 
 ### ASPIRE::PDDLStream ### 
@@ -58,7 +58,7 @@ def set_experiment_env():
     _poseGrn = np.eye(4)
     _poseGrn[0:3,3] = [ -0.211, # env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
                         -0.463, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
-                         0.5*env_var("_BLOCK_SCALE"), ]
+                         0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE"), ]
     _trgtGrn = ObjPose( _poseGrn )
     
     env_sto( "_Z_SNAP_BOOST"     ,   0.00*env_var("_BLOCK_SCALE")   )
@@ -90,10 +90,6 @@ def set_experiment_env():
         )
     )
 
-    env_sto( "_HACKED_OFFSET"  , np.array( [[ 1.0, 0.0, 0.0, -1.0/100.0, ],
-                                            [ 0.0, 1.0, 0.0, -0.5/100.0, ],
-                                            [ 0.0, 0.0, 1.0, 0.0, ],
-                                            [ 0.0, 0.0, 0.0, 1.0, ],] ) )
     env_sto( "_ANGRY_PUSH_M", 0.035 ) 
     
 
@@ -440,7 +436,8 @@ _SHOT_6 = repair_pose( np.array( [[-0.07,  -0.951, -0.3 ,  -0.059],
                                  [ 0.   ,  0.    , 0.   ,  1.   ],] ))
  
 
-_EXP_BGN_POSES = [_SHOT_6, _SHOT_6]
+# _EXP_BGN_POSES = [_SHOT_6, _SHOT_6]
+_EXP_BGN_POSES = [_SHOT_6,]
 
 
 if __name__ == "__main__":

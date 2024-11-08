@@ -33,7 +33,7 @@ def hacked_offset_map( pose ) -> np.ndarray:
     midY     = env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")*0.50
     maxY     = env_var("_MAX_Y_OFFSET")
 
-    height   = 0.5*env_var("_BLOCK_SCALE")
+    height   = 0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE")
 
     hackMap  = [ [[minX, minY, height], [ 1.0/100.0, 1.0/100.0, 0.0]],
                  [[minX, maxY, height], [ 1.0/100.0, 0.0/100.0, 0.0]],
@@ -73,8 +73,10 @@ def observation_to_readings( obs, xform = None ):
                 else:
                     dstrb[ match_name( nam ) ] = env_var("_CONFUSE_PROB")
 
-            if env_var("_NULL_NAME") not in dstrb:
-                dstrb[ env_var("_NULL_NAME") ] = env_var("_CONFUSE_PROB")
+            for nam in env_var("_BLOCK_NAMES"):
+                if nam not in dstrb:
+                    dstrb[ nam ] = env_var("_CONFUSE_PROB")
+                
             dstrb = normalize_dist( dstrb )
 
         if len( item['Pose'] ) == 16:
@@ -98,29 +100,30 @@ def observation_to_readings( obs, xform = None ):
             score  = 0.0,
             cpcd   = item['CPCD'],
         )
-
         rtnBel.append( rtnObj )
     return rtnBel
 
 
-def random_symbols_from_readings( objLst : list[GraspObj], N : int ):
+def strongest_symbols_from_readings( objLst : list[GraspObj], N : int ):
     """ Randomly pick `N` readings to serve as symbols """
     if len( objLst ) < N:
         return list()
-    picked = set([])
-    rtnSym = list()
-    while len( rtnSym ) < N:
-        sym = choice( objLst )
-        sID = id( sym )
-        if sID not in picked:
-            picked.add( sID )
-            rtnSym.append( sym )
-    for s in rtnSym:
-        if len( s.labels ):
-            probs = zip_dict_sorted_by_decreasing_value( s.labels )
-            s.label = probs[0][0]
-            s.prob  = probs[0][1]
-    return [sym.copy_child() for sym in rtnSym]
+    
+    picked = dict()
+
+    for obj in objLst:
+        print( obj.score )
+        obj.score = np.mean( obj.score )
+        labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
+        lbl       = labelDist[0][0]
+        prb       = labelDist[0][1]
+        if (lbl not in picked) or (prb > picked[ lbl ].prob):
+            nu = obj.copy_child()
+            nu.label = lbl
+            nu.prob  = prb
+            picked[ lbl ] = nu
+        
+    return list( picked.values() )
         
 
 
@@ -165,7 +168,7 @@ class Memory:
 
     def get_current_most_likely( self ):
         """ Generate symbols """
-        symbols = random_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
+        symbols = strongest_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
 
         self.history.append( 
             datum = {
