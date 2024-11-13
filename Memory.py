@@ -87,7 +87,7 @@ def observation_to_readings( obs, xform = None ):
             objPose  = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
             
             # HACK: SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE
-            objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
+            # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
         else:
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         

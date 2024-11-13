@@ -30,6 +30,7 @@ from magpie_perception.label_owlv2 import LabelOWLv2
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
 from aspire.utils import normalize_dist, diff_norm
+from aspire.symbols import CPCD
 
 
 ########## PERCEPTION SETTINGS #####################################################################
@@ -105,32 +106,42 @@ def bb_intersection_over_union( boxA, boxB ):
 def p_bb_intersect( boxA, boxB ):
     """ Return true if the 2D bounding boxes intersect """
     # Original Author: Dennis Bauszus, https://stackoverflow.com/a/77133433
-    return !((boxA[0] > boxB[2]) or (boxA[2] < boxB[0]) or (boxA[1] > boxB[3]) or (boxA[3] < boxB[1]))
+    return (not ((boxA[0] > boxB[2]) or (boxA[2] < boxB[0]) or (boxA[1] > boxB[3]) or (boxA[3] < boxB[1])))
 
 
 def pos_mask_from_bbox( shape, bbox ):
     """ Return an array of `shape` where all entries inside the 2D `bbox` are 1, and everything else is 0 """
     bbox   = [int(c) for c in bbox]
-    rntMtx = np.zeros( shape )
-    rntMtx[bbox[1]:bbox[3], bbox[0]:bbox[2]] = np.ones( (bbox[3]-bbox[1], bbox[2]-bbox[0],) )
+    rntMtx = np.zeros( shape[:2] )
+    rntMtx[bbox[1]:bbox[3], bbox[0]:bbox[2],] = np.ones( (bbox[3]-bbox[1], bbox[2]-bbox[0],) )
     return rntMtx
 
 
 def mask_subtract( mask1, mask2 ):
     """ Subtract `mask2` from `mask1` """
-    return mask1[~mask2]
+    return np.clip( np.subtract( mask1, mask2 ), 0, 1 )
     
 
 def avg_color_in_mask( image, mask ):
     """ Return the average `image` color where `mask` is True """
-    Nmask = 0
-    avClr = np.zeros( (3,) )
-    for i in range( image.size[0] ):
-        for j in range( image.size[1] ):
-            if mask[i,j]:
-                avClr += image[i,j,:3]
-                Nmask += 1
-    return avClr / Nmask
+    if np.sum( mask ) < 1.0:
+        return np.zeros( (3,) )
+    nuMsk = np.zeros( image.shape ) 
+    for i in range(3):
+        nuMsk[:,:,i] = mask
+    return np.mean( image, axis = (0,1), where = nuMsk > 0.005 )
+    
+
+
+    # for i in range( image.shape[0] ):
+    #     for j in range( image.shape[1] ):
+    #         if mask[i,j]:
+    #             avClr += image[i,j,:3]
+    #             Nmask += 1
+    # if Nmask > 0:
+    #     return avClr / Nmask
+    # else:
+    #     return np.zeros( (3,) )
                 
 
 def p_bbox_contains_other( boxA, boxB ):
@@ -141,6 +152,12 @@ def p_bbox_contains_other( boxA, boxB ):
     ]
 
 
+def convert_to_CPCD( o3dCpcd ):
+    """ Convert the points and colors to a CPCD """
+    return CPCD(
+        points = np.asarray( o3dCpcd.points ).copy(),
+        colors = np.asarray( o3dCpcd.colors ).copy(),
+    )
 
 ########## PERCEPTION WRAPPER ######################################################################
 
@@ -234,6 +251,8 @@ class Perception_OWLv2:
         image = np.array( rgbd_image.color )
         depth = np.array( rgbd_image.depth )
 
+        # print( f"Image shape: {image.shape}", flush=True, file=sys.stderr )
+
         self.label_vit.set_threshold( env_var("_OWL2_THRESH") )
 
         _, _, scores, labels = self.label_vit.label( image, query, abbrevq, topk = True, plot = False )
@@ -288,7 +307,7 @@ class Perception_OWLv2:
 
                 metadata.append( { 'query': query, 'abbrv': abbrv, 
                                    'image': result['image'].copy(), 
-                                   'image': result['depth'].copy(), 
+                                   'depth': result['depth'].copy(), 
                                    'rgbd' : result['rgbd'], 
                                    'hits': deepcopy( result['hits'] ), 
                                    't': now(), } )
@@ -343,7 +362,7 @@ class Perception_OWLv2:
                     cpcd = None
 
                     try:
-                        _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], rsc, NB = 5 )
+                        _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
 
                     except Exception as e:
                         print(f"Segmentation error: {e}", flush=True, file=sys.stderr)
@@ -366,6 +385,10 @@ class Perception_OWLv2:
 
             for obj in rtnObjs:
                 obj['Probability'] = normalize_dist( obj['Probability'] )
+
+            # These don't pickle!
+            for elem in metadata:
+                del elem['rgbd']
                 
             return rtnObjs, metadata
 
