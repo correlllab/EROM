@@ -28,7 +28,8 @@ from draw_beliefs import ( set_render_env, render_memory_list, render_scan_list,
 # path = "/home/will/james/erom/data/EROM-Memories_11-07-2024_16-24-41.pkl"
 # path = "/home/will/james/erom/data/EROM-Memories_11-07-2024_16-29-50.pkl"
 # path = "/home/will/james/erom/data/EROM-Memories_11-07-2024_16-36-58.pkl"
-path = "/home/will/james/erom/data/EROM-Memories_11-07-2024_16-42-59.pkl"
+# path = "/home/will/james/erom/data/EROM-Memories_11-07-2024_16-42-59.pkl"
+path = "data/EROM-Memories_11-12-2024_16-54-59.pkl"
 data = list()
 with open( path, 'rb' ) as f:
     data = pickle.load( f )
@@ -89,7 +90,9 @@ for i, datum in enumerate( data ):
             rdg.cpcd.transform( camPose ) 
             # rdg.pose = ObjPose( np.dot( camPose, extract_pose_as_homog( rdg.pose ) ) )
         totMem.extend( readings )
-        # break
+        
+    if datum['msg'] == 'symbols':
+        render_memory_list( syms = datum['data']['scan'] )
 
 # rdng = totMem[-5]
 
