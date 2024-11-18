@@ -102,7 +102,7 @@ def min_dist_to_mesh( q, verts, norms, diams, cntrs ):
         if (cenDs[i,0] > (diams[i]*factr)):
             dMin = min( dMin, pntDs[i,0] )
         else:
-            dMin = min( dMin, plnDs[i,0] )
+            dMin = min( dMin, abs( plnDs[i,0] ) )
     return dMin
 
 
