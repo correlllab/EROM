@@ -6,6 +6,7 @@ now = time.time
 from os import environ
 from copy import deepcopy
 from collections import defaultdict
+from uuid import uuid4
 
 # print( f"PYTORCH_CUDA_ALLOC_CONF: {environ['PYTORCH_CUDA_ALLOC_CONF']}" )
 # environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -258,6 +259,7 @@ class Perception_OWLv2:
         _, _, scores, labels = self.label_vit.label( image, query, abbrevq, topk = True, plot = False )
 
         rtnHits = list()
+        imgID   = str( uuid4() )
         for i in range( len( scores ) ):
             if (scores[i] >= env_var("_SEG_SCORE_THRESH")) and \
             self.filter_by_area( 
@@ -275,11 +277,13 @@ class Perception_OWLv2:
                     'image'  : image[indices[1]:indices[3], indices[0]:indices[2]].copy(),
                     'query'  : query,
                     'abbrv'  : abbrevq,
+                    'shotID' : imgID,
                 })
             if len( rtnHits ) >= env_var("_SEG_MAX_HITS"):
                 break
 
         return {
+            'id'   : imgID,
             'rgbd' : rgbd_image,
             'image': image,
             'depth': depth,
@@ -293,7 +297,10 @@ class Perception_OWLv2:
         hits     = list()
         metadata = list()
         rtnObjs  = list()
-        # result   = None
+        metadata = {
+            'input'  : dict(),
+            'hits'   : list(),
+        }
 
         try:
 
@@ -303,26 +310,28 @@ class Perception_OWLv2:
 
                 query  = q['query']
                 abbrv  = q['abbrv']
-                result = self.bound( query, abbrv ) 
+                result = self.bound( query, abbrv )
 
-                metadata.append( { 'query': query, 'abbrv': abbrv, 
-                                   'image': result['image'].copy(), 
-                                   'depth': result['depth'].copy(), 
-                                   'rgbd' : result['rgbd'], 
-                                   'hits': deepcopy( result['hits'] ), 
-                                   't': now(), } )
-                hits.extend( deepcopy( result['hits'] ) )
+                metadata['input'][ result['id'] ] = {
+                    'query': query, 'abbrv': abbrv, 
+                    'image': result['image'].copy(), 
+                    'depth': result['depth'].copy(),
+                    'rgbd' : result['rgbd'], 
+                    't'    : now(),
+                }
+                metadata['hits'].extend( deepcopy( result['hits'] ) )
+                
 
-            image = metadata[0]['image']
-            Nhits = len( hits )
+            image = metadata['input'][ list(metadata['input'].keys())[0] ]['image']
+            Nhits = len( metadata['hits'] )
 
             ### Reconcile Overlapping BBoxes with Masks ###
                 
             for i in range( Nhits-1 ):
-                hit_i = hits[i]
+                hit_i = metadata['hits'][i]
                 msk_i = pos_mask_from_bbox( image.shape, hit_i['bbox'] ) if ('mask' not in hit_i) else hit_i['mask']
                 for j in range( i+1, Nhits ):
-                    hit_j = hits[j]
+                    hit_j = metadata['hits'][j]
                     msk_j = pos_mask_from_bbox( image.shape, hit_j['bbox'] ) if ('mask' not in hit_j) else hit_j['mask']
                     if p_bb_intersect( hit_i['bbox'], hit_j['bbox'] ) and (not (True in p_bbox_contains_other( hit_i['bbox'], hit_j['bbox'] ))):
                         bbInt = bb_intersection( hit_i['bbox'], hit_j['bbox'] )
@@ -333,20 +342,20 @@ class Perception_OWLv2:
                         clr_i = avg_color_in_mask( image, msk_i )
                         clr_j = avg_color_in_mask( image, msk_j )
                         if diff_norm( clr_i, clr_n ) < diff_norm( clr_j, clr_n ):
-                            hit_i['mask'] = msk_i + msk_n
-                            hit_j['mask'] = msk_j
+                            metadata['hits'][i]['mask'] = msk_i + msk_n
+                            metadata['hits'][j]['mask'] = msk_j
                         else:
-                            hit_i['mask'] = msk_i
-                            hit_j['mask'] = msk_j + msk_n
+                            metadata['hits'][i]['mask'] = msk_i
+                            metadata['hits'][j]['mask'] = msk_j + msk_n
                     else:
-                        hit_i['mask'] = msk_i
-                        hit_j['mask'] = msk_j
+                        metadata['hits'][i]['mask'] = msk_i
+                        metadata['hits'][j]['mask'] = msk_j
 
                         
             ### Get CPCDs from the Masks ###
             rgbds = [result['rgbd'] for result in metadata]
 
-            for hit_i in hits:
+            for hit_i in metadata['hits']:
                 match = False
                 ## If Match, Then Update Object ##
                 for obj in rtnObjs:
@@ -378,7 +387,8 @@ class Perception_OWLv2:
                         'Pose'       : self.get_pcd_pose( cpcd ),
                         'Time'       : now(),
                         'CPCD'       : { 'points' : np.asarray( cpcd.points ).copy(),
-                                         'colors' : np.asarray( cpcd.colors ).copy(), }
+                                         'colors' : np.asarray( cpcd.colors ).copy(), },
+                        'shotID'     : hit_i['shotID'],
                     }
                     item['Probability'][ hit_i['abbrv'] ] = hit_i['score']
                     rtnObjs.append( item )
@@ -387,8 +397,8 @@ class Perception_OWLv2:
                 obj['Probability'] = normalize_dist( obj['Probability'] )
 
             # These don't pickle!
-            for elem in metadata:
-                del elem['rgbd']
+            for k in metadata['input'].keys():
+                del metadata['input'][k]['rgbd']
                 
             return rtnObjs, metadata
 

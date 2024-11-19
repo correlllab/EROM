@@ -172,10 +172,8 @@ class Memory:
         symbols = strongest_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
 
         self.history.append( 
-            datum = {
-                "scan": deep_copy_memory_list( symbols ),
-            },
-            msg = "symbols" 
+            datum = deep_copy_memory_list( symbols ),
+            msg   = "symbols" 
         )
 
         return symbols
