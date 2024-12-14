@@ -22,7 +22,6 @@ from OWLv2_Segment import Perception_OWLv2, _QUERIES
 _USE_OWL_2 = True
 
 
-
 def record_readings( shotList : list[np.ndarray], N : int ):
     """ Characterize the vision system """
     set_blocks_env()
