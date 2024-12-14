@@ -282,7 +282,7 @@ class Perception_OWLv2:
 
                         
             ### Get CPCDs from the Masks ###
-            rgbds = [result['rgbd'] for result in metadata]
+            # rgbds = [result['rgbd'] for result in metadata]
 
             for hit_i in metadata['hits']:
                 match = False
@@ -305,6 +305,7 @@ class Perception_OWLv2:
                         sam_box = np.array( hit_i['bbox'] )
                         sam_mask, _, _ = self.sam_predictor.predict( box = sam_box )
                         sam_mask = np.transpose( sam_mask, (1, 2, 0) )
+                        hit_i['mask'] = np.asarray( sam_mask )
 
                         # _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
                         _, cpcd = pcd.get_masked_cpcd( 
