@@ -8,16 +8,13 @@ from copy import deepcopy
 from collections import defaultdict
 from uuid import uuid4
 
-# print( f"PYTORCH_CUDA_ALLOC_CONF: {environ['PYTORCH_CUDA_ALLOC_CONF']}" )
-# environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-# environ["CUBLASLT_WORKSPACE_SIZE"] = "16"
+# import torch
+# torch.cuda.empty_cache()
 
-# print( environ["CUBLASLT_WORKSPACE_SIZE"] )
 import torch
-# print( torch.cuda.memory_summary( device = None, abbreviated = False ))
-torch.cuda.empty_cache()
-# torch.backends.cuda.matmul.allow_tf32 = True
-# torch.backends.cudnn.allow_tf32 = True
+import sam2
+from sam2.build_sam import build_sam2
+from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 ### Special ###
 import numpy as np
@@ -69,9 +66,12 @@ def set_perc_env():
 
 ########## HELPER FUNCTIONS ########################################################################
 
-def give_0():
-    """ Return Float Zero """
-    return 0.0
+def convert_to_CPCD( o3dCpcd ):
+    """ Convert the points and colors to a CPCD """
+    return CPCD(
+        points = np.asarray( o3dCpcd.points ).copy(),
+        colors = np.asarray( o3dCpcd.colors ).copy(),
+    )
 
 
 def bb_intersection( boxA, boxB ):
@@ -103,65 +103,14 @@ def bb_intersection_over_union( boxA, boxB ):
     # return the intersection over union value
     return iou
 
-    
-def p_bb_intersect( boxA, boxB ):
-    """ Return true if the 2D bounding boxes intersect """
-    # Original Author: Dennis Bauszus, https://stackoverflow.com/a/77133433
-    return (not ((boxA[0] > boxB[2]) or (boxA[2] < boxB[0]) or (boxA[1] > boxB[3]) or (boxA[3] < boxB[1])))
+
+def give_0():
+    """ Return Float Zero """
+    return 0.0
 
 
-def pos_mask_from_bbox( shape, bbox ):
-    """ Return an array of `shape` where all entries inside the 2D `bbox` are 1, and everything else is 0 """
-    bbox   = [int(c) for c in bbox]
-    rntMtx = np.zeros( shape[:2] )
-    rntMtx[bbox[1]:bbox[3], bbox[0]:bbox[2],] = np.ones( (bbox[3]-bbox[1], bbox[2]-bbox[0],) )
-    return rntMtx
-
-
-def mask_subtract( mask1, mask2 ):
-    """ Subtract `mask2` from `mask1` """
-    return np.clip( np.subtract( mask1, mask2 ), 0, 1 )
-    
-
-def avg_color_in_mask( image, mask ):
-    """ Return the average `image` color where `mask` is True """
-    if np.sum( mask ) < 1.0:
-        return np.zeros( (3,) )
-    nuMsk = np.zeros( image.shape ) 
-    for i in range(3):
-        nuMsk[:,:,i] = mask
-    return np.mean( image, axis = (0,1), where = nuMsk > 0.005 )
-    
-
-
-    # for i in range( image.shape[0] ):
-    #     for j in range( image.shape[1] ):
-    #         if mask[i,j]:
-    #             avClr += image[i,j,:3]
-    #             Nmask += 1
-    # if Nmask > 0:
-    #     return avClr / Nmask
-    # else:
-    #     return np.zeros( (3,) )
-                
-
-def p_bbox_contains_other( boxA, boxB ):
-    """ Return [ <A contains B>, <B contains A> ] """
-    return [
-        (boxA[0] <= boxB[0]) and (boxA[1] <= boxB[1]) and (boxA[2] >= boxB[2]) and (boxA[3] >= boxB[3]),
-        (boxB[0] <= boxA[0]) and (boxB[1] <= boxA[1]) and (boxB[2] >= boxA[2]) and (boxB[3] >= boxA[3]),
-    ]
-
-
-def convert_to_CPCD( o3dCpcd ):
-    """ Convert the points and colors to a CPCD """
-    return CPCD(
-        points = np.asarray( o3dCpcd.points ).copy(),
-        colors = np.asarray( o3dCpcd.colors ).copy(),
-    )
 
 ########## PERCEPTION WRAPPER ######################################################################
-
 
 
 class Perception_OWLv2:
@@ -197,6 +146,15 @@ class Perception_OWLv2:
         except Exception as e:
             if _VERBOSE:
                 print( f"\nERROR initializing OWLv2: {e}\n", flush=True, file=sys.stderr )
+            raise e
+        
+        try:
+            print(f"{self.label_vit.model.device=}")
+            self.sam_predictor = SAM2ImagePredictor.from_pretrained( "facebook/sam2-hiera-large" )
+            print(f"{self.sam_predictor.model.device=}")
+        except Exception as e:
+            if _VERBOSE:
+                print( f"\nERROR initializing SAM2: {e}\n", flush=True, file=sys.stderr )
             raise e
         
     
@@ -322,35 +280,6 @@ class Perception_OWLv2:
                 metadata['hits'].extend( deepcopy( result['hits'] ) )
                 
 
-            image = metadata['input'][ list(metadata['input'].keys())[0] ]['image']
-            Nhits = len( metadata['hits'] )
-
-            ### Reconcile Overlapping BBoxes with Masks ###
-                
-            for i in range( Nhits-1 ):
-                hit_i = metadata['hits'][i]
-                msk_i = pos_mask_from_bbox( image.shape, hit_i['bbox'] ) if ('mask' not in hit_i) else hit_i['mask']
-                for j in range( i+1, Nhits ):
-                    hit_j = metadata['hits'][j]
-                    msk_j = pos_mask_from_bbox( image.shape, hit_j['bbox'] ) if ('mask' not in hit_j) else hit_j['mask']
-                    if p_bb_intersect( hit_i['bbox'], hit_j['bbox'] ) and (not (True in p_bbox_contains_other( hit_i['bbox'], hit_j['bbox'] ))):
-                        bbInt = bb_intersection( hit_i['bbox'], hit_j['bbox'] )
-                        msk_n = pos_mask_from_bbox( image.shape, bbInt )
-                        msk_i = mask_subtract( msk_i, msk_n )
-                        msk_j = mask_subtract( msk_j, msk_n )
-                        clr_n = avg_color_in_mask( image, msk_n )
-                        clr_i = avg_color_in_mask( image, msk_i )
-                        clr_j = avg_color_in_mask( image, msk_j )
-                        if diff_norm( clr_i, clr_n ) < diff_norm( clr_j, clr_n ):
-                            metadata['hits'][i]['mask'] = msk_i + msk_n
-                            metadata['hits'][j]['mask'] = msk_j
-                        else:
-                            metadata['hits'][i]['mask'] = msk_i
-                            metadata['hits'][j]['mask'] = msk_j + msk_n
-                    else:
-                        metadata['hits'][i]['mask'] = msk_i
-                        metadata['hits'][j]['mask'] = msk_j
-
                         
             ### Get CPCDs from the Masks ###
             rgbds = [result['rgbd'] for result in metadata]
@@ -371,10 +300,22 @@ class Perception_OWLv2:
                     cpcd = None
 
                     try:
-                        _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
+
+                        self.sam_predictor.set_image( metadata['input'][ hit_i['shotID'] ]['image'] )
+                        sam_box = np.array( hit_i['bbox'] )
+                        sam_mask, _, _ = self.sam_predictor.predict( box = sam_box )
+                        sam_mask = np.transpose( sam_mask, (1, 2, 0) )
+
+                        # _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
+                        _, cpcd = pcd.get_masked_cpcd( 
+                            metadata['input'][ hit_i['shotID'] ]['rgbd'], 
+                            sam_mask, 
+                            self.rsc, 
+                            NB = 5 
+                        )
 
                     except Exception as e:
-                        print(f"Segmentation error: {e}", flush=True, file=sys.stderr)
+                        print( f"Segmentation error: {e}", flush = True, file = sys.stderr )
                         raise e
 
                     item = {
