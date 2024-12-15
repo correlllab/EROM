@@ -41,6 +41,7 @@ def record_readings( shotList : list[np.ndarray], N : int ):
 
     for i in range(N):
         for j, shotPose in enumerate( shotList ):
+            print( f"About to move to:\n{shotPose}\n" )
             mem.history.append( msg = "step", datum = [i,j,] )
             rbt.moveL( shotPose, asynch = False )
             sleep( 2.0 )
