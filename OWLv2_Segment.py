@@ -291,6 +291,7 @@ class Perception_OWLv2:
                 sam_mask = np.transpose( sam_mask, (1, 2, 0) )
                 sam_mask = np.asarray( sam_mask[:,:,0] )
                 sam_mask.reshape( sam_mask.shape[:2] )
+                # sam_mask[ sam_mask > 0.005 ] = 1.0
                 hit_i['mask'] = sam_mask.copy()
 
                 match = False
@@ -314,7 +315,7 @@ class Perception_OWLv2:
                             metadata['input'][ hit_i['shotID'] ]['rgbd'], 
                             hit_i['mask'], 
                             self.rsc, 
-                            NB = 5 
+                            NB = 25 
                         )
 
                     except Exception as e:

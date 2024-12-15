@@ -63,6 +63,8 @@ def set_experiment_env():
                          0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE"), ]
     _trgtGrn = ObjPose( _poseGrn )
     
+    env_sto( "_SCAN_ALPHA", 0.50 )
+
     env_sto( "_Z_SNAP_BOOST"     ,   0.00*env_var("_BLOCK_SCALE")   )
     env_sto( "_Z_STACK_BOOST"    ,   0.00*env_var("_BLOCK_SCALE")   )
 
@@ -76,7 +78,6 @@ def set_experiment_env():
     env_sto( "_WIDE_XY_ACCEPT"   , 0.75*env_var("_BLOCK_SCALE") )
 
     env_sto( "_WIDE_Z_ABOVE"     , 1.75*env_var("_BLOCK_SCALE") )
-    
 
     env_sto( "_ROBOT_FREE_SPEED",  0.125 ) 
     env_sto( "_ROBOT_HOLD_SPEED",  0.125 )
@@ -84,7 +85,6 @@ def set_experiment_env():
     
     env_sto( "_GOAL" ,
         ( 'and',
-            
             ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
             ('Supported', 'ylwBlock', 'grnBlock'), 
             ('Supported', 'bluBlock', 'ylwBlock'), 
@@ -196,10 +196,6 @@ class TaskPlanner:
             obsrv,
             camPose 
         ) 
-
-        
-        
-
 
 
     def phase_2_Conditions( self ):
@@ -416,7 +412,6 @@ _YCB_LANDSCAPE_FAR_BGN = repair_pose( np.array( [[-0.873,  0.238,  0.426, -0.474
                                                  [ 0.206,  0.971, -0.121, -0.212],
                                                  [-0.442, -0.018, -0.897,  0.394],
                                                  [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
- 
 
 
 _SHOT_1 = repair_pose( np.array( [[-0.635,  0.251,  0.731, -0.615,],
@@ -447,6 +442,7 @@ _SHOT_5 = repair_pose( np.array( [[-0.705, -0.694,  0.144, -0.365],
                                   [-0.708,  0.678, -0.197, -0.322],
                                   [ 0.039, -0.24 , -0.97 ,  0.439],
                                   [ 0.   ,  0.   ,  0.   ,  1.   ],] ))
+
 
 _SHOT_6 = repair_pose( np.array( [[-0.07,  -0.951, -0.3 ,  -0.059],
                                  [-0.995,  0.086 ,-0.04 , -0.38 ],
