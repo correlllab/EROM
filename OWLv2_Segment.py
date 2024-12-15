@@ -57,7 +57,7 @@ def set_perc_env():
     env_sto( "_OWL2_CPU"     , False )
     env_sto( "_OWL2_PATH"    , "google/owlv2-base-patch16-ensemble" ) 
 
-    env_sto( "_SEG_MAX_HITS"    , 20     ) 
+    env_sto( "_SEG_MAX_HITS"    , 30     ) 
     env_sto( "_SEG_MAX_FRAC"    ,  0.05  ) 
     env_sto( "_SEG_SCORE_THRESH",  0.100 ) # 0.075
     env_sto( "_SEG_IOU_THRESH"  ,  0.750 )
@@ -252,8 +252,6 @@ class Perception_OWLv2:
     def segment( self, queries : list[dict] ) -> tuple[list[dict], list[dict]]: 
         """ Get poses from the camera """
 
-        hits     = list()
-        metadata = list()
         rtnObjs  = list()
         metadata = {
             'input'  : dict(),
@@ -285,6 +283,16 @@ class Perception_OWLv2:
             # rgbds = [result['rgbd'] for result in metadata]
 
             for hit_i in metadata['hits']:
+
+                # print( metadata['input'][ hit_i['shotID'] ]['image'].shape )
+                self.sam_predictor.set_image( metadata['input'][ hit_i['shotID'] ]['image'] )
+                sam_box = np.array( hit_i['bbox'] )
+                sam_mask, _, _ = self.sam_predictor.predict( box = sam_box )
+                sam_mask = np.transpose( sam_mask, (1, 2, 0) )
+                sam_mask = np.asarray( sam_mask[:,:,0] )
+                sam_mask.reshape( sam_mask.shape[:2] )
+                hit_i['mask'] = sam_mask.copy()
+
                 match = False
                 ## If Match, Then Update Object ##
                 for obj in rtnObjs:
@@ -301,16 +309,10 @@ class Perception_OWLv2:
 
                     try:
 
-                        self.sam_predictor.set_image( metadata['input'][ hit_i['shotID'] ]['image'] )
-                        sam_box = np.array( hit_i['bbox'] )
-                        sam_mask, _, _ = self.sam_predictor.predict( box = sam_box )
-                        sam_mask = np.transpose( sam_mask, (1, 2, 0) )
-                        hit_i['mask'] = np.asarray( sam_mask )
-
                         # _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
                         _, cpcd = pcd.get_masked_cpcd( 
                             metadata['input'][ hit_i['shotID'] ]['rgbd'], 
-                            sam_mask, 
+                            hit_i['mask'], 
                             self.rsc, 
                             NB = 5 
                         )
