@@ -59,7 +59,7 @@ def set_perc_env():
 
     env_sto( "_SEG_MAX_HITS"    , 50     ) 
     env_sto( "_SEG_MAX_FRAC"    ,  0.05  ) 
-    env_sto( "_SEG_SCORE_THRESH",  0.025 ) # 0.075 # 0.100
+    env_sto( "_SEG_SCORE_THRESH",  0.100 ) # 0.025 # 0.075 # 0.100
     env_sto( "_SEG_IOU_THRESH"  ,  0.750 )
 
 
@@ -108,6 +108,12 @@ def give_0():
     """ Return Float Zero """
     return 0.0
 
+
+def bbox_to_mask( maskShape, bbox ):
+    """ Convert a bbox to a mask """
+    mask = np.zeros( maskShape[:2] )
+    mask[ bbox[1]:bbox[3], bbox[0]:bbox[2] ] = 1.0
+    return mask
 
 
 ########## PERCEPTION WRAPPER ######################################################################
@@ -182,8 +188,14 @@ class Perception_OWLv2:
 
     def get_pcd_pose( self, point_cloud ):
         """Gets the pose of the point cloud."""
-        center = point_cloud.get_center()
-        center = np.mean( np.asarray( point_cloud.points ), axis = 0 )
+        # center = point_cloud.get_center()
+        pnts = np.asarray( point_cloud.points )
+        if len( pnts ):
+            center = np.mean( pnts, axis = 0 )
+        else:
+            center = np.zeros( 3 )
+        print( pnts.shape )
+        
         print( f"{center=}" )
 
         # pose_vector = [center[0], center[1], center[2], 3.14, 0, 0]
@@ -221,12 +233,13 @@ class Perception_OWLv2:
         rtnHits = list()
         imgID   = str( uuid4() )
         for i in range( len( scores ) ):
-            if (scores[i] >= env_var("_SEG_SCORE_THRESH")) and \
-            self.filter_by_area( 
-                env_var("_SEG_MAX_FRAC"), 
-                self.label_vit.sorted_labeled_boxes_coords[i][0], 
-                image.shape[0]*image.shape[1] 
-            ):
+            # if (scores[i] >= env_var("_SEG_SCORE_THRESH")) and \
+            # self.filter_by_area( 
+            #     env_var("_SEG_MAX_FRAC"), 
+            #     self.label_vit.sorted_labeled_boxes_coords[i][0], 
+            #     image.shape[0]*image.shape[1] 
+            # ):
+            if (scores[i] >= env_var("_SEG_SCORE_THRESH")):
                 coords  = self.label_vit.sorted_boxes[i]
                 indices = [int(c) for c in coords]
                 rtnHits.append({
@@ -278,54 +291,53 @@ class Perception_OWLv2:
                     't'    : now(),
                 }
                 metadata['hits'].extend( deepcopy( result['hits'] ) )
-                
 
-                        
+
             ### Get CPCDs from the Masks ###
             # rgbds = [result['rgbd'] for result in metadata]
 
             for hit_i in metadata['hits']:
+                img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
 
-                # print( metadata['input'][ hit_i['shotID'] ]['image'].shape )
-                self.sam_predictor.set_image( metadata['input'][ hit_i['shotID'] ]['image'] )
-                sam_box = np.array( hit_i['bbox'] )
+                self.sam_predictor.reset_predictor()
+                self.sam_predictor.set_image( img_i )
+
+                # sam_box = np.array( hit_i['bbox'] )
+                sam_box = np.array( hit_i['bboxi'] )
+
                 sam_mask, _, _ = self.sam_predictor.predict( box = sam_box )
                 sam_mask = np.transpose( sam_mask, (1, 2, 0) )
                 sam_mask = np.asarray( sam_mask[:,:,0] )
                 sam_mask.reshape( sam_mask.shape[:2] )
-                # sam_mask[ sam_mask > 0.005 ] = 1.0
-                hit_i['mask'] = sam_mask.copy()
-
-
                 
+                if np.sum( sam_mask ) > 100:
+                    mask_i = sam_mask.copy()
+                else:
+                    mask_i = bbox_to_mask( img_i.shape, hit_i['bbox'] )
 
-                match = False
-                ## If Match, Then Update Object ##
-                for obj in rtnObjs:
-                    if bb_intersection_over_union( hit_i['bbox'], obj['bbox'] ) >= env_var("_SEG_IOU_THRESH"):
-                        obj['Score'].append( hit_i['score'] )
-                        obj['Probability'][ hit_i['abbrv'] ] += hit_i['score']
-                        obj['Count'] += 1
-                        match = True
-                        break
-                ## Else, New Obejct ##
-                if not match:
+                if np.sum( mask_i ) < 100:
+                    print( "MASK ERROR" )
 
-                    cpcd = None
 
-                    try:
+                cpcd = None
 
-                        # _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
-                        _, cpcd = pcd.get_masked_cpcd( 
-                            metadata['input'][ hit_i['shotID'] ]['rgbd'], 
-                            hit_i['mask'], 
-                            self.rsc, 
-                            NB = 25 
-                        )
+                try:
 
-                    except Exception as e:
-                        print( f"Segmentation error: {e}", flush = True, file = sys.stderr )
-                        raise e
+                    print( type( metadata['input'][ hit_i['shotID'] ]['rgbd'] ) )
+
+                    # _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
+                    _, cpcd = pcd.get_masked_cpcd( 
+                        metadata['input'][ hit_i['shotID'] ]['rgbd'], 
+                        mask_i, 
+                        self.rsc, 
+                        NB = 50 
+                    )
+
+                except Exception as e:
+                    print( f"Segmentation error: {e}", flush = True, file = sys.stderr )
+                    raise e
+
+                if len( np.asarray( cpcd.points ) ):
 
                     item = {
                         ## Updated ##
@@ -342,9 +354,6 @@ class Perception_OWLv2:
                     }
                     item['Probability'][ hit_i['abbrv'] ] = hit_i['score']
                     rtnObjs.append( item )
-
-            for obj in rtnObjs:
-                obj['Probability'] = normalize_dist( obj['Probability'] )
 
             # These don't pickle!
             for k in metadata['input'].keys():
