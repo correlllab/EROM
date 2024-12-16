@@ -57,9 +57,9 @@ def set_perc_env():
     env_sto( "_OWL2_CPU"     , False )
     env_sto( "_OWL2_PATH"    , "google/owlv2-base-patch16-ensemble" ) 
 
-    env_sto( "_SEG_MAX_HITS"    , 30     ) 
+    env_sto( "_SEG_MAX_HITS"    , 50     ) 
     env_sto( "_SEG_MAX_FRAC"    ,  0.05  ) 
-    env_sto( "_SEG_SCORE_THRESH",  0.100 ) # 0.075
+    env_sto( "_SEG_SCORE_THRESH",  0.025 ) # 0.075 # 0.100
     env_sto( "_SEG_IOU_THRESH"  ,  0.750 )
 
 
@@ -183,6 +183,8 @@ class Perception_OWLv2:
     def get_pcd_pose( self, point_cloud ):
         """Gets the pose of the point cloud."""
         center = point_cloud.get_center()
+        center = np.mean( np.asarray( point_cloud.points ), axis = 0 )
+        print( f"{center=}" )
 
         # pose_vector = [center[0], center[1], center[2], 3.14, 0, 0]
         # HACK: HARDCODED ORIENTATION
@@ -293,6 +295,9 @@ class Perception_OWLv2:
                 sam_mask.reshape( sam_mask.shape[:2] )
                 # sam_mask[ sam_mask > 0.005 ] = 1.0
                 hit_i['mask'] = sam_mask.copy()
+
+
+                
 
                 match = False
                 ## If Match, Then Update Object ##

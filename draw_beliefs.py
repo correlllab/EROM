@@ -84,8 +84,8 @@ def table_geo():
     return table
 
 
-def cross_geo( posn, size, color ):
-    """ Return a cross made of line segments """
+def cross_info( posn, size, color ):
+    """ Return a cross made of line segments, NOTE: This is meant to be combined with other crosses before drawing """
     hs = size/2.0
     pX, pY, pZ = posn
     verts = np.array([
@@ -101,12 +101,11 @@ def cross_geo( posn, size, color ):
         [2,3,],
         [4,5,],
     ])
-    cross = scene.visuals.Line(
-        pos     = verts,
-        connect = ndces,
-        color   = color,
-    )
-    return cross
+    return {
+        'verts': verts,
+        'ndces': ndces,
+        'color': color,
+    }
 
 
 def wireframe_box_geo( xScl, yScl, zScl, color = None ):
@@ -344,18 +343,28 @@ def cpcd_geo( sym : GraspObj, camPose : np.ndarray = None, size = 0.00125, div =
     clr = np.mean( sym.cpcd.colors, axis = 0 ).tolist()
     clr = clr + [1.0,] if (len( clr ) == 3) else clr
     
-    rtnPts = deque()
+    totPts = {
+        'verts': np.zeros( (0,3), float ),
+        'ndces': np.zeros( (0,2), int   ),
+        'color': None,
+        'total': 0
+    }
 
     for i, pnt_i in enumerate( sym.cpcd.points ):
         if ((i%div)==0):
             clr_i = sym.cpcd.colors[i,:]
-            rtnPts.append( cross_geo( pnt_i, size, clr_i ) )
+            info  = cross_info( pnt_i, size, clr_i )
+            totPts['verts'] = np.vstack( (totPts['verts'], info['verts']) )
+            totPts['ndces'] = np.vstack( (totPts['ndces'], info['ndces']+(totPts["total"])) )
+            totPts["total"] = totPts['verts'].shape[0]
 
-    print( f"There are {len(sym.cpcd.points)} points!" )
-    print( sym.cpcd.points.shape )
-    print( sym.cpcd.points )
+    geo = scene.visuals.Line(
+        pos     = totPts['verts'],
+        connect = totPts['ndces'],
+        color   = clr,
+    )
 
-    return list( rtnPts )
+    return [geo,]
 
 
 def symbol_list_geo( objs : list[GraspObj], noTable = True ):
