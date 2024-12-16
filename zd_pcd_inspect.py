@@ -1,16 +1,14 @@
 ########## INIT && LOAD DATA #######################################################################
 import pickle, os
-from pprint import pprint
 from collections import deque
 
 import numpy as np
 
-from aspire.symbols import ObjPose, GraspObj, extract_pose_as_homog
+from aspire.symbols import GraspObj
 from aspire.BlocksTask import set_blocks_env
 
 from TaskPlanner import set_experiment_env
-from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_geo_list_window, 
-                           table_geo, cpcd_geo )
+from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_geo_list_window, cpcd_geo )
 
 # path = "/home/james/EROM/data/EROM-Memories_11-05-2024_13-43-39.pkl"
 # path = "/home/james/EROM/data/EROM-Memories_11-06-2024_18-09-37.pkl"
@@ -23,7 +21,12 @@ from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_g
 # path = "data/EROM-Memories_12-14-2024_19-47-38.pkl"
 # path = "data/EROM-Memories_12-15-2024_20-05-38.pkl"
 # path = "data/EROM-Memories_12-15-2024_20-14-39.pkl"
-path = "data/EROM-Memories_12-15-2024_20-26-29.pkl"
+# path = "data/EROM-Memories_12-15-2024_20-26-29.pkl"
+# path = "data/EROM-Memories_12-15-2024_21-54-39.pkl"
+# path = "data/EROM-Memories_12-15-2024_22-02-45.pkl"
+# path = "data/EROM-Memories_12-15-2024_22-10-14.pkl"
+path = "data/EROM-Memories_12-15-2024_22-21-42.pkl"
+
 data = list()
 with open( path, 'rb' ) as f:
     data = pickle.load( f )
@@ -92,23 +95,13 @@ for i, datum in enumerate( data ):
 
         vispy_geo_list_window( list( totGeo ) )
 
-        # for rdg in readings:
-        #     # rdg.cpcd.transform( camPose ) 
-        #     # rdg.pose = ObjPose( np.dot( camPose, extract_pose_as_homog( rdg.pose ) ) )
-        # # totMem.extend( readings )
+
         
     if _DRAW_SYMB and (datum['msg'] == 'symbols'):
         # render_memory_list( syms = datum['data']['scan'] )
         render_memory_list( syms = datum['data'] )
 
-# rdng = totMem[-5]
 
-# vispy_geo_list_window(
-#     # table_geo(), 
-#     cpcd_geo( rdng, camPose ),
-# )
-
-# render_scan_list( totMem )
 
 
 os.system( 'kill %d' % os.getpid() ) 

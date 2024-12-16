@@ -81,10 +81,12 @@ def observation_to_readings( obs, xform = None ):
 
         if len( item['Pose'] ) == 16:
             # HACK: THERE IS A PERSISTENT GRASP OFFSET IN THE SCENE
-            hackXfrm = hacked_offset_map( xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) )  )
-            xform    = hackXfrm.dot( xform ) #env_var("_HACKED_OFFSET").dot( xform )
-            
-            objPose  = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
+            if 0:
+                hackXfrm = hacked_offset_map( xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) )  )
+                xform    = hackXfrm.dot( xform ) #env_var("_HACKED_OFFSET").dot( xform )
+                objPose  = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
+            else:
+                objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
             
             # HACK: SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE
             # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
