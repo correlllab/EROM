@@ -1,7 +1,7 @@
 """ Make it as simple as possible """
 ########## INIT ####################################################################################
 ### Standard ###
-import sys, gc, time, traceback
+import sys, gc, time, traceback, warnings
 now = time.time
 from os import environ
 from copy import deepcopy
@@ -116,6 +116,36 @@ def bbox_to_mask( maskShape, bbox ):
     return mask
 
 
+
+########## SAM2 WRAPPER ############################################################################
+
+class SAM2:
+    """ Simplest SAM2 wrapper for bbox prompts """
+
+    def __init__( self ):
+        self.sam_predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-large")
+
+    def predict(self, img, bbox):
+        # Suppress warnings during the prediction step
+        self.sam_predictor.set_image( img )
+        sam_mask = None
+        sam_scores = None
+        sam_logits = None
+        with warnings.catch_warnings():
+            warnings.simplefilter( "ignore", category = UserWarning )
+            sam_mask, sam_scores, sam_logits = self.sam_predictor.predict(box = bbox)
+        sam_mask = np.all( sam_mask, axis = 0 )
+        return sam_mask, sam_scores, sam_logits
+    
+
+    def __str__( self ):
+        return f"SAM2: {self.sam_predictor.model.device}"
+    
+    def __repr__( self ):
+        return self.__str__()
+
+
+
 ########## PERCEPTION WRAPPER ######################################################################
 
 
@@ -146,6 +176,7 @@ class Perception_OWLv2:
                 pth             = env_var("_OWL2_PATH"), 
                 cpu_override    = env_var("_OWL2_CPU") 
             )
+            print(f"{self.label_vit.model.device=}")
 
             if _VERBOSE:
                 print( f"VLM STARTED", flush=True, file=sys.stderr )
@@ -155,9 +186,8 @@ class Perception_OWLv2:
             raise e
         
         try:
-            print(f"{self.label_vit.model.device=}")
-            self.sam_predictor = SAM2ImagePredictor.from_pretrained( "facebook/sam2-hiera-large" )
-            print(f"{self.sam_predictor.model.device=}")
+            self.sam_predictor = SAM2()
+            print(f"{self.sam_predictor.sam_predictor.model.device=}")
         except Exception as e:
             if _VERBOSE:
                 print( f"\nERROR initializing SAM2: {e}\n", flush=True, file=sys.stderr )
@@ -299,16 +329,17 @@ class Perception_OWLv2:
             for hit_i in metadata['hits']:
                 img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
 
-                self.sam_predictor.reset_predictor()
-                self.sam_predictor.set_image( img_i )
+                
 
-                # sam_box = np.array( hit_i['bbox'] )
-                sam_box = np.array( hit_i['bboxi'] )
+                sam_mask, _, _ = self.sam_predictor.predict( 
+                    img_i, 
+                    np.array( hit_i['bboxi'] ) 
+                )
+                print( f"SAM2 Mask Dims: {sam_mask.shape}, Image Dims: {img_i.shape}" )
 
-                sam_mask, _, _ = self.sam_predictor.predict( box = sam_box )
-                sam_mask = np.transpose( sam_mask, (1, 2, 0) )
-                sam_mask = np.asarray( sam_mask[:,:,0] )
-                sam_mask.reshape( sam_mask.shape[:2] )
+                # sam_mask = np.transpose( sam_mask, (1, 2, 0) )
+                # sam_mask = np.asarray( sam_mask[:,:,0] )
+                # sam_mask.reshape( sam_mask.shape[:2] )
                 
                 if np.sum( sam_mask ) > 100:
                     mask_i = sam_mask.copy()

@@ -303,9 +303,11 @@ class TaskPlanner:
 
             print( f"Phase 1, {self.status} ..." )
 
-            for bgnPose in beginPlanPose:
-                self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
-                self.phase_1_Perceive( env_var("_N_INTAKE_SCANS") )
+            # for bgnPose in beginPlanPose:
+
+            bgnPose = self.memory.plan_3d_shot( beginPlanPose[0] )
+            self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
+            self.phase_1_Perceive( env_var("_N_INTAKE_SCANS") )
 
             if env_var("_USE_GRAPHICS"):
                 render_scan_list( self.memory.scan )

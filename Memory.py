@@ -6,9 +6,13 @@ from random import choice
 
 import numpy as np
 
+from magpie_control.poses import vec_unit, repair_pose
+from magpie_control.ur5 import UR5_Interface
+
 from aspire.env_config import env_var
 from aspire.utils import match_name, normalize_dist
-from aspire.symbols import ( ObjPose, GraspObj, )
+from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, )
+
 
 ### Local ###
 from utils import ( snap_z_to_nearest_block_unit_above_zero, LogPickler, 
@@ -81,7 +85,7 @@ def observation_to_readings( obs, xform = None ):
 
         if len( item['Pose'] ) == 16:
             # HACK: THERE IS A PERSISTENT GRASP OFFSET IN THE SCENE
-            if 0:
+            if 1:
                 hackXfrm = hacked_offset_map( xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) )  )
                 xform    = hackXfrm.dot( xform ) #env_var("_HACKED_OFFSET").dot( xform )
                 objPose  = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
@@ -131,9 +135,48 @@ def strongest_symbols_from_readings( objLst : list[GraspObj], N : int ):
 
 
 
-########## OBJECT PERMANENCE #######################################################################
+########## SENSORY PLANNING ########################################################################
 
-### TBD ###
+
+class SensoryPlanner:
+    """ Do sensing in a way that gets the task done """
+
+    def __init__( self, robot : UR5_Interface ):
+        """ HACK: THIS IS NOT MEASURED """
+        self.robot     = robot
+        self.ZTableCam = -0.081666 - 0.017
+
+
+    def tcp_from_cam_pose( self, camPose : np.ndarray ):
+        """ Get a robot pose from the camera pose """
+        return camPose.dot( np.linalg.inv( np.array( self.robot.camXform ) ) )
+
+
+    def get_camera_Z_offset( self ):
+        """ Bump everything up by some Z value I guess """
+        return -self.ZTableCam 
+
+
+    def plan_3d_shot( self, objects : list[GraspObj], defaultPose : np.ndarray ):
+        """ Plan a camera pose that maximizes info and avoids occlusion, given the proposed objects """
+        rtnPose  = defaultPose.copy()
+        if len( objects ):
+            centroid = np.zeros( 3 )
+            for obj in objects:
+                centroid += extract_pose_as_homog( obj )[0:3,3].reshape( 3 )
+            centroid /= 3.0
+            backupDr = vec_unit( [1.0,1.0,0.0] )
+            backupVc = backupDr * env_var( "_MIN_CAM_PCD_DIST_M" )
+            backupPt = centroid + backupVc
+            yBasis = np.array([0.0, 1.0, 0.0])
+            zBasis = -backupDr
+            xBasis = vec_unit( np.cross( yBasis, zBasis ) )
+            rtnPose[0:3,0] = xBasis
+            rtnPose[0:3,1] = xBasis
+            rtnPose[0:3,2] = zBasis
+            rtnPose[0:3,3] = backupPt
+        return self.tcp_from_cam_pose( rtnPose )
+
 
 
 
@@ -149,6 +192,7 @@ class Memory:
 
     def __init__( self ):
         self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
+        self.camPlan = SensoryPlanner()
         self.reset_memory()
 
 
@@ -157,9 +201,19 @@ class Memory:
         self.history.dump_to_file( openNext = False )
 
 
+    def plan_3d_shot( self, defaultPose : np.ndarray ):
+        """ Ask the sensory planner to get us a shot """
+        # HACK: WORKING FROM SCAN, NOT THE BELIEF
+        return self.camPlan.plan_3d_shot( self.scan, defaultPose )
+
+
     def process_observations( self, obs, xform = None ):
         """ Integrate one noisy scan into the current beliefs """
         self.scan = observation_to_readings( obs, xform )
+
+        # HACK: BUMP EVERYTHING UP BY SOME OFFSET
+        for obj in self.scan:
+            obj.pose.pose[2,3] += self.camPlan.get_camera_Z_offset()
 
         self.history.append( 
             datum = {
