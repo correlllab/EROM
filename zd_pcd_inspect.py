@@ -25,7 +25,8 @@ from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_g
 # path = "data/EROM-Memories_12-15-2024_21-54-39.pkl"
 # path = "data/EROM-Memories_12-15-2024_22-02-45.pkl"
 # path = "data/EROM-Memories_12-15-2024_22-10-14.pkl"
-path = "data/EROM-Memories_12-15-2024_22-21-42.pkl"
+# path = "data/EROM-Memories_12-15-2024_22-21-42.pkl"
+path = "data/EROM-Memories_12-16-2024_13-50-52.pkl"
 
 data = list()
 with open( path, 'rb' ) as f:
