@@ -313,48 +313,8 @@ def symbol_geo( sym : GraspObj ):
     return [wf1, wf2, blc,] 
 
 
-def scan_geo( sym : GraspObj ):
-    objXfrm = extract_pose_as_homog( sym, noRot = True )
-    wf1 = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
-                             color = Color( "black" ) )
-    wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    
-    if len( sym.labels ):
-        labelSort = zip_dict_sorted_by_decreasing_value( sym.labels )
-        lbl = labelSort[0][0]
-        prb = labelSort[0][1]
-        scl  = env_var("_BLOCK_SCALE") * prb
-        bClr = env_var("_CLR_TABLE")[ lbl[:3] ]
-        bClr.append( env_var("_SCAN_ALPHA") )
-        blc  = scene.visuals.Box( scl, scl, scl,  
-                                color = bClr, edge_color="black" )
-        blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-        return [wf1, blc,] 
-    else:
-        return [wf1,] 
-
-
-def symbol_neg( sym : GraspObj ):
-    objXfrm = extract_pose_as_homog( sym, noRot = True )
-    wf1 = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
-                             color = Color( "black" ) )
-    wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    wf2 = wireframe_box_geo( env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, 
-                             color = Color( "black" ) )
-    wf2.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    scl  = env_var("_BLOCK_SCALE") * sym.prob
-    bClr = env_var("_CLR_TABLE")[ sym.label[:3] ]
-    bClr.append( env_var("_BLOCK_ALPHA") )
-    blc  = scene.visuals.Box( scl, scl, scl,  
-                              color = bClr, edge_color="black" )
-    blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    return [wf1, wf2, blc,] 
-
-
-def cpcd_geo( sym : GraspObj, camPose : np.ndarray = None, size = 0.00125, div = 20 ):
+def cpcd_geo( sym : GraspObj, size = 0.00125, div = 20 ):
     """ Draw a monochrome pointcloud of one object """
-    if camPose is not None:
-        sym.cpcd.transform( camPose )
     clr = np.mean( sym.cpcd.colors, axis = 0 ).tolist()
     clr = clr + [1.0,] if (len( clr ) == 3) else clr
     
@@ -380,6 +340,49 @@ def cpcd_geo( sym : GraspObj, camPose : np.ndarray = None, size = 0.00125, div =
     )
 
     return [geo,]
+
+
+def scan_geo( sym : GraspObj ):
+    objXfrm = extract_pose_as_homog( sym, noRot = True )
+    wf1 = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
+                             color = Color( "black" ) )
+    wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    
+    if len( sym.labels ):
+        labelSort = zip_dict_sorted_by_decreasing_value( sym.labels )
+        lbl = labelSort[0][0]
+        prb = labelSort[0][1]
+        scl  = env_var("_BLOCK_SCALE") * prb
+        bClr = env_var("_CLR_TABLE")[ lbl[:3] ]
+        bClr.append( env_var("_SCAN_ALPHA") )
+        blc  = scene.visuals.Box( scl, scl, scl,  
+                                color = bClr, edge_color="black" )
+        blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+        rtnGeo = [wf1, blc,]
+        rtnGeo.extend( cpcd_geo( sym ) )
+        return rtnGeo
+    else:
+        return [wf1,] 
+
+
+def symbol_neg( sym : GraspObj ):
+    objXfrm = extract_pose_as_homog( sym, noRot = True )
+    wf1 = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
+                             color = Color( "black" ) )
+    wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    wf2 = wireframe_box_geo( env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, 
+                             color = Color( "black" ) )
+    wf2.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    scl  = env_var("_BLOCK_SCALE") * sym.prob
+    bClr = env_var("_CLR_TABLE")[ sym.label[:3] ]
+    bClr.append( env_var("_BLOCK_ALPHA") )
+    blc  = scene.visuals.Box( scl, scl, scl,  
+                              color = bClr, edge_color="black" )
+    blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
+    return [wf1, wf2, blc,] 
+
+
+
 
 
 def symbol_list_geo( objs : list[GraspObj], noTable = True ):
