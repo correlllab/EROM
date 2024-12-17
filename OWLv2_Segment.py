@@ -3,7 +3,6 @@
 ### Standard ###
 import sys, gc, time, traceback, warnings
 now = time.time
-from os import environ
 from copy import deepcopy
 from collections import defaultdict
 from uuid import uuid4
@@ -18,16 +17,15 @@ from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 ### Special ###
 import numpy as np
-import open3d as o3d
 
 ### MAGPIE ###
+from magpie_control.poses import vec_unit
 from magpie_perception import pcd
 from magpie_control import realsense_wrapper as real
 from magpie_perception.label_owlv2 import LabelOWLv2
 
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
-from aspire.utils import normalize_dist, diff_norm
 from aspire.symbols import CPCD
 
 
@@ -297,6 +295,25 @@ class Perception_OWLv2:
     def segment( self, queries : list[dict] ) -> tuple[list[dict], list[dict]]: 
         """ Get poses from the camera """
 
+        def mask_ray( mask : np.ndarray, bbox : np.ndarray ):
+            """ Project a ray through the center of the mask """
+            rows   = mask.shape[0]
+            rwHf   = rows / 2
+            cols   = mask.shape[1]
+            clHf   = cols / 2
+            cntr2d = np.zeros( 2 )
+            count  = 0.0
+            Xlen   = np.sin( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
+            Ylen   = np.sin( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
+            for j in range( bbox[1], bbox[3]+1 ):
+                for k in range( bbox[0], bbox[2]+1 ):
+                    frac_jk =  mask[j,k]
+                    cntr2d  += np.array( [(k-clHf)/clHf,(j-rwHf)/rwHf] ) * frac_jk
+                    count   += frac_jk
+            cntr2d /= count
+            return vec_unit( [cntr2d[0]*Xlen, cntr2d[0]*Ylen, 1.0] )
+            
+
         rtnObjs  = list()
         metadata = {
             'input'  : dict(),
@@ -329,26 +346,21 @@ class Perception_OWLv2:
             for hit_i in metadata['hits']:
                 img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
 
-                
-
                 sam_mask, _, _ = self.sam_predictor.predict( 
                     img_i, 
                     np.array( hit_i['bboxi'] ) 
                 )
                 print( f"SAM2 Mask Dims: {sam_mask.shape}, Image Dims: {img_i.shape}" )
-
-                # sam_mask = np.transpose( sam_mask, (1, 2, 0) )
-                # sam_mask = np.asarray( sam_mask[:,:,0] )
-                # sam_mask.reshape( sam_mask.shape[:2] )
                 
                 if np.sum( sam_mask ) > 100:
                     mask_i = sam_mask.copy()
                 else:
                     mask_i = bbox_to_mask( img_i.shape, hit_i['bbox'] )
 
+                ray_i = mask_ray( mask_i, hit_i['bbox'] )
+
                 if np.sum( mask_i ) < 100:
                     print( "MASK ERROR" )
-
 
                 cpcd = None
 
@@ -382,6 +394,7 @@ class Perception_OWLv2:
                         'CPCD'       : { 'points' : np.asarray( cpcd.points ).copy(),
                                          'colors' : np.asarray( cpcd.colors ).copy(), },
                         'shotID'     : hit_i['shotID'],
+                        'camRay'     : ray_i,
                     }
                     item['Probability'][ hit_i['abbrv'] ] = hit_i['score']
                     rtnObjs.append( item )

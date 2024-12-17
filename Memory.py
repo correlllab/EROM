@@ -100,6 +100,8 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
         else:
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         
+        # item['CPCD']
+
         # Create reading
         rtnObj = GraspObj( 
             labels = dstrb, 
@@ -109,6 +111,9 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
             score  = 0.0,
             cpcd   = item['CPCD'],
         )
+        mov = xform.copy()
+        mov[2,3] += zOffset
+        rtnObj.cpcd.transform( mov )
         rtnBel.append( rtnObj )
     return rtnBel
 
