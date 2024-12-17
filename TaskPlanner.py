@@ -44,7 +44,7 @@ from aspire.SymPlanner import SymPlanner
 from OWLv2_Segment import Perception_OWLv2, _QUERIES
 
 from Memory import Memory
-from draw_beliefs import render_memory_list, render_scan_list
+from draw_beliefs import render_memory_list, render_scan_list, vispy_geo_list_window, table_geo
 
 
 
@@ -65,7 +65,7 @@ def set_experiment_env():
     
     env_sto( "_SCAN_ALPHA", 0.50 )
 
-    env_sto( "_Z_SNAP_BOOST"     ,   0.00*env_var("_BLOCK_SCALE")   )
+    env_sto( "_Z_SNAP_BOOST"     ,  -0.75*env_var("_BLOCK_SCALE")   )
     env_sto( "_Z_STACK_BOOST"    ,   0.00*env_var("_BLOCK_SCALE")   )
 
     env_sto( "_N_INTAKE_SCANS"   ,   1     )
@@ -131,13 +131,15 @@ class TaskPlanner:
         set_experiment_env()
         self.outFil  = None
         self.noBot   = noBot
-        self.memory  = Memory() 
         self.status  = Status.INVALID # Running status
 
         # self.perc    = Perception_OWLViT
         self.perc = Perception_OWLv2()
 
         self.robot : UR5_Interface = UR5_Interface() if (not noBot) else None
+
+        self.memory = Memory( self.robot ) 
+
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
             os.path.join( os.path.dirname( __file__ ), "pddl", "stream.pddl" )
@@ -177,24 +179,19 @@ class TaskPlanner:
 
     ##### Task Planning Phases ############################################
 
-    def phase_1_Perceive( self, Nscans = 1 ):
+    def phase_1_Perceive( self, Append = False ):
         """ Take in evidence and form beliefs """
 
         camPose  = self.robot.get_cam_pose()
-        obsrv    = list()
-        metadata = list()
 
-        for _ in range( Nscans ):
-            # obsrv.update( self.perc.build_model( shots = 1 ) )
-            obs, mta = self.perc.segment( _QUERIES )
-            obsrv.extend( obs )
-            metadata.extend( mta )
+        obsrv, metadata = self.perc.segment( _QUERIES )
 
         self.memory.history.append( msg = "ObsMeta", datum = metadata )
 
         self.memory.process_observations( 
             obsrv,
-            camPose 
+            camPose,
+            Append
         ) 
 
 
@@ -305,9 +302,14 @@ class TaskPlanner:
 
             # for bgnPose in beginPlanPose:
 
-            bgnPose = self.memory.plan_3d_shot( beginPlanPose[0] )
-            self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
-            self.phase_1_Perceive( env_var("_N_INTAKE_SCANS") )
+            bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
+            self.memory.reset_memory()
+
+            vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
+
+            for bgnPose in bgnPoses:
+                self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
+                self.phase_1_Perceive( Append = True )
 
             if env_var("_USE_GRAPHICS"):
                 render_scan_list( self.memory.scan )
