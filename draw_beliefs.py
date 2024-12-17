@@ -219,8 +219,24 @@ def wireframe_box_neg( xScl, yScl, zScl, color = None ):
     return wireBox
 
 
-def quality_bar( objReading : GraspObj, maxScl = None, maxLen = None ):
-    pass
+def cam_ray_geo( objReading : GraspObj, linLen : float = 1.0 ):
+    """ Draw the direction where SAM2 thought the thing was """
+    verts = np.array([
+        objReading.meta['rayOrg'],
+        np.add( objReading.meta['rayOrg'], np.multiply( objReading.meta['rayDir'], linLen ) )
+    ])
+    ndces = np.array([
+        [0,1,]
+    ])
+    labelSort = zip_dict_sorted_by_decreasing_value( objReading.labels )
+    color = env_var("_CLR_TABLE")[ labelSort[0][0][:3] ]
+    color.append( 1.0 )
+    raySeg = scene.visuals.Line(
+        pos     = verts,
+        connect = ndces,
+        color   = color,
+    )
+    return raySeg 
 
 
 def reading_geo( objReading : GraspObj, alpha = None ):
@@ -358,7 +374,7 @@ def scan_geo( sym : GraspObj ):
         blc  = scene.visuals.Box( scl, scl, scl,  
                                 color = bClr, edge_color="black" )
         blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-        rtnGeo = [wf1, blc,]
+        rtnGeo = [wf1, blc, cam_ray_geo( sym ) ]
         rtnGeo.extend( cpcd_geo( sym ) )
         return rtnGeo
     else:

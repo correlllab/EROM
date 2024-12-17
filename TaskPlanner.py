@@ -31,7 +31,7 @@ from magpie_control.poses import repair_pose
 
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
-from aspire.symbols import ( ObjPose, )
+from aspire.symbols import ( ObjPose, GraspObj, )
 from aspire.actions import ( BT_Runner, MoveFree, GroundedAction, )
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
 
@@ -52,16 +52,20 @@ from draw_beliefs import render_memory_list, render_scan_list, vispy_geo_list_wi
 ########## HELPER FUNCTIONS ########################################################################
 
 
+def BASE_TARGET():
+    _poseGrn = np.eye(4)
+    _poseGrn[0:3,3] = [ -0.211, # env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
+                        -0.463, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
+                         0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE"), ]
+    return ObjPose( _poseGrn )
+
+
 def set_experiment_env():
     """ Params for this experiment """
 
      # 3D Printed Blocks
 
-    _poseGrn = np.eye(4)
-    _poseGrn[0:3,3] = [ -0.211, # env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
-                        -0.463, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
-                         0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE"), ]
-    _trgtGrn = ObjPose( _poseGrn )
+    _trgtGrn = BASE_TARGET()
     
     env_sto( "_SCAN_ALPHA", 0.50 )
 
@@ -177,6 +181,17 @@ class TaskPlanner:
         print( f"\nRobot returned to \n{goPose}\n" )
 
 
+    def dummy_object( self ):
+        """ Use as target for first-pass sensory planning """
+        return GraspObj(
+            labels = {'grnBlock':1.0,}, 
+            pose   = BASE_TARGET(), 
+            ts     = now(), 
+            count  = 1, 
+            score  = 0.0,
+        )
+
+
     ##### Task Planning Phases ############################################
 
     def phase_1_Perceive( self, Append = False ):
@@ -287,6 +302,8 @@ class TaskPlanner:
         self.symPln.set_goal( env_var("_GOAL") )
 
         self.memory.history.append( msg = "Task Start" )
+
+        self.memory.scan.append( self.dummy_object() ) # NOT REAL: For first iteration sensory planning
 
         while (self.status != Status.SUCCESS) and (i < maxIter): # and (not self.PANIC):
             

@@ -303,15 +303,18 @@ class Perception_OWLv2:
             clHf   = cols / 2
             cntr2d = np.zeros( 2 )
             count  = 0.0
-            Xlen   = np.sin( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
-            Ylen   = np.sin( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
-            for j in range( bbox[1], bbox[3]+1 ):
-                for k in range( bbox[0], bbox[2]+1 ):
+            # Xlen   = np.sin( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
+            # Ylen   = np.sin( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
+            Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
+            Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
+            for j in range( bbox[1], min(bbox[3]-1, rows) ):
+                for k in range( bbox[0], min(bbox[2]-1, cols) ):
+                    # print( j,k )
                     frac_jk =  mask[j,k]
                     cntr2d  += np.array( [(k-clHf)/clHf,(j-rwHf)/rwHf] ) * frac_jk
                     count   += frac_jk
             cntr2d /= count
-            return vec_unit( [cntr2d[0]*Xlen, cntr2d[0]*Ylen, 1.0] )
+            return vec_unit( [cntr2d[0]*Xlen, cntr2d[1]*Ylen, 1.0] )
             
 
         rtnObjs  = list()
@@ -350,14 +353,15 @@ class Perception_OWLv2:
                     img_i, 
                     np.array( hit_i['bboxi'] ) 
                 )
-                print( f"SAM2 Mask Dims: {sam_mask.shape}, Image Dims: {img_i.shape}" )
+                samCount = (sam_mask > 0.1).sum()
+                print( f"SAM2 Mask Dims: {sam_mask.shape}, Mask Count: {samCount}, Image Dims: {img_i.shape}" )
                 
-                if np.sum( sam_mask ) > 100:
+                if 100 < samCount < 12000:
                     mask_i = sam_mask.copy()
                 else:
-                    mask_i = bbox_to_mask( img_i.shape, hit_i['bbox'] )
+                    mask_i = bbox_to_mask( img_i.shape, hit_i['bboxi'] )
 
-                ray_i = mask_ray( mask_i, hit_i['bbox'] )
+                ray_i = mask_ray( mask_i, hit_i['bboxi'] )
 
                 if np.sum( mask_i ) < 100:
                     print( "MASK ERROR" )
