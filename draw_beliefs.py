@@ -38,7 +38,7 @@ def set_render_env():
 
 ########## DISPLAY WINDOW ##########################################################################
 
-def vispy_geo_list_window( geoLst ):
+def vispy_geo_list_window( geoLst, robotPose = None ):
     canvas = scene.SceneCanvas( keys='interactive', size=(1000, 900), show=True )
     # Enable backface culling
     gloo.set_state( cull_face = True )
@@ -60,6 +60,21 @@ def vispy_geo_list_window( geoLst ):
 
     view.padding = 100
     view.add( scene.visuals.XYZAxis() )
+
+    def add_pose( pose ):
+        nonlocal geoLst
+        rbtAxs  = scene.visuals.XYZAxis()
+        # VISPY IS COLUMN-MAJOR
+        vizXfrm = transforms.linear.MatrixTransform( matrix = pose.transpose() )
+        rbtAxs.transform = vizXfrm
+        geoLst.append( rbtAxs )
+
+    if isinstance( robotPose, np.ndarray ):
+        add_pose( robotPose )
+    elif isinstance( robotPose, list ):
+        for pose in robotPose:
+            add_pose( pose )
+
 
     for geo in geoLst:
         view.add( geo )

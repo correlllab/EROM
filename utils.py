@@ -79,6 +79,8 @@ def snap_z_to_nearest_block_unit_above_zero( z : float ):
     zBloc = max( (zUnit*env_var("_BLOCK_SCALE"))+zBump, zBump )
     return zBloc
 
+
+
 ########## LOGGER ##################################################################################
 
 class LogPickler:

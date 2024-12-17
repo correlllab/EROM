@@ -39,11 +39,14 @@ def hacked_offset_map( pose ) -> np.ndarray:
 
     height   = 0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE")
 
-    hackMap  = [ [[minX, minY, height], [ 1.0/100.0, 1.0/100.0, 0.0]],
-                 [[minX, maxY, height], [ 1.0/100.0, 0.0/100.0, 0.0]],
-                 [[midX, midY, height], [ 2.0/100.0, 1.0/100.0, 0.0]],
-                 [[maxX, minY, height], [ 2.0/100.0, 1.0/100.0, 0.0]], 
-                 [[maxX, maxY, height], [ 2.0/100.0, 0.0/100.0, 0.0]],]
+    hackMap  = [ [[minX, minY, height], [ 1.0/100.0,  0.0/100.0, 0.0]],
+                 [[minX, maxY, height], [ 1.0/100.0, -1.0/100.0, 0.0]],
+
+                 [[midX, minY, height], [ 3.0/100.0,  0.0/100.0, 0.0]],
+                 [[midX, midY, height], [ 2.0/100.0,  0.0/100.0, 0.0]],
+
+                 [[maxX, minY, height], [ 2.0/100.0,  0.0/100.0, 0.0]], 
+                 [[maxX, maxY, height], [ 2.0/100.0, -1.0/100.0, 0.0]],]
     
     weights = list()
     for hack in hackMap:
@@ -55,7 +58,7 @@ def hacked_offset_map( pose ) -> np.ndarray:
     return hackXfrm
 
 
-def observation_to_readings( obs, xform = None ):
+def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
     """ Parse the Perception Process output struct """
     rtnBel = []
     if xform is None:
@@ -85,7 +88,7 @@ def observation_to_readings( obs, xform = None ):
 
         if len( item['Pose'] ) == 16:
             # HACK: THERE IS A PERSISTENT GRASP OFFSET IN THE SCENE
-            if 1:
+            if 0:
                 hackXfrm = hacked_offset_map( xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) )  )
                 xform    = hackXfrm.dot( xform ) #env_var("_HACKED_OFFSET").dot( xform )
                 objPose  = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
@@ -93,7 +96,7 @@ def observation_to_readings( obs, xform = None ):
                 objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
             
             # HACK: SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE
-            # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
+            objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] + zOffset )
         else:
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         
@@ -157,25 +160,35 @@ class SensoryPlanner:
         return -self.ZTableCam 
 
 
-    def plan_3d_shot( self, objects : list[GraspObj], defaultPose : np.ndarray ):
+    def plan_3d_shot( self, objects : list[GraspObj], backupDir : np.ndarray, defaultPose : np.ndarray ):
         """ Plan a camera pose that maximizes info and avoids occlusion, given the proposed objects """
-        rtnPose  = defaultPose.copy()
+        rtnPose = defaultPose.copy()
         if len( objects ):
             centroid = np.zeros( 3 )
             for obj in objects:
                 centroid += extract_pose_as_homog( obj )[0:3,3].reshape( 3 )
-            centroid /= 3.0
-            backupDr = vec_unit( [1.0,1.0,0.0] )
-            backupVc = backupDr * env_var( "_MIN_CAM_PCD_DIST_M" )
+            centroid /= len( objects )
+            backupDr = vec_unit( backupDir ) # vec_unit( [1.0,0.25,1.0] )
+            backupVc = backupDr * (1.5*env_var( "_MIN_CAM_PCD_DIST_M" ))
             backupPt = centroid + backupVc
-            yBasis = np.array([0.0, 1.0, 0.0])
+            xBasis = np.array([0.0, -1.0, 0.0])
             zBasis = -backupDr
+            yBasis = vec_unit( np.cross( zBasis, xBasis ) )
             xBasis = vec_unit( np.cross( yBasis, zBasis ) )
             rtnPose[0:3,0] = xBasis
-            rtnPose[0:3,1] = xBasis
+            rtnPose[0:3,1] = yBasis
             rtnPose[0:3,2] = zBasis
             rtnPose[0:3,3] = backupPt
+        # return self.tcp_from_cam_pose( repair_pose( rtnPose ) )
         return self.tcp_from_cam_pose( rtnPose )
+    
+
+    def plan_3d_shots( self, objects : list[GraspObj], defaultPose : np.ndarray ):
+        return [
+            self.plan_3d_shot( objects, [  1.00, 0.25, 1.0, ], defaultPose ),
+            self.plan_3d_shot( objects, [  1.00,-0.25, 1.0, ], defaultPose ),
+            self.plan_3d_shot( objects, [ -0.25, 0.00, 1.0, ], defaultPose ),
+        ]
 
 
 
@@ -187,12 +200,13 @@ class Memory:
 
     def reset_memory( self ):
         """ Erase memory components """
-        self.scan : list[GraspObj]  = list()
+        self.scan : list[GraspObj] = list()
+        self.mult : bool           = False
 
 
-    def __init__( self ):
+    def __init__( self, robot ):
         self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
-        self.camPlan = SensoryPlanner()
+        self.camPlan = SensoryPlanner( robot )
         self.reset_memory()
 
 
@@ -201,19 +215,22 @@ class Memory:
         self.history.dump_to_file( openNext = False )
 
 
-    def plan_3d_shot( self, defaultPose : np.ndarray ):
+    def plan_3d_shots( self, defaultPose : np.ndarray ):
         """ Ask the sensory planner to get us a shot """
         # HACK: WORKING FROM SCAN, NOT THE BELIEF
-        return self.camPlan.plan_3d_shot( self.scan, defaultPose )
+        return self.camPlan.plan_3d_shots( self.scan, defaultPose )
 
 
-    def process_observations( self, obs, xform = None ):
+    def process_observations( self, obs, xform = None, Append = False ):
         """ Integrate one noisy scan into the current beliefs """
-        self.scan = observation_to_readings( obs, xform )
-
-        # HACK: BUMP EVERYTHING UP BY SOME OFFSET
-        for obj in self.scan:
-            obj.pose.pose[2,3] += self.camPlan.get_camera_Z_offset()
+        if (Append and self.mult):
+            # HACK: BUMP EVERYTHING UP BY SOME OFFSET
+            self.scan.extend( observation_to_readings( obs, xform, self.camPlan.get_camera_Z_offset() ) )
+        else:
+            # HACK: BUMP EVERYTHING UP BY SOME OFFSET
+            self.scan = observation_to_readings( obs, xform, self.camPlan.get_camera_Z_offset() )
+            if Append:
+                self.mult = True
 
         self.history.append( 
             datum = {
@@ -223,9 +240,35 @@ class Memory:
         )
 
 
+    def HACK_MERGE( self ):
+        """ HACK: Just average the poses """
+        cat   = dict()
+        rtnLst = list()
+        for obj in self.scan:
+            labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
+            labelMax  = labelDist[0][0]
+            if labelMax in cat:
+                cat[ labelMax ].append( obj )
+            else:
+                cat[ labelMax ] = [ obj, ]
+        for k, v in cat.items():
+            cntr = np.zeros( 3 )
+            for obj_i in v:
+                cntr += extract_pose_as_homog( obj_i )[0:3,3].reshape( 3 )
+            cntr /= len(v)
+            rtnObj = v[0]
+            rtnObj.pose.pose[0:3,3] = cntr
+            print( f"There are {len(v)} examples of {k}, Pose:\n{rtnObj.pose.pose[0:3,3]}" )
+            rtnLst.append( rtnObj )
+        return rtnLst
+
+
     def get_current_most_likely( self ):
         """ Generate symbols """
-        symbols = strongest_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
+        if self.mult:
+            symbols = strongest_symbols_from_readings( self.HACK_MERGE(), env_var("_N_REQD_OBJS") )
+        else:
+            symbols = strongest_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
 
         self.history.append( 
             datum = deep_copy_memory_list( symbols ),
