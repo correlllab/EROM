@@ -20,6 +20,25 @@ from utils import ( snap_z_to_nearest_block_unit_above_zero, LogPickler,
 
 
 
+########## GEOMETRY FUNCTIONS ######################################################################
+
+def closest_ray_points( A_org, A_dir, B_org, B_dir ):
+    """ Return the closest point on ray A to ray B and on ray B to ray A """
+    # https://palitri.com/vault/stuff/maths/Rays%20closest%20point.pdf
+    c  = np.subtract( B_org, A_org )
+    aa = np.dot( A_dir, A_dir )
+    bb = np.dot( B_dir, B_dir )
+    ab = np.dot( A_dir, B_dir )
+    ac = np.dot( A_dir, c     )
+    bc = np.dot( B_dir, c     ) 
+    fA = (-ab*bc + ac*bb) / (aa*bb-ab*ab)
+    fB = ( ab*ac - bc*aa) / (aa*bb-ab*ab)
+    pA = np.add( A_org, np.multiply( A_dir, fA ) )
+    pB = np.add( B_org, np.multiply( B_dir, fB ) )
+    return pA, pB
+
+
+
 ########## HELPER FUNCTIONS ########################################################################
 
 
@@ -111,9 +130,16 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
             score  = 0.0,
             cpcd   = item['CPCD'],
         )
+
+        # Transform CPCD
         mov = xform.copy()
         mov[2,3] += zOffset
         rtnObj.cpcd.transform( mov )
+
+        # Store mask centroid ray
+        rtnObj.meta['rayOrg'] = xform[0:3,3].reshape(3)
+        rtnObj.meta['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+
         rtnBel.append( rtnObj )
     return rtnBel
 
@@ -153,6 +179,7 @@ class SensoryPlanner:
         """ HACK: THIS IS NOT MEASURED """
         self.robot     = robot
         self.ZTableCam = -0.081666 - 0.017
+        self.dShot     = 1.75*env_var( "_MIN_CAM_PCD_DIST_M" )
 
 
     def tcp_from_cam_pose( self, camPose : np.ndarray ):
@@ -174,7 +201,7 @@ class SensoryPlanner:
                 centroid += extract_pose_as_homog( obj )[0:3,3].reshape( 3 )
             centroid /= len( objects )
             backupDr = vec_unit( backupDir ) # vec_unit( [1.0,0.25,1.0] )
-            backupVc = backupDr * (1.5*env_var( "_MIN_CAM_PCD_DIST_M" ))
+            backupVc = backupDr * self.dShot
             backupPt = centroid + backupVc
             xBasis = np.array([0.0, -1.0, 0.0])
             zBasis = -backupDr
@@ -191,8 +218,9 @@ class SensoryPlanner:
     def plan_3d_shots( self, objects : list[GraspObj], defaultPose : np.ndarray ):
         return [
             self.plan_3d_shot( objects, [  1.00, 0.25, 1.0, ], defaultPose ),
-            self.plan_3d_shot( objects, [  1.00,-0.25, 1.0, ], defaultPose ),
+            # self.plan_3d_shot( objects, [  1.00,-0.25, 1.0, ], defaultPose ), # Pulled too far +X???
             self.plan_3d_shot( objects, [ -0.25, 0.00, 1.0, ], defaultPose ),
+            # self.plan_3d_shot( objects, [ -0.50, 0.00, 1.0, ], defaultPose ), # Try in a bit
         ]
 
 
@@ -247,7 +275,25 @@ class Memory:
 
     def HACK_MERGE( self ):
         """ HACK: Just average the poses """
-        cat   = dict()
+
+        def ray_merge( objLst : list[GraspObj] ):
+            """ What is the mutually closes point between all cam rays? """
+            N      = len( objLst )
+            pntLst = list()
+            for i in range( N-1 ):
+                obj_i = objLst[i]
+                for j in range( i+1, N ):
+                    obj_j = objLst[j]
+                    pnt_ij, pnt_ji = closest_ray_points( 
+                        obj_i.meta['rayOrg'], 
+                        obj_i.meta['rayDir'], 
+                        obj_j.meta['rayOrg'], 
+                        obj_j.meta['rayDir'], 
+                    )
+                    pntLst.extend([pnt_ij, pnt_ji,])
+            return np.mean( pntLst, axis = 0 )
+                    
+        cat    = dict()
         rtnLst = list()
         for obj in self.scan:
             labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
@@ -260,9 +306,13 @@ class Memory:
             cntr = np.zeros( 3 )
             for obj_i in v:
                 cntr += extract_pose_as_homog( obj_i )[0:3,3].reshape( 3 )
-            cntr /= len(v)
+            ryCn = ray_merge( v )
+            cntr += ryCn
+            cntr /= (len(v)+1)
+            
             rtnObj = v[0]
-            rtnObj.pose.pose[0:3,3] = cntr
+            # rtnObj.pose.pose[0:3,3] = cntr
+            rtnObj.pose.pose[0:3,3] = ryCn
             print( f"There are {len(v)} examples of {k}, Pose:\n{rtnObj.pose.pose[0:3,3]}" )
             rtnLst.append( rtnObj )
         return rtnLst
