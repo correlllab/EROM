@@ -71,7 +71,7 @@ def set_experiment_env():
 
     _trgtGrn = BASE_TARGET()
     
-    env_sto( "_SCAN_ALPHA", 0.50 )
+    env_sto( "_SCAN_ALPHA", 0.35 )
 
     env_sto( "_Z_SNAP_BOOST"     ,  -0.75*env_var("_BLOCK_SCALE")   )
     env_sto( "_Z_STACK_BOOST"    ,   0.00*env_var("_BLOCK_SCALE")   )
