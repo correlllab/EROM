@@ -80,7 +80,8 @@ def set_experiment_env():
 
     _trgtGrn = BASE_TARGET()
     
-    env_sto( "_SCAN_ALPHA", 0.35 )
+    env_sto( "_USE_GRAPHICS", False )
+    env_sto( "_SCAN_ALPHA"  , 0.35  )
 
     env_sto( "_Z_SNAP_BOOST"     ,  -0.75*env_var("_BLOCK_SCALE")   )
     env_sto( "_Z_STACK_BOOST"    ,   0.00*env_var("_BLOCK_SCALE")   )
@@ -274,7 +275,7 @@ class TaskPlanner:
     def narrate_plan( self ):
         """ Describe the state in English sentences """
         rtnDesc  = list()
-        pdlsPlan = self.blcMod.planner.nxtAct[:]
+        pdlsPlan = self.blcMod.planner.currPlan[:]
         for action in pdlsPlan:
             actName  = action.name
             actArgs  = action.args
@@ -420,7 +421,8 @@ class TaskPlanner:
             bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
             self.memory.reset_memory()
 
-            vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
+            if env_var("_USE_GRAPHICS"):
+                vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
 
             for bgnPose in bgnPoses:
                 self.robot.moveL( _SAFE, asynch = False )
@@ -463,8 +465,6 @@ class TaskPlanner:
             ##### Phase 4 ########################
 
             print( f"Phase 4, {self.status} ..." )
-
-            
 
             self.phase_4_Execute_Action()
 
