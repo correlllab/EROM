@@ -222,9 +222,9 @@ class Perception_OWLv2:
             center = np.mean( pnts, axis = 0 )
         else:
             center = np.zeros( 3 )
-        print( pnts.shape )
+        # print( pnts.shape )
         
-        print( f"{center=}" )
+        # print( f"{center=}" )
 
         # pose_vector = [center[0], center[1], center[2], 3.14, 0, 0]
         # HACK: HARDCODED ORIENTATION
@@ -356,7 +356,7 @@ class Perception_OWLv2:
                 samCount = (sam_mask > 0.1).sum()
                 print( f"SAM2 Mask Dims: {sam_mask.shape}, Mask Count: {samCount}, Image Dims: {img_i.shape}" )
                 
-                if 100 < samCount < 12000:
+                if 100 < samCount < 50000:
                     mask_i = sam_mask.copy()
                 else:
                     mask_i = bbox_to_mask( img_i.shape, hit_i['bboxi'] )
@@ -370,7 +370,7 @@ class Perception_OWLv2:
 
                 try:
 
-                    print( type( metadata['input'][ hit_i['shotID'] ]['rgbd'] ) )
+                    # print( type( metadata['input'][ hit_i['shotID'] ]['rgbd'] ) )
 
                     # _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
                     _, cpcd = pcd.get_masked_cpcd( 

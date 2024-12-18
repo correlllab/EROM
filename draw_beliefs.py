@@ -375,7 +375,7 @@ def scan_geo( sym : GraspObj ):
                                 color = bClr, edge_color="black" )
         blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
         rtnGeo = [wf1, blc, cam_ray_geo( sym ) ]
-        rtnGeo.extend( cpcd_geo( sym ) )
+        rtnGeo.extend( cpcd_geo( sym, div = 4 ) )
         return rtnGeo
     else:
         return [wf1,] 
