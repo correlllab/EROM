@@ -7,7 +7,7 @@ Contacts: {james.watson-2@colorado.edu,}
 """
 ########## INIT ####################################################################################
 
-##### Imports #####
+##### Imports #############################################################
 
 ### Standard ###
 import sys, time, os, json
@@ -46,12 +46,21 @@ from OWLv2_Segment import Perception_OWLv2, _QUERIES
 from Memory import Memory
 from draw_beliefs import render_memory_list, render_scan_list, vispy_geo_list_window, table_geo
 
+
+##### Globals #############################################################
+
 _SAFE = repair_pose( np.array( [[-0.985, -0.163, -0.052, -0.252],
                                 [-0.164,  0.986,  0.013, -0.262],
                                 [ 0.049,  0.021, -0.999,  0.471],
                                 [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
 
-
+_BLOCK_TYPE = "plastic" if (env_var("_BLOCK_SCALE") > 0.030) else "wooden"
+_BLOCK_DESC = {
+    'grnBlock' : f"green {_BLOCK_TYPE} block",
+    'ylwBlock' : f"yellow {_BLOCK_TYPE} block",
+    'bluBlock' : f"blue {_BLOCK_TYPE} block",
+    'table'    : f"wooden table",
+}
 
 ########## HELPER FUNCTIONS ########################################################################
 
@@ -198,6 +207,9 @@ class TaskPlanner:
 
     ##### Task Planning Phases ############################################
 
+
+    ##### Phase 1 ################################
+
     def phase_1_Perceive( self, Append = False ):
         """ Take in evidence and form beliefs """
 
@@ -205,14 +217,32 @@ class TaskPlanner:
 
         obsrv, metadata = self.perc.segment( _QUERIES )
 
-        self.memory.history.append( msg = "ObsMeta", datum = metadata )
-
+        self.memory.history.append( msg = "Annotation", datum = {"Event": "The robot takes a 3D picture of the scene."} )
+        self.memory.history.append( msg = "ObsMeta"   , datum = metadata )
+        
         self.memory.process_observations( 
             obsrv,
             camPose,
             Append
         ) 
 
+
+    ##### Phase 2 ################################
+
+    def narrate_state( self ):
+        """ Describe the state in English sentences """
+        rtnDesc = list()
+        for fact in self.blcMod.planner.facts:
+            if fact[0] == 'GraspObj':
+                rtnDesc.append( f"There is a {_BLOCK_DESC[ fact[1] ]} near to the robot." )
+            elif fact[0] == 'Supported':
+                rtnDesc.append( f"The {_BLOCK_DESC[ fact[1] ]} is on the {_BLOCK_DESC[ fact[2] ]}." )
+            elif fact[0] == 'Blocked':
+                rtnDesc.append( f"The {_BLOCK_DESC[ fact[1] ]} cannot be moved until the block above it is moved." )
+            else:
+                print( f"There is no annotation for predicate: {fact}" )
+        return rtnDesc
+            
 
     def phase_2_Conditions( self ):
         """ Get the necessary initial state, Check for goals already met """
@@ -232,7 +262,40 @@ class TaskPlanner:
                 print( f"\tNO OBJECTS DETERMINIZED" )
 
         self.blcMod.instantiate_conditions( self.robot )
+
+        self.memory.history.append( msg = "Annotation", datum = {
+            "Event": "The robot has taken a 3D picture of the scene.",
+            "Desc": self.narrate_state()
+        } )
         
+
+    ##### Phase 3 ################################
+
+    def narrate_plan( self ):
+        """ Describe the state in English sentences """
+        rtnDesc  = list()
+        pdlsPlan = self.blcMod.planner.nxtAct[:]
+        for action in pdlsPlan:
+            actName  = action.name
+            actArgs  = action.args
+            if actName == "move_free":
+                rtnDesc.append( f"The robot arm will move." )
+            elif actName in ("pick", "unstack",):
+                # ?label ?pose ?prevSupport
+                label, pose, prevSupport = actArgs
+                rtnDesc.append( f"The robot arm will pick up the {_BLOCK_DESC[ label ]} from the {_BLOCK_DESC[ prevSupport ]}." )
+            elif actName == "move_holding":
+                # ?poseBgn ?poseEnd ?label
+                poseBgn, poseEnd, label = actArgs
+                rtnDesc.append( f"The robot arm will move the {_BLOCK_DESC[ label ]}." )
+            elif actName in ("place", "stack",):
+                # ?label ?pose ?support
+                label, pose, support = actArgs
+                rtnDesc.append( f"The robot arm will place the {_BLOCK_DESC[ label ]} on the {_BLOCK_DESC[ support ]}." )
+            else:
+                print( f"There is no annotation for action: {action}" )
+        return rtnDesc
+    
 
     def phase_3_Plan_Task( self ):
         """ Attempt to solve the symbolic problem """
@@ -245,13 +308,26 @@ class TaskPlanner:
             },
             robot = self.robot
         )
+
+        if len( self.blcMod.planner.nxtAct ):
+            self.memory.history.append( msg = "Annotation", datum = {
+                "Event": "The robot has planned a series of actions.",
+                "Desc": self.narrate_plan()
+            } )
+
         if (self.symPln.status == Status.FAILURE):
             self.status = Status.FAILURE
             self.memory.history.append( msg = "Planning Failure" )
             print( f"Planning Failure!" )
+            self.memory.history.append( msg = "Annotation", datum = {
+                "Event": "The robot has failed to plan any actions.",
+            } )
         elif (self.symPln.status == Status.SUCCESS):
             self.status = Status.RUNNING
             print( f"\n\nPlanner thinks we SUCCEEDED!\n\n" )
+            self.memory.history.append( msg = "Annotation", datum = {
+                "Event": "The robot has determined that the sybolic goal has been met.",
+            } )
 
 
     def phase_4_Execute_Action( self ):
@@ -280,10 +356,26 @@ class TaskPlanner:
 
         self.memory.history.append( msg = f"BT END: {btr.status}" )
 
+        if (btr.status == Status.FAILURE):
+            self.memory.history.append( msg = "Annotation", datum = {
+                "Event": "The robot's plan was not executed correctly.",
+            } )
+        elif (btr.status == Status.SUCCESS):
+            self.memory.history.append( msg = "Annotation", datum = {
+                "Event": "The robot's plan was executed correctly.",
+            } )
+        else:
+            self.memory.history.append( msg = "Annotation", datum = {
+                "Event": "The final outcome of the robot's actions was undetermined.",
+            } )
+
 
     def phase_5_Return_Home( self, goPose ):
         """ Get ready for next iteration while updating beliefs """
         self.return_home( goPose )
+        self.memory.history.append( msg = "Annotation", datum = {
+            "Event": "The robot moved to the home pose.",
+        } )
         
 
     ##### Task Planner Main Loop ##########################################
