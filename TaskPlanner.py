@@ -310,12 +310,6 @@ class TaskPlanner:
             robot = self.robot
         )
 
-        if len( self.blcMod.planner.nxtAct ):
-            self.memory.history.append( msg = "Annotation", datum = {
-                "Event": "The robot has planned a series of actions.",
-                "Desc": self.narrate_plan()
-            } )
-
         if (self.symPln.status == Status.FAILURE):
             self.status = Status.FAILURE
             self.memory.history.append( msg = "Planning Failure" )
@@ -328,6 +322,16 @@ class TaskPlanner:
             print( f"\n\nPlanner thinks we SUCCEEDED!\n\n" )
             self.memory.history.append( msg = "Annotation", datum = {
                 "Event": "The robot has determined that the sybolic goal has been met.",
+            } )
+
+        if self.blcMod.planner.nxtAct is not None:
+            self.memory.history.append( msg = "Annotation", datum = {
+                "Event": "The robot has planned a series of actions.",
+                "Desc": self.narrate_plan()
+            } )
+        else:
+            self.memory.history.append( msg = "Annotation", datum = {
+                "Event": "The robot has failed to plan any actions.",
             } )
 
 
