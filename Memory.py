@@ -17,7 +17,14 @@ from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, )
 ### Local ###
 from utils import ( snap_z_to_nearest_block_unit_above_zero, LogPickler, 
                     zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, )
+from OWLv2_Segment import SAM2, Perception_OWLv2
 
+
+_REVERSE_QUERIES = {
+    "bluBlock": {'query': "a photo of a blue block"  , 'abbrv': "blu", },
+    "ylwBlock": {'query': "a photo of a yellow block", 'abbrv': "ylw", },
+    "grnBlock": {'query': "a photo of a green block" , 'abbrv': "grn", },
+}
 
 
 ########## GEOMETRY FUNCTIONS ######################################################################
@@ -167,6 +174,18 @@ def strongest_symbols_from_readings( objLst : list[GraspObj], N : int ):
     return list( picked.values() )
         
 
+def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
+    """ Project a ray through the center of the mask """
+    rows   = image.shape[0]
+    rwHf   = rows / 2
+    cols   = image.shape[1]
+    clHf   = cols / 2
+    cntr2d = np.zeros( 2 )
+    Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) * zLen
+    Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) * zLen 
+    cntr2d = np.array([ ((bbox[0]+bbox[2])/2.0-clHf)/clHf, ((bbox[1]+bbox[3])/2.0-rwHf)/rwHf, ])
+    
+    return np.array([ cntr2d[0]*Xlen, cntr2d[1]*Ylen, zLen, ])
 
 
 ########## SENSORY PLANNING ########################################################################
@@ -175,11 +194,13 @@ def strongest_symbols_from_readings( objLst : list[GraspObj], N : int ):
 class SensoryPlanner:
     """ Do sensing in a way that gets the task done """
 
-    def __init__( self, robot : UR5_Interface ):
+    def __init__( self, robot : UR5_Interface, perc : Perception_OWLv2 ):
         """ HACK: THIS IS NOT MEASURED """
         self.robot     = robot
+        self.perc      = perc
         self.ZTableCam = -0.081666 - 0.017
-        self.dShot     = 1.75*env_var( "_MIN_CAM_PCD_DIST_M" )
+        self.dShot     = 1.5*env_var( "_MIN_CAM_PCD_DIST_M" )
+        self.dLoc      = 1.1*env_var( "_MIN_CAM_PCD_DIST_M" )
 
 
     def tcp_from_cam_pose( self, camPose : np.ndarray ):
@@ -192,36 +213,91 @@ class SensoryPlanner:
         return -self.ZTableCam 
 
 
-    def plan_3d_shot( self, objects : list[GraspObj], backupDir : np.ndarray, defaultPose : np.ndarray ):
+    def plan_3d_shot( self, objects : list[GraspObj], backupDir : np.ndarray, dBackup : float, defaultPose : np.ndarray ):
         """ Plan a camera pose that maximizes info and avoids occlusion, given the proposed objects """
         rtnPose = defaultPose.copy()
+
         if len( objects ):
             centroid = np.zeros( 3 )
             for obj in objects:
                 centroid += extract_pose_as_homog( obj )[0:3,3].reshape( 3 )
             centroid /= len( objects )
-            backupDr = vec_unit( backupDir ) # vec_unit( [1.0,0.25,1.0] )
-            backupVc = backupDr * self.dShot
-            backupPt = centroid + backupVc
-            xBasis = np.array([0.0, -1.0, 0.0])
-            zBasis = -backupDr
-            yBasis = vec_unit( np.cross( zBasis, xBasis ) )
-            xBasis = vec_unit( np.cross( yBasis, zBasis ) )
-            rtnPose[0:3,0] = xBasis
-            rtnPose[0:3,1] = yBasis
-            rtnPose[0:3,2] = zBasis
-            rtnPose[0:3,3] = backupPt
+        else:
+            centroid = defaultPose[0:3,3].reshape(3)
+
+        backupDr = vec_unit( backupDir ) # vec_unit( [1.0,0.25,1.0] )
+        backupVc = backupDr * dBackup
+        backupPt = centroid + backupVc
+        xBasis = np.array([0.0, -1.0, 0.0])
+        zBasis = -backupDr
+        yBasis = vec_unit( np.cross( zBasis, xBasis ) )
+        xBasis = vec_unit( np.cross( yBasis, zBasis ) )
+        rtnPose[0:3,0] = xBasis
+        rtnPose[0:3,1] = yBasis
+        rtnPose[0:3,2] = zBasis
+        rtnPose[0:3,3] = backupPt
         # return self.tcp_from_cam_pose( repair_pose( rtnPose ) )
         return self.tcp_from_cam_pose( rtnPose )
     
 
     def plan_3d_shots( self, objects : list[GraspObj], defaultPose : np.ndarray ):
+        """ A Series of shots  """
         return [
-            self.plan_3d_shot( objects, [  1.00, 0.25, 1.0, ], defaultPose ),
-            # self.plan_3d_shot( objects, [  1.00,-0.25, 1.0, ], defaultPose ), # Pulled too far +X???
-            self.plan_3d_shot( objects, [ -0.25, 0.00, 1.0, ], defaultPose ),
-            # self.plan_3d_shot( objects, [ -0.50, 0.00, 1.0, ], defaultPose ), # Try in a bit
+            # self.plan_3d_shot( objects, [  0.00, 0.00, 1.0, ], self.dShot, defaultPose ),
+            self.plan_3d_shot( objects, [  1.25, -0.25, 1.0, ], self.dShot, defaultPose ),
+            self.plan_3d_shot( objects, [  1.25,  0.25, 1.0, ], self.dShot, defaultPose ),
+            self.plan_3d_shot( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
+            self.plan_3d_shot( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
         ]
+    
+
+    def locate( self, obj : GraspObj ):
+        """ Home in on a partcular block """
+        initShot = self.plan_3d_shot( list(), [0.0, 0.0, 1.0,], self.dLoc, extract_pose_as_homog( obj ) )
+        self.robot.moveL( initShot, asynch = False )
+        query   = _REVERSE_QUERIES[ obj.label ]['query']
+        abbrevq = _REVERSE_QUERIES[ obj.label ]['abbrv']
+        res     = self.perc.bound( query, abbrevq )
+        while not len( res['hits'] ):
+            res = self.perc.bound( query, abbrevq )
+        offset  = image_offset( res['image'], res['hits'][0]['bboxi'], self.dLoc )
+        curPose = self.robot.get_tcp_pose()
+        camPose = self.robot.get_cam_pose()
+        while( np.linalg.norm( offset[:2] ) > 0.5*env_var("_PLACE_XY_ACCEPT") ):
+            tcpOfst = np.dot( camPose[0:3,0:3], offset ).reshape(3)
+            print( tcpOfst )
+            if np.linalg.norm( offset[:2] ) > 0.1:
+                break
+            movPose = curPose.copy()
+            movPose[0:2,3] += tcpOfst[0:2]
+            obj.pose.pose[0:2,3] += tcpOfst[0:2]
+            self.robot.moveL( movPose, asynch = False )
+            res = self.perc.bound( query, abbrevq )
+            while not len( res['hits'] ):
+                res = self.perc.bound( query, abbrevq )
+            offset  = image_offset( res['image'], res['hits'][0]['bboxi'], self.dLoc )
+            curPose = self.robot.get_tcp_pose()
+            camPose = self.robot.get_cam_pose()
+
+
+    def locate_all( self, objLst : list[GraspObj] ):
+        """ Locate one object at a time """
+        locLst = objLst[:]
+        for i, obj_i in enumerate( objLst ):
+            for j, obj_j in enumerate( objLst ):
+                if i != j:
+                    posn_i = extract_pose_as_homog( obj_i )[0:3,3].reshape(3)
+                    posn_j = extract_pose_as_homog( obj_j )[0:3,3].reshape(3)
+                    vec_ij = vec_unit( posn_j - posn_i )
+                    if vec_ij[2] > 0.0:
+                        if np.arctan2( np.linalg.norm( vec_ij[0:2] ), vec_ij[2] ) < np.pi/4.0:
+                            try:
+                                locLst.remove( obj_i )
+                            except ValueError:
+                                pass
+        for obj in locLst:
+            self.locate( obj )
+
 
 
 
@@ -237,9 +313,9 @@ class Memory:
         self.mult : bool           = False
 
 
-    def __init__( self, robot ):
+    def __init__( self, robot, perc ):
         self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
-        self.camPlan = SensoryPlanner( robot )
+        self.camPlan = SensoryPlanner( robot, perc )
         self.reset_memory()
 
 
@@ -252,6 +328,11 @@ class Memory:
         """ Ask the sensory planner to get us a shot """
         # HACK: WORKING FROM SCAN, NOT THE BELIEF
         return self.camPlan.plan_3d_shots( self.scan, defaultPose )
+    
+
+    def locate_all( self, objLst : list[GraspObj] ):
+        """ Locate one object at a time """
+        self.camPlan.locate_all( objLst )
 
 
     def process_observations( self, obs, xform = None, Append = False ):
@@ -275,6 +356,8 @@ class Memory:
 
     def HACK_MERGE( self ):
         """ HACK: Just average the poses """
+
+        rayFac = 3.0
 
         def ray_merge( objLst : list[GraspObj] ):
             """ What is the mutually closes point between all cam rays? """
@@ -307,12 +390,13 @@ class Memory:
             for obj_i in v:
                 cntr += extract_pose_as_homog( obj_i )[0:3,3].reshape( 3 )
             ryCn = ray_merge( v )
-            cntr += ryCn
-            cntr /= (len(v)+1)
+            cntr += ryCn * rayFac
+            cntr /= (len(v)+rayFac)
             
             rtnObj = v[0]
-            # rtnObj.pose.pose[0:3,3] = cntr
-            rtnObj.pose.pose[0:3,3] = ryCn
+            rtnObj.pose.pose[0:3,3] = cntr
+            # rtnObj.pose.pose[0:3,3] = ryCn
+            rtnObj.pose.pose[2,3] = max( rtnObj.pose.pose[2,3], 0.5*env_var("_BLOCK_SCALE") )
             print( f"There are {len(v)} examples of {k}, Pose:\n{rtnObj.pose.pose[0:3,3]}" )
             rtnLst.append( rtnObj )
         return rtnLst

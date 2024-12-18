@@ -46,6 +46,10 @@ from OWLv2_Segment import Perception_OWLv2, _QUERIES
 from Memory import Memory
 from draw_beliefs import render_memory_list, render_scan_list, vispy_geo_list_window, table_geo
 
+_SAFE = repair_pose( np.array( [[-0.985, -0.163, -0.052, -0.252],
+                                [-0.164,  0.986,  0.013, -0.262],
+                                [ 0.049,  0.021, -0.999,  0.471],
+                                [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
 
 
 
@@ -54,8 +58,8 @@ from draw_beliefs import render_memory_list, render_scan_list, vispy_geo_list_wi
 
 def BASE_TARGET():
     _poseGrn = np.eye(4)
-    _poseGrn[0:3,3] = [ -0.211, # env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
-                        -0.463, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
+    _poseGrn[0:3,3] = [ -0.200, # env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
+                        -0.300, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
                          0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE"), ]
     return ObjPose( _poseGrn )
 
@@ -78,7 +82,7 @@ def set_experiment_env():
     env_sto( "_N_REQD_OBJS"      ,   3      )
     env_sto( "_CONFUSE_PROB"     ,   0.025  )
 
-    env_sto( "_PLACE_XY_ACCEPT"  , 0.30*env_var("_BLOCK_SCALE") )
+    env_sto( "_PLACE_XY_ACCEPT"  , 0.60*env_var("_BLOCK_SCALE") )
     env_sto( "_WIDE_XY_ACCEPT"   , 0.75*env_var("_BLOCK_SCALE") )
 
     env_sto( "_WIDE_Z_ABOVE"     , 1.75*env_var("_BLOCK_SCALE") )
@@ -142,7 +146,7 @@ class TaskPlanner:
 
         self.robot : UR5_Interface = UR5_Interface() if (not noBot) else None
 
-        self.memory = Memory( self.robot ) 
+        self.memory = Memory( self.robot, self.perc ) 
 
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
@@ -213,6 +217,8 @@ class TaskPlanner:
     def phase_2_Conditions( self ):
         """ Get the necessary initial state, Check for goals already met """
         self.symPln.symbols = self.memory.get_current_most_likely()
+
+        self.memory.locate_all( self.symPln.symbols )
 
         if len( self.symPln.symbols ):
             self.status = Status.RUNNING
@@ -325,6 +331,7 @@ class TaskPlanner:
             vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
 
             for bgnPose in bgnPoses:
+                self.robot.moveL( _SAFE, asynch = False )
                 self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
                 self.phase_1_Perceive( Append = True )
 
@@ -345,6 +352,9 @@ class TaskPlanner:
                 print( f"LOOP, {self.status} ..." )
                 continue
 
+            if env_var("_USE_GRAPHICS"):
+                render_memory_list( syms = self.symPln.symbols )
+
             ##### Phase 3 ########################
 
             print( f"Phase 3, {self.status} ..." )
@@ -362,8 +372,7 @@ class TaskPlanner:
 
             print( f"Phase 4, {self.status} ..." )
 
-            if env_var("_USE_GRAPHICS"):
-                render_memory_list( syms = self.symPln.symbols )
+            
 
             self.phase_4_Execute_Action()
 
