@@ -357,7 +357,7 @@ class Memory:
     def HACK_MERGE( self ):
         """ HACK: Just average the poses """
 
-        rayFac = 8.0
+        rayFac = 5.5 # 3.0 # 8.0
 
         def ray_merge( objLst : list[GraspObj] ):
             """ What is the mutually closes point between all cam rays? """
