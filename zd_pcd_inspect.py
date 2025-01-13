@@ -26,7 +26,8 @@ from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_g
 # path = "data/EROM-Memories_12-15-2024_22-02-45.pkl"
 # path = "data/EROM-Memories_12-15-2024_22-10-14.pkl"
 # path = "data/EROM-Memories_12-15-2024_22-21-42.pkl"
-path = "data/EROM-Memories_12-16-2024_13-50-52.pkl"
+# path = "data/EROM-Memories_12-16-2024_13-50-52.pkl"
+path = "data/EROM-Memories_01-10-2025_16-47-56.pkl"
 
 data = list()
 with open( path, 'rb' ) as f:
@@ -91,9 +92,10 @@ for i, datum in enumerate( data ):
         totGeo   = deque()
         for rdg in readings:
             if len( rdg.cpcd ) > 20:
-                totGeo.extend( cpcd_geo( rdg, camPose ) )
+                totGeo.extend( cpcd_geo( rdg ) )
                 totGeo.extend( scan_geo( rdg ) )
 
+        # print( type( totGeo ) )
         vispy_geo_list_window( list( totGeo ) )
 
 

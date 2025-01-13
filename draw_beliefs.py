@@ -6,7 +6,7 @@ import numpy as np
 
 import vispy
 # print(vispy.sys_info())
-vispy.use('pyglet')
+# vispy.use('pyglet')
 # vispy.use('glfw')
 from vispy import scene, gloo, visuals
 from vispy.visuals import transforms
@@ -69,11 +69,12 @@ def vispy_geo_list_window( geoLst, robotPose = None ):
         rbtAxs.transform = vizXfrm
         geoLst.append( rbtAxs )
 
-    if isinstance( robotPose, np.ndarray ):
-        add_pose( robotPose )
-    elif isinstance( robotPose, list ):
-        for pose in robotPose:
-            add_pose( pose )
+    if 0:
+        if isinstance( robotPose, np.ndarray ):
+            add_pose( robotPose )
+        elif isinstance( robotPose, list ):
+            for pose in robotPose:
+                add_pose( pose )
 
 
     for geo in geoLst:
@@ -102,23 +103,39 @@ def table_geo():
 def cross_info( posn, size, color ):
     """ Return a cross made of line segments, NOTE: This is meant to be combined with other crosses before drawing """
     hs = size/2.0
-    pX, pY, pZ = posn
-    verts = np.array([
-        [ pX-hs, pY, pZ ], # 0
-        [ pX+hs, pY, pZ ], # 1
-        [ pX, pY-hs, pZ ], # 2
-        [ pX, pY+hs, pZ ], # 3
-        [ pX, pY, pZ-hs ], # 4
-        [ pX, pY, pZ+hs ], # 5
-    ])
-    ndces = np.array([
+    pX = posn[0]
+    pY = posn[1]
+    pZ = posn[2]
+    if not isinstance( size, float ):
+        raise ValueError( f"Bad value!: {size}" )
+    if not isinstance( pX, float ):
+        raise ValueError( f"Bad value!: {pX}" )
+    if not isinstance( pY, float ):
+        raise ValueError( f"Bad value!: {pY}" )
+    if not isinstance( pZ, float ):
+        raise ValueError( f"Bad value!: {pZ}" )
+    # print( posn.shape )
+    # print( pX, pY, pZ )
+    verts = np.asarray([
+        [ pX-hs, pY,    pZ    ], # 0
+        [ pX+hs, pY,    pZ    ], # 1
+        [ pX,    pY-hs, pZ    ], # 2
+        [ pX,    pY+hs, pZ    ], # 3
+        [ pX,    pY,    pZ-hs ], # 4
+        [ pX,    pY,    pZ+hs ], # 5
+    # ], dtype="float")
+    ], dtype="object")
+    # print( verts )
+    # ndces = np.array([
+    ndces = np.asarray([
         [0,1,],
         [2,3,],
-        [4,5,],
-    ])
+        [4,5,]
+    ], dtype="object")
+    # ndces = np.array([0,1,2,3,4,5,])
     return {
-        'verts': verts,
-        'ndces': ndces,
+        'verts': verts.copy(),
+        'ndces': ndces.copy(),
         'color': color,
     }
 
@@ -329,14 +346,14 @@ def symbol_geo( sym : GraspObj ):
     return [wf1, wf2, blc,] 
 
 
-def cpcd_geo( sym : GraspObj, size = 0.00125, div = 20 ):
+def cpcd_geo( sym : GraspObj, size : float = 0.00125, div : int = 20 ):
     """ Draw a monochrome pointcloud of one object """
     clr = np.mean( sym.cpcd.colors, axis = 0 ).tolist()
     clr = clr + [1.0,] if (len( clr ) == 3) else clr
     
     totPts = {
-        'verts': np.zeros( (0,3), float ),
-        'ndces': np.zeros( (0,2), int   ),
+        'verts': None, # np.zeros( (0,3), float ),
+        'ndces': None, # np.zeros( (0,2), int   ),
         'color': None,
         'total': 0
     }
@@ -344,18 +361,27 @@ def cpcd_geo( sym : GraspObj, size = 0.00125, div = 20 ):
     for i, pnt_i in enumerate( sym.cpcd.points ):
         if ((i%div)==0):
             clr_i = sym.cpcd.colors[i,:]
+            # print( pnt_i, size, clr_i )
             info  = cross_info( pnt_i, size, clr_i )
-            totPts['verts'] = np.vstack( (totPts['verts'], info['verts']) )
-            totPts['ndces'] = np.vstack( (totPts['ndces'], info['ndces']+(totPts["total"])) )
+            totPts['verts'] = np.vstack( (totPts['verts'], info['verts']) ) if (totPts['verts'] is not None) else info['verts']
+            totPts['ndces'] = np.vstack( (totPts['ndces'], info['ndces']+(totPts["total"])) ) if (totPts['ndces'] is not None) else info['ndces']
+            # print( info['ndces'] )
             totPts["total"] = totPts['verts'].shape[0]
 
-    geo = scene.visuals.Line(
-        pos     = totPts['verts'],
-        connect = totPts['ndces'],
-        color   = clr,
-    )
+    print( totPts['verts'].shape, totPts['verts'][-1] )
+    print( totPts['ndces'].shape, totPts['ndces'][-1] )
 
-    return [geo,]
+    if 1:
+        geo = scene.visuals.Line(
+            pos     = totPts['verts'].copy(),
+            connect = totPts['ndces'].copy(),
+            color   = clr,
+        )
+        return [geo,]
+    else:
+        return list()
+
+    
 
 
 def scan_geo( sym : GraspObj ):

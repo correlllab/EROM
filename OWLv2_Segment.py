@@ -303,8 +303,6 @@ class Perception_OWLv2:
             clHf   = cols / 2
             cntr2d = np.zeros( 2 )
             count  = 0.0
-            # Xlen   = np.sin( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
-            # Ylen   = np.sin( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
             Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
             Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
             for j in range( bbox[1], min(bbox[3]-1, rows) ):
