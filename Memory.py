@@ -158,9 +158,14 @@ def strongest_symbols_from_readings( objLst : list[GraspObj], N : int ):
         
     return list( picked.values() )
 
+from pprint import pprint
+from copy import deepcopy
 
 def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
     """ Choose the most likely in each class that does not conflict with an even more likely label of a different class """
+
+    print( f"There are {len(objLst)} to evaluate!" )
+    
     ranked : Dict[str, Deque[GraspObj]] = dict()
     for obj in objLst:
         labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
@@ -177,11 +182,17 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
         nuV.sort( key = lambda x: x.prob, reverse = True )
         ranked[k] = deque( nuV )
 
-    picked : Dict[str, GraspObj] = dict()
+    print( "Label Ranking" )
+    pprint( ranked )
+
+    picked  : Dict[str, GraspObj] = dict()
+    compare : Dict[str, GraspObj] = dict()
     for lbl_i in ranked.keys():
-        obj_i = ranked[ lbl_i ].popleft()
-        for lbl_j, obj_j in picked.items():
+        obj_i   = ranked[ lbl_i ].popleft()
+        collide = False
+        for lbl_j, obj_j in compare.items():
             if euclidean_distance_between_symbols( obj_i, obj_j ) < env_var( "_BLOCK_SCALE" ):
+                collide = True
                 if obj_i.prob > obj_j.prob:
                     picked[ lbl_i ] = obj_i
                     picked[ lbl_j ] = ranked[ lbl_j ].popleft()
@@ -198,7 +209,10 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
                             picked[ lbl_i ] = ranked[ lbl_i ].popleft()
                         else:
                             break
-
+        if not collide:
+            picked[ lbl_i ] = obj_i
+        compare = deepcopy( picked )
+    print( f"About to return {len(picked.values())} symbols!" )
     return list( picked.values() )
 
 

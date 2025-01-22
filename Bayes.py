@@ -94,21 +94,31 @@ def HACK_MERGE( exist : GraspObj, input : GraspObj ):
             obj_i = objLst[i]
             for j in range( i+1, N ):
                 obj_j = objLst[j]
-                pnt_ij, pnt_ji = closest_ray_points( 
-                    obj_i['rayOrg'], 
-                    obj_i['rayDir'], 
-                    obj_j['rayOrg'], 
-                    obj_j['rayDir'], 
-                )
-                pntLst.extend([pnt_ij, pnt_ji,])
-        return np.mean( pntLst, axis = 0 )
+                try:
+                    pnt_ij, pnt_ji = closest_ray_points( 
+                        obj_i['rayOrg'], 
+                        obj_i['rayDir'], 
+                        obj_j['rayOrg'], 
+                        obj_j['rayDir'], 
+                    )
+                    pntLst.extend([pnt_ij, pnt_ji,])
+                except ValueError:
+                    pass
+        if len( pntLst ):
+            return np.mean( pntLst, axis = 0 )
+        else:
+            return np.zeros(3)
                 
     cntr = np.zeros( 3 )
     for obj_i in exist.meta['poseHist']:
         cntr += obj_i['pose'][0:3,3].reshape( 3 )
     ryCn = ray_merge( exist.meta['poseHist'] )
-    cntr += ryCn * rayFac
-    cntr /= (len(exist.meta['poseHist'])+rayFac)
+    if np.linalg.norm( ryCn ) > 0.00001:
+        cntr += ryCn * rayFac
+        cntr /= (len(exist.meta['poseHist'])+rayFac)
+    else:
+        cntr /= (1.0 * len(exist.meta['poseHist']))
+
 
     nuPose = np.eye(4)
     nuPose[0:3,3] = cntr

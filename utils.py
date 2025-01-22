@@ -145,8 +145,11 @@ def closest_ray_points( A_org, A_dir, B_org, B_dir ):
     ab = np.dot( A_dir, B_dir )
     ac = np.dot( A_dir, c     )
     bc = np.dot( B_dir, c     ) 
-    fA = (-ab*bc + ac*bb) / (aa*bb-ab*ab)
-    fB = ( ab*ac - bc*aa) / (aa*bb-ab*ab)
+    dv = (aa*bb-ab*ab)
+    if dv < 0.0001:
+        raise ValueError( f"BAD DIVISOR computed from: \n{A_org=}, {A_dir=}, \n{B_org=}, {B_dir=}" )
+    fA = (-ab*bc + ac*bb) / dv
+    fB = ( ab*ac - bc*aa) / dv
     pA = np.add( A_org, np.multiply( A_dir, fA ) )
     pB = np.add( B_org, np.multiply( B_dir, fB ) )
     return pA, pB
