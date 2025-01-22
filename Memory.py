@@ -3,6 +3,8 @@
 import time
 now = time.time
 from random import choice
+from collections import deque
+from typing import Dict, Deque
 
 import numpy as np
 
@@ -11,13 +13,14 @@ from magpie_control.ur5 import UR5_Interface
 
 from aspire.env_config import env_var
 from aspire.utils import match_name, normalize_dist
-from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, )
+from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols )
 
 
 ### Local ###
-from utils import ( snap_z_to_nearest_block_unit_above_zero, LogPickler, 
-                    zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, )
-from OWLv2_Segment import SAM2, Perception_OWLv2
+from utils import ( snap_z_to_nearest_block_unit_above_zero, LogPickler, zip_dict_sorted_by_decreasing_value, 
+                    deep_copy_memory_list, closest_ray_points )
+from OWLv2_Segment import Perception_OWLv2
+from Bayes import BayesMemory
 
 
 _REVERSE_QUERIES = {
@@ -25,24 +28,6 @@ _REVERSE_QUERIES = {
     "ylwBlock": {'query': "a photo of a yellow block", 'abbrv': "ylw", },
     "grnBlock": {'query': "a photo of a green block" , 'abbrv': "grn", },
 }
-
-
-########## GEOMETRY FUNCTIONS ######################################################################
-
-def closest_ray_points( A_org, A_dir, B_org, B_dir ):
-    """ Return the closest point on ray A to ray B and on ray B to ray A """
-    # https://palitri.com/vault/stuff/maths/Rays%20closest%20point.pdf
-    c  = np.subtract( B_org, A_org )
-    aa = np.dot( A_dir, A_dir )
-    bb = np.dot( B_dir, B_dir )
-    ab = np.dot( A_dir, B_dir )
-    ac = np.dot( A_dir, c     )
-    bc = np.dot( B_dir, c     ) 
-    fA = (-ab*bc + ac*bb) / (aa*bb-ab*ab)
-    fB = ( ab*ac - bc*aa) / (aa*bb-ab*ab)
-    pA = np.add( A_org, np.multiply( A_dir, fA ) )
-    pB = np.add( B_org, np.multiply( B_dir, fB ) )
-    return pA, pB
 
 
 
@@ -172,6 +157,55 @@ def strongest_symbols_from_readings( objLst : list[GraspObj], N : int ):
                 break
         
     return list( picked.values() )
+
+
+def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
+    """ Choose the most likely in each class that does not conflict with an even more likely label of a different class """
+    ranked : Dict[str, Deque[GraspObj]] = dict()
+    for obj in objLst:
+        labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
+        for lbl_i, prb_i in labelDist:
+            if (lbl_i not in ranked):
+                ranked[ lbl_i ] = deque()
+            obj_i = obj.copy_child()
+            obj_i.label = lbl_i
+            obj_i.prob  = prb_i
+            ranked[ lbl_i ].append( obj_i )
+
+    for k, v in ranked.items():
+        nuV = list(v)
+        nuV.sort( key = lambda x: x.prob, reverse = True )
+        ranked[k] = deque( nuV )
+
+    picked : Dict[str, GraspObj] = dict()
+    for lbl_i in ranked.keys():
+        obj_i = ranked[ lbl_i ].popleft()
+        for lbl_j, obj_j in picked.items():
+            if euclidean_distance_between_symbols( obj_i, obj_j ) < env_var( "_BLOCK_SCALE" ):
+                if obj_i.prob > obj_j.prob:
+                    picked[ lbl_i ] = obj_i
+                    picked[ lbl_j ] = ranked[ lbl_j ].popleft()
+                    while euclidean_distance_between_symbols( picked[ lbl_i ], picked[ lbl_j ] ) < env_var( "_BLOCK_SCALE" ):
+                        if len( ranked[ lbl_j ] ):
+                            picked[ lbl_j ] = ranked[ lbl_j ].popleft()
+                        else:
+                            break
+                else:
+                    picked[ lbl_i ] = ranked[ lbl_i ].popleft()
+                    picked[ lbl_j ] = obj_j
+                    while euclidean_distance_between_symbols( picked[ lbl_i ], picked[ lbl_j ] ) < env_var( "_BLOCK_SCALE" ):
+                        if len( ranked[ lbl_i ] ):
+                            picked[ lbl_i ] = ranked[ lbl_i ].popleft()
+                        else:
+                            break
+
+    return list( picked.values() )
+
+
+
+
+
+
         
 
 def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
@@ -213,8 +247,8 @@ class SensoryPlanner:
         return -self.ZTableCam 
 
 
-    def plan_3d_shot( self, objects : list[GraspObj], backupDir : np.ndarray, dBackup : float, defaultPose : np.ndarray ):
-        """ Plan a camera pose that maximizes info and avoids occlusion, given the proposed objects """
+    def plan_3d_shot_centroid( self, objects : list[GraspObj], backupDir : np.ndarray, dBackup : float, defaultPose : np.ndarray ):
+        """ Plan a camera pose for along a line to the centroid of the objects """
         rtnPose = defaultPose.copy()
 
         if len( objects ):
@@ -244,10 +278,10 @@ class SensoryPlanner:
         """ A Series of shots  """
         return [
             # self.plan_3d_shot( objects, [  0.00, 0.00, 1.0, ], self.dShot, defaultPose ),
-            self.plan_3d_shot( objects, [  1.25, -0.25, 1.0, ], self.dShot, defaultPose ),
-            self.plan_3d_shot( objects, [  1.25,  0.25, 1.0, ], self.dShot, defaultPose ),
-            self.plan_3d_shot( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
-            self.plan_3d_shot( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
+            self.plan_3d_shot_centroid( objects, [  1.25, -0.25, 1.0, ], self.dShot, defaultPose ),
+            self.plan_3d_shot_centroid( objects, [  1.25,  0.25, 1.0, ], self.dShot, defaultPose ),
+            self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
+            self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
         ]
     
 
@@ -311,6 +345,7 @@ class Memory:
         """ Erase memory components """
         self.scan : list[GraspObj] = list()
         self.mult : bool           = False
+        self.bMem : BayesMemory    = BayesMemory()
 
 
     def __init__( self, robot, perc ):
@@ -346,9 +381,12 @@ class Memory:
             if Append:
                 self.mult = True
 
+        self.bMem.belief_update( self.scan, xform )
+
         self.history.append( 
             datum = {
-                "scan": deep_copy_memory_list( self.scan ),
+                "scan"   : deep_copy_memory_list( self.scan ),
+                "beliefs": deep_copy_memory_list( self.bMem.beliefs ),
             },
             msg = "memory" 
         )
@@ -402,12 +440,17 @@ class Memory:
         return rtnLst
 
 
-    def get_current_most_likely( self ):
+    def get_current_most_likely( self, strat = "bayes" ) -> list[GraspObj]:
         """ Generate symbols """
-        if self.mult:
+        symbols = list()
+        if strat == "bayes":
+            symbols = most_likely_non_conflict( self.bMem.beliefs ) 
+        elif strat == "hack":
             symbols = strongest_symbols_from_readings( self.HACK_MERGE(), env_var("_N_REQD_OBJS") )
-        else:
+        elif strat == "score":
             symbols = strongest_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
+        else:
+            raise ValueError( f"The update strategy {str(strat).upper()} is NOT recognized!" )
 
         self.history.append( 
             datum = deep_copy_memory_list( symbols ),

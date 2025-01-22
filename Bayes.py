@@ -22,7 +22,7 @@ from aspire.symbols import ( euclidean_distance_between_symbols, extract_pose_as
 
 
 ### Local ###
-from utils import set_quality_score
+from utils import set_quality_score, closest_ray_points
 
 
 
@@ -68,6 +68,58 @@ def p_sphere_inside_plane_list( qCen, qRad, planeList ):
             return False
     return True
 
+
+def HACK_MERGE( exist : GraspObj, input : GraspObj ):
+    """ HACK: Just average the poses """
+
+    if 'poseHist' not in exist.meta:
+        exist.meta['poseHist'] = [{
+            'pose'  : extract_pose_as_homog( exist ),
+            'rayOrg': exist.meta['rayOrg'],
+            'rayDir': exist.meta['rayDir'],
+        },]
+    exist.meta['poseHist'].append( {
+        'pose'  : extract_pose_as_homog( input ),
+        'rayOrg': input.meta['rayOrg'],
+        'rayDir': input.meta['rayDir'],
+    } )
+
+    rayFac = 5.5 
+
+    def ray_merge( objLst : list[dict] ):
+        """ What is the mutually closes point between all cam rays? """
+        N      = len( objLst )
+        pntLst = list()
+        for i in range( N-1 ):
+            obj_i = objLst[i]
+            for j in range( i+1, N ):
+                obj_j = objLst[j]
+                pnt_ij, pnt_ji = closest_ray_points( 
+                    obj_i['rayOrg'], 
+                    obj_i['rayDir'], 
+                    obj_j['rayOrg'], 
+                    obj_j['rayDir'], 
+                )
+                pntLst.extend([pnt_ij, pnt_ji,])
+        return np.mean( pntLst, axis = 0 )
+                
+    cntr = np.zeros( 3 )
+    for obj_i in exist.meta['poseHist']:
+        cntr += obj_i['pose'][0:3,3].reshape( 3 )
+    ryCn = ray_merge( exist.meta['poseHist'] )
+    cntr += ryCn * rayFac
+    cntr /= (len(exist.meta['poseHist'])+rayFac)
+
+    nuPose = np.eye(4)
+    nuPose[0:3,3] = cntr
+
+    exist.pose = ObjPose( nuPose )
+    
+    
+
+
+########## SENSOR PLACEMENT ########################################################################
+
 def get_D405_FOV_frustum( camXform ):
     """ Get 5 <point, normal> pairs for planes bounding an Intel RealSense D405 field of view with its focal point at `camXform` """
     ## Fetch Components ##
@@ -100,10 +152,12 @@ def get_D405_FOV_frustum( camXform ):
     ## Return Limits ##
     return rtnFOV
 
+
+
 ########## BELIEFS #################################################################################
 
 
-class ObjectMemory:
+class BayesMemory:
     """ Attempt to maintain recent and constistent object beliefs based on readings from the vision system """
 
     def reset_beliefs( self ):
@@ -115,7 +169,18 @@ class ObjectMemory:
         """ Set belief containers """
         self.reset_beliefs()
         
+
+    ##### Sensor Placement ################################################
+
+    def p_symbol_in_cam_view( self, camXform : np.ndarray, symbol : GraspObj ):
+        bounds = get_D405_FOV_frustum( camXform )
+        qPosn  = extract_pose_as_homog( symbol )[0:3,3]
+        blcRad = np.sqrt( 3.0 * (env_var("_BLOCK_SCALE")/2.0)**2 )
+        return p_sphere_inside_plane_list( qPosn, blcRad, bounds )
     
+
+    ##### Bayes Update ####################################################
+
     def accum_evidence_for_belief( self, evidence : GraspObj, belief : GraspObj ):
         """ Use Bayesian multiclass update on `belief`, destructive """
         evdnc = extract_class_dist_in_order( evidence )
@@ -128,16 +193,6 @@ class ObjectMemory:
         )
         for i, key in enumerate( keys ):
             belief.labels[ key ] = pstrr[i]
-
-
-    ##### Sensor Placement ################################################
-
-
-    def p_symbol_in_cam_view( self, camXform : np.ndarray, symbol : GraspObj ):
-        bounds = get_D405_FOV_frustum( camXform )
-        qPosn  = extract_pose_as_homog( symbol )[0:3,3]
-        blcRad = np.sqrt( 3.0 * (env_var("_BLOCK_SCALE")/2.0)**2 )
-        return p_sphere_inside_plane_list( qPosn, blcRad, bounds )
 
 
     def integrate_one_reading( self, objReading : GraspObj, camXform : np.ndarray = None, 
@@ -164,16 +219,20 @@ class ObjectMemory:
             belBest.visited = True
             self.accum_evidence_for_belief( objReading, belBest )
 
-            # updtFrac = objReading.score / (belBest.score + objReading.score)
-            updtFrac = 0.45
+            
             
             ## Update Pose ##
-            belPosn = posn_from_xform( extract_pose_as_homog( belBest.pose    ) )
-            objPosn = posn_from_xform( extract_pose_as_homog( objReading.pose ) )
-            updPosn = objPosn * updtFrac + belPosn * (1.0 - updtFrac)
-            updPose = np.eye(4)
-            updPose[0:3,3] = updPosn
-            belBest.pose  = ObjPose( updPose )
+            if 0:
+                # updtFrac = objReading.score / (belBest.score + objReading.score)
+                updtFrac = 0.45 
+                belPosn  = posn_from_xform( extract_pose_as_homog( belBest.pose    ) )
+                objPosn  = posn_from_xform( extract_pose_as_homog( objReading.pose ) )
+                updPosn  = objPosn * updtFrac + belPosn * (1.0 - updtFrac)
+                updPose  = np.eye(4)
+                updPose[0:3,3] = updPosn
+                belBest.pose  = ObjPose( updPose )
+            else:
+                HACK_MERGE( belBest, objReading )
 
             ## Update Score ##
             belBest.count += objReading.count
