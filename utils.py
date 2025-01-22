@@ -7,6 +7,7 @@ from collections import deque
 from datetime import datetime
 
 import numpy as np
+np.set_printoptions( precision = 4 )
 
 from aspire.symbols import GraspObj
 from aspire.env_config import env_var

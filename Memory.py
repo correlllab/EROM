@@ -158,10 +158,12 @@ def strongest_symbols_from_readings( objLst : list[GraspObj], N : int ):
         
     return list( picked.values() )
 
+
 from pprint import pprint
 from copy import deepcopy
 
-def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
+
+def most_likely_non_conflict( objLst : list[GraspObj], zOffset : float ) -> list[GraspObj]:
     """ Choose the most likely in each class that does not conflict with an even more likely label of a different class """
 
     print( f"There are {len(objLst)} to evaluate!" )
@@ -188,6 +190,8 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
     picked  : Dict[str, GraspObj] = dict()
     compare : Dict[str, GraspObj] = dict()
     for lbl_i in ranked.keys():
+        if lbl_i == env_var( "_NULL_NAME" ):
+            continue
         obj_i   = ranked[ lbl_i ].popleft()
         collide = False
         for lbl_j, obj_j in compare.items():
@@ -212,14 +216,16 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
         if not collide:
             picked[ lbl_i ] = obj_i
         compare = deepcopy( picked )
-    print( f"About to return {len(picked.values())} symbols!" )
-    return list( picked.values() )
 
+    symbols = list( picked.values() )
 
+    # HACK: SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE
+    # for sym in symbols:
+    #     # sym.pose.pose[2,3] = snap_z_to_nearest_block_unit_above_zero( sym.pose.pose[2,3] + zOffset )
+    #     sym.pose.pose[2,3] = snap_z_to_nearest_block_unit_above_zero( sym.pose.pose[2,3] )
 
-
-
-
+    print( f"About to return {len(symbols)} symbols!" )
+    return symbols
         
 
 def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
@@ -291,7 +297,6 @@ class SensoryPlanner:
     def plan_3d_shots( self, objects : list[GraspObj], defaultPose : np.ndarray ):
         """ A Series of shots  """
         return [
-            # self.plan_3d_shot( objects, [  0.00, 0.00, 1.0, ], self.dShot, defaultPose ),
             self.plan_3d_shot_centroid( objects, [  1.25, -0.25, 1.0, ], self.dShot, defaultPose ),
             self.plan_3d_shot_centroid( objects, [  1.25,  0.25, 1.0, ], self.dShot, defaultPose ),
             self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
@@ -301,7 +306,7 @@ class SensoryPlanner:
 
     def locate( self, obj : GraspObj ):
         """ Home in on a partcular block """
-        initShot = self.plan_3d_shot( list(), [0.0, 0.0, 1.0,], self.dLoc, extract_pose_as_homog( obj ) )
+        initShot = self.plan_3d_shot_centroid( list(), [0.0, 0.0, 1.0,], self.dLoc, extract_pose_as_homog( obj ) )
         self.robot.moveL( initShot, asynch = False )
         query   = _REVERSE_QUERIES[ obj.label ]['query']
         abbrevq = _REVERSE_QUERIES[ obj.label ]['abbrv']
@@ -458,7 +463,7 @@ class Memory:
         """ Generate symbols """
         symbols = list()
         if strat == "bayes":
-            symbols = most_likely_non_conflict( self.bMem.beliefs ) 
+            symbols = most_likely_non_conflict( self.bMem.beliefs, self.camPlan.get_camera_Z_offset() ) 
         elif strat == "hack":
             symbols = strongest_symbols_from_readings( self.HACK_MERGE(), env_var("_N_REQD_OBJS") )
         elif strat == "score":
