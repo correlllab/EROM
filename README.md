@@ -11,7 +11,7 @@ Entropy Ranked Object Memory
 * `[Y]` Run planner with Bayesian Updates on multiple scans, 2025-01-22: TESTED! Stacks blocks and recognizes it
 * `[>]` Re-implement periodic scanning
     - `[>]` Try an interrupt pattern instead of a spaced pattern
-        * `[Y]` New Behaviour: `Move_Arm_w_Pause`, 2025-01-22: Complete, NEEDS TESTING
+        * `[Y]` New Behaviour: `Move_Arm_w_Pause`, 2025-01-23: Complete, NEEDS TESTING
         * `[>]` New Sequence: An interruptable motion that will pause for perception updates at timed intervals WITHOUT having to plot out waypoints in a complex way
     - `{C}` If (interrupt is infeasible or overly complex) then { Fall back on pre-planned waypoints! }
 * `[ ]` Evaluate the Memory Implementation
