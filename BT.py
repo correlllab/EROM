@@ -16,7 +16,8 @@ from magpie_control.BT import BasicBehavior, CycleTimer, SetBBVar, Pause_Robot, 
 from magpie_control.ur5 import UR5_Interface
 from magpie_control.utils import vec_unit
 from aspire.symbols import env_var
-from aspire.actions.pdls_behaviors import GroundedAction, MoveFree, MoveFree_w_Pause
+from aspire.actions.pdls_behaviors import ( GroundedAction, MoveFree, MoveFree_w_Pause, Plan, Place, 
+                                            Stack, Pick, Unstack, MoveHolding, PlanParser, )
 from aspire.actions.utils import line_intersect_plane
 
 
@@ -131,3 +132,102 @@ class MoveFree_and_PerceiveScene( GroundedAction ):
             mfBT
         ])
         return root
+
+
+########## PDLS --TO-> BT ##########################################################################
+
+def get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, planner ):
+    """ Fetch the `i`th item from `pdlsPlan` and parameterize a BT that operates on the environment """
+    if i >= len( pdlsPlan ):
+        return None
+    actName  = pdlsPlan[i].name
+    actArgs  = pdlsPlan[i].args
+    btAction = None
+    print( f"Planner Type: {type( planner )}" )
+    if actName == "move_free":
+        # btAction = MoveFree( actArgs, robot = robot )
+        btAction = MoveFree_and_PerceiveScene(
+            actArgs,
+            robot,
+            perceive_cb = None, # FIXME: WHERE IS THIS?
+            check_cb    = None  # FIXME: WHERE IS THIS?
+        )
+    elif actName == "pick":
+        btAction = Pick( actArgs, robot = robot )
+    elif actName == "unstack":
+        btAction = Unstack( actArgs, robot = robot )
+    elif actName == "move_holding":
+        btAction = MoveHolding( actArgs, robot = robot )
+    elif actName == "place":
+        btAction = Place( actArgs, robot = robot )
+    elif actName == "stack":
+        btAction = Stack( actArgs, robot = robot )
+    else:
+        raise NotImplementedError( f"There is no BT procedure defined for a PDDL action named {actName}!" )
+    print( f"Action {i+1}, {actName} --> {btAction.name}, planned!" )
+    return btAction
+
+
+def get_BT_plan_until_block_change( pdlsPlan, planner, sensePeriod_s, robot ):
+    """ Translate the PDLS plan to one that can be executed by the robot """
+    rtnBTlst = []
+    print( f"Planner Type: {type( planner )}" )
+    if pdlsPlan is not None:
+        for i in range( len( pdlsPlan ) ):
+            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, planner, sensePeriod_s )
+            rtnBTlst.append( btAction )
+            if btAction.__class__ in ( Place, Stack ):
+                break
+    rtnPlan = Plan()
+    rtnPlan.add_children( rtnBTlst )
+    return rtnPlan
+
+
+def get_BT_plan( pdlsPlan, planner, sensePeriod_s, robot ):
+    """ Translate the PDLS plan to one that can be executed by the robot """
+    rtnBTlst = []
+    print( f"Planner Type: {type( planner )}" )
+    if pdlsPlan is not None:
+        for i in range( len( pdlsPlan ) ):
+            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, planner, sensePeriod_s )
+            rtnBTlst.append( btAction )
+    rtnPlan = Plan()
+    rtnPlan.add_children( rtnBTlst )
+    return rtnPlan
+
+
+def display_PDLS_plan( plan ):
+    print( f"\nPlan output from PDDLStream:" )
+    if plan is not None:
+        for i, action in enumerate( plan ):
+            # print( dir( action ) )
+            print( f"\t{i+1}: { action.__class__.__name__ }, {action.name}" )
+            for j, arg in enumerate( action.args ):
+                print( f"\t\tArg {j}:\t{type( arg )}, {arg}" )
+    else:
+        print( plan )
+
+
+class ReactivePlanParser( PlanParser ):
+    """ Actually transform plans """
+
+    def __init__( self ):
+        """ Set internal var """
+        super().__init__()
+
+
+    def display_PDLS_plan( self, plan ):
+        """ Print basic plan info """
+        display_PDLS_plan( plan )
+
+
+    def parse_PDLS_plan( self, plan ):
+        """ SHOULD NOT BE USED! """
+        raise NotImplementedError( "`parse_PDLS_plan` HAS NOT BEEN IMPLEMENTED!" )
+    
+
+    def parse_PDLS_action( self, plan ):
+        """ SHOULD NOT BE USED! """
+        raise NotImplementedError( "`parse_PDLS_action` HAS NOT BEEN IMPLEMENTED!" )
+
+    
