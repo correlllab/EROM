@@ -6,6 +6,7 @@ from random import choice
 from collections import deque
 from typing import Dict, Deque
 from math import log
+from uuid import uuid4
 
 import numpy as np
 
@@ -260,6 +261,20 @@ def KL_div_info_gain_dct( priorB : dict, postB : dict ):
     return rtnKL
 
 
+def get_uniform_prior_over_labels( labelsLst : list = None ):
+    """ Return a discrete distribution with uniform confusion between classes other than `label` """
+    if labelsLst is None:
+        labelsLst = env_var("_BLOCK_NAMES") # Defer name fetch until env init
+    rtnLabels = {}
+    Nclass    = len( labelsLst )
+    perProb   = 1.0 / Nclass
+    for i in range( Nclass ):
+        blkName_i = labelsLst[i]
+        rtnLabels[ blkName_i ] = perProb
+    return rtnLabels
+
+
+
 ########## SENSORY PLANNING ########################################################################
 
 
@@ -375,17 +390,55 @@ class SensoryPlanner:
 
 ########## OBJECT MEMORY ###########################################################################
 
+##### BAD, YAGNI ##########################################################
+
+class ThinSymbol:
+    """ Barest Symbol """
+    # HACK: IS THIS A BAD THING? YAGNI?
+    def __init__( self, label = "", pose = None ):
+        self.id    = uuid4()
+        self.label = label
+        self.pose  = np.eye(4) if (pose is None) else pose
+        self.distH = list() # Distribution history
+        self.KLDvH = list() # KL-Divergence history
+
+
+##### Object Location & Tracking ##########################################
+
 class Memory:
     """ Object Memory """
 
+    ##### KL-Divergence Tracking #################
+
     def reset_memory( self ):
         """ Erase memory components """
-        self.scan : list[GraspObj] = list()
-        self.mult : bool           = False
-        self.bMem : BayesMemory    = BayesMemory()
-        self.syHs : list[dict]     = list()
-        self.klHs : list[float]    = list()
+        self.scan : list[GraspObj]   = list()
+        self.mult : bool             = False
+        self.bMem : BayesMemory      = BayesMemory()
+        self.symH : Dict[ThinSymbol] = dict()
+        # self.syHs : list[dict]     = list() # NOT THE WAY TO DO IT!
+        # self.klHs : list[float]    = list()
 
+
+    def closest_symbol_to_pose( self, pose, margin = None ):
+        """ Fetch the closest symbol to the pose within `margin`, otherwise return None """
+        # FIXME
+        pass
+
+
+    def move_symbol_from_to_pose( self, srcPose, dstPose ):
+        """ Find the symbol at `srcPose` and move it to `dstPose` """
+        # FIXME
+        pass
+
+
+    def update_symbol_history( self, symLst : list[GraspObj] ):
+        """ Find the symbol at `srcPose` and move it to `dstPose` """
+        # FIXME
+        pass
+
+
+    ##### Begin / End ############################
 
     def __init__( self, robot, perc ):
         self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
@@ -397,6 +450,8 @@ class Memory:
         """ Save the memory """
         self.history.dump_to_file( openNext = False )
 
+
+    ##### Perception #############################
 
     def plan_3d_shots( self, defaultPose : np.ndarray ):
         """ Ask the sensory planner to get us a shot """
@@ -479,22 +534,11 @@ class Memory:
         return rtnLst
     
 
-    def append_to_history( self, symLst : list[GraspObj] ):
-        """ Save the current symbols so that the KL Divergence can be tracked """
+    ##### Symbol Grounding #######################
 
-        # Store Distributions #
-        nuDct = dict()
-        for sym in symLst:
-            nuDct[ sym.label ] = deepcopy( sym.labels )
-        self.syHs.append( nuDct )
-
-        # Store Divergences #
-        if (len( self.syHs ) > 1):
-            nuKLd = dict()
-            lsDct = self.syHs[-2]
-            for nam_i, dst_i in nuDct.items():
-                nuKLd[ nam_i ] = KL_div_info_gain_dct( lsDct[ nam_i ], dst_i )
-            self.klHs.append( nuKLd )
+    def p_KL_OK_per_class( self ):
+        """ Evaluate the KL """
+        pass
 
 
     def get_current_most_likely( self, strat = "bayes" ) -> list[GraspObj]:
