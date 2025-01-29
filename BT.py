@@ -16,7 +16,7 @@ from magpie_control.BT import BasicBehavior, CycleTimer, SetBBVar, Pause_Robot, 
 from magpie_control.ur5 import UR5_Interface
 from magpie_control.utils import vec_unit
 from aspire.symbols import env_var
-from aspire.actions.pdls_behaviors import ( GroundedAction, MoveFree, MoveFree_w_Pause, Plan, Place, 
+from aspire.actions.pdls_behaviors import ( GroundedAction, MoveFree_w_Pause, Plan, Place, 
                                             Stack, Pick, Unstack, MoveHolding, PlanParser, )
 from aspire.actions.utils import line_intersect_plane
 
@@ -136,21 +136,27 @@ class MoveFree_and_PerceiveScene( GroundedAction ):
 
 ########## PDLS --TO-> BT ##########################################################################
 
-def get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, planner ):
+def get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, perceive_cb = None, check_cb = None ):
     """ Fetch the `i`th item from `pdlsPlan` and parameterize a BT that operates on the environment """
+
+    def dummy_cb( *args ):
+        """ SHOULD NOT BE USED! """
+        print( f"`dummy_cb` was called with {args}" )
+        return True
+
     if i >= len( pdlsPlan ):
         return None
     actName  = pdlsPlan[i].name
     actArgs  = pdlsPlan[i].args
     btAction = None
-    print( f"Planner Type: {type( planner )}" )
+    # print( f"Planner Type: {type( planner )}" )
     if actName == "move_free":
         # btAction = MoveFree( actArgs, robot = robot )
         btAction = MoveFree_and_PerceiveScene(
             actArgs,
             robot,
-            perceive_cb = None, # FIXME: WHERE IS THIS?
-            check_cb    = None  # FIXME: WHERE IS THIS?
+            perceive_cb = perceive_cb if(perceive_cb is not None) else dummy_cb, 
+            check_cb    = check_cb if(check_cb is not None) else dummy_cb  
         )
     elif actName == "pick":
         btAction = Pick( actArgs, robot = robot )
@@ -168,13 +174,12 @@ def get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, planner ):
     return btAction
 
 
-def get_BT_plan_until_block_change( pdlsPlan, planner, sensePeriod_s, robot ):
+def get_BT_plan_until_block_change( pdlsPlan, robot, perceive_cb = None, check_cb = None ):
     """ Translate the PDLS plan to one that can be executed by the robot """
     rtnBTlst = []
-    print( f"Planner Type: {type( planner )}" )
     if pdlsPlan is not None:
         for i in range( len( pdlsPlan ) ):
-            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, planner, sensePeriod_s )
+            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, perceive_cb = perceive_cb, check_cb = check_cb )
             rtnBTlst.append( btAction )
             if btAction.__class__ in ( Place, Stack ):
                 break
@@ -183,13 +188,12 @@ def get_BT_plan_until_block_change( pdlsPlan, planner, sensePeriod_s, robot ):
     return rtnPlan
 
 
-def get_BT_plan( pdlsPlan, planner, sensePeriod_s, robot ):
+def get_BT_plan( pdlsPlan, robot, perceive_cb = None, check_cb = None ):
     """ Translate the PDLS plan to one that can be executed by the robot """
     rtnBTlst = []
-    print( f"Planner Type: {type( planner )}" )
     if pdlsPlan is not None:
         for i in range( len( pdlsPlan ) ):
-            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, planner, sensePeriod_s )
+            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, perceive_cb = perceive_cb, check_cb = check_cb  )
             rtnBTlst.append( btAction )
     rtnPlan = Plan()
     rtnPlan.add_children( rtnBTlst )
@@ -211,9 +215,12 @@ def display_PDLS_plan( plan ):
 class ReactivePlanParser( PlanParser ):
     """ Actually transform plans """
 
-    def __init__( self ):
+    def __init__( self, robot = None, perceive_cb = None, check_cb = None ):
         """ Set internal var """
         super().__init__()
+        self.robot       = robot
+        self.perceive_cb = perceive_cb
+        self.check_cb    = check_cb
 
 
     def display_PDLS_plan( self, plan ):
@@ -221,13 +228,13 @@ class ReactivePlanParser( PlanParser ):
         display_PDLS_plan( plan )
 
 
-    def parse_PDLS_plan( self, plan ):
+    def parse_PDLS_plan( self, pdlsPlan ):
         """ SHOULD NOT BE USED! """
-        raise NotImplementedError( "`parse_PDLS_plan` HAS NOT BEEN IMPLEMENTED!" )
+        return get_BT_plan( pdlsPlan, self.robot, perceive_cb = self.perceive_cb, check_cb = self.check_cb )
     
 
-    def parse_PDLS_action( self, plan ):
-        """ SHOULD NOT BE USED! """
-        raise NotImplementedError( "`parse_PDLS_action` HAS NOT BEEN IMPLEMENTED!" )
+    def parse_PDLS_action( self, pdlsPlan ):
+        """ Executable BT up until the next required replan """
+        return get_BT_plan_until_block_change( pdlsPlan, self.robot, perceive_cb = self.perceive_cb, check_cb = self.check_cb )
 
     

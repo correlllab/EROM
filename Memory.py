@@ -365,6 +365,8 @@ class Memory:
         self.scan : list[GraspObj] = list()
         self.mult : bool           = False
         self.bMem : BayesMemory    = BayesMemory()
+        self.syHs : list[dict]     = list()
+        self.klHs : list[float]    = list()
 
 
     def __init__( self, robot, perc ):
@@ -457,6 +459,14 @@ class Memory:
             print( f"There are {len(v)} examples of {k}, Pose:\n{rtnObj.pose.pose[0:3,3]}" )
             rtnLst.append( rtnObj )
         return rtnLst
+    
+
+    def append_to_history( self, symLst : list[GraspObj] ):
+        """ Save the current symbols so that the KL Divergence can be tracked """
+        nuDct = dict()
+        for sym in symLst:
+            nuDct[ sym.label ] = deepcopy( sym.labels )
+        
 
 
     def get_current_most_likely( self, strat = "bayes" ) -> list[GraspObj]:

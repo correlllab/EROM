@@ -72,12 +72,6 @@ def p_sphere_inside_plane_list( qCen, qRad, planeList ):
 def HACK_MERGE( exist : GraspObj, input : GraspObj ):
     """ HACK: Just average the poses """
 
-    if 'poseHist' not in exist.meta:
-        exist.meta['poseHist'] = [{
-            'pose'  : extract_pose_as_homog( exist ),
-            'rayOrg': exist.meta['rayOrg'],
-            'rayDir': exist.meta['rayDir'],
-        },]
     exist.meta['poseHist'].append( {
         'pose'  : extract_pose_as_homog( input ),
         'rayOrg': input.meta['rayOrg'],
@@ -201,8 +195,10 @@ class BayesMemory:
             prior, 
             evdnc 
         )
+        nuLabels = dict()
         for i, key in enumerate( keys ):
-            belief.labels[ key ] = pstrr[i]
+            nuLabels[ key ] = pstrr[i]
+        belief.labels = nuLabels
 
 
     def integrate_one_reading( self, objReading : GraspObj, camXform : np.ndarray = None, 
@@ -228,8 +224,6 @@ class BayesMemory:
         if relevant:
             belBest.visited = True
             self.accum_evidence_for_belief( objReading, belBest )
-
-            
             
             ## Update Pose ##
             if 0:
@@ -267,9 +261,10 @@ class BayesMemory:
         priorB = [ belief.labels[ label ] for label in env_var("_BLOCK_NAMES") ] 
         evidnc = [ labels[ label ] for label in env_var("_BLOCK_NAMES") ]
         updatB = multiclass_Bayesian_belief_update( cnfMtx, priorB, evidnc )
-        belief.labels = {}
+        nuLabels = {}
         for i, name in enumerate( env_var("_BLOCK_NAMES") ):
-            belief.labels[ name ] = updatB[i]
+            nuLabels[ name ] = updatB[i]
+        belief.labels = nuLabels
         if avgScore is not None:
             belief.score = exp_filter( belief.score, avgScore, env_var("_SCORE_FILTER_EXP") )
         # 2024-07-26: NOT updating the timestamp as NULL evidence should tend to remove a reading from consideration

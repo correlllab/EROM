@@ -13,9 +13,8 @@ Contacts: {james.watson-2@colorado.edu,}
 import sys, time, os, json
 now = time.time
 from time import sleep
-from pprint import pprint
 # from random import random
-from traceback import print_exc, format_exc
+from traceback import print_exc
 from datetime import datetime
 from math import isnan
 
@@ -32,15 +31,15 @@ from magpie_control.poses import repair_pose
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
 from aspire.symbols import ( ObjPose, GraspObj, )
-from aspire.actions import ( BT_Runner, MoveFree, GroundedAction, )
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
+from aspire.actions.pdls_behaviors import BT_Runner, GroundedAction, MoveFree
 
 ### ASPIRE::PDDLStream ### 
 from aspire.pddlstream.pddlstream.language.generator import from_gen_fn, from_test
 from aspire.SymPlanner import SymPlanner
 
 ### Local ###
-# from obj_ID_server import Perception_OWLViT
+from BT import ReactivePlanParser
 from OWLv2_Segment import Perception_OWLv2, _QUERIES
 
 from Memory import Memory
@@ -160,7 +159,8 @@ class TaskPlanner:
 
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
-            os.path.join( os.path.dirname( __file__ ), "pddl", "stream.pddl" )
+            os.path.join( os.path.dirname( __file__ ), "pddl", "stream.pddl" ),
+            planParser = ReactivePlanParser( self.robot, self.phase_1_Perceive, self.p_belief_dist_OK )
         )
         self.blcMod = BlockFunctions( self.symPln )
         if (not noBot):
@@ -387,7 +387,10 @@ class TaskPlanner:
 
     def p_belief_dist_OK( self ): 
         """ Return False if belief change criterion met, Otherwise return True """
-        print( f"\nFIXME: `ResponsiveTaskPlanner.p_belief_dist_OK` HAS NOT BEEN IMPLEMENTED!!!\n", file = sys.stderr )
+        
+        # 1. Identify the objects being operated on
+        # 2. Compute KL divergence for 
+
         return True
 
 
@@ -571,9 +574,9 @@ _SHOT_5 = repair_pose( np.array( [[-0.705, -0.694,  0.144, -0.365],
 
 
 _SHOT_6 = repair_pose( np.array( [[-0.07,  -0.951, -0.3 ,  -0.059],
-                                 [-0.995,  0.086 ,-0.04 , -0.38 ],
-                                 [ 0.064,  0.296 ,-0.953,  0.457],
-                                 [ 0.   ,  0.    , 0.   ,  1.   ],] ))
+                                  [-0.995,  0.086 ,-0.04 , -0.38 ],
+                                  [ 0.064,  0.296 ,-0.953,  0.457],
+                                  [ 0.   ,  0.    , 0.   ,  1.   ],] ))
  
 
 # _EXP_BGN_POSES = [_SHOT_6, _SHOT_6]
