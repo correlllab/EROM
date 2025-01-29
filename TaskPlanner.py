@@ -387,9 +387,12 @@ class TaskPlanner:
 
     def p_belief_dist_OK( self ): 
         """ Return False if belief change criterion met, Otherwise return True """
+
+        # FIXME, START HERE: IMPLEMENT THE CRITERION AND **TEST**
         
         # 1. Identify the objects being operated on
-        # 2. Compute KL divergence for 
+        # 2. Failure Criterion: KL has been falling for N steps
+        # 3. Failure Criterion: Plurality class is different than the current class
 
         return True
 

@@ -5,6 +5,7 @@ now = time.time
 from random import choice
 from collections import deque
 from typing import Dict, Deque
+from math import log
 
 import numpy as np
 
@@ -242,6 +243,23 @@ def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
     return np.array([ cntr2d[0]*Xlen, cntr2d[1]*Ylen, zLen, ])
 
 
+def KL_div_info_gain_prior_to_post( priorB, postB ):
+    """ Get the discrete KL-Divergence of the posterior from the prior """
+    rtnKL = 0.0
+    for i in range( len( priorB ) ):
+        rtnKL += postB[i] * log( postB[i] / priorB[i] )
+    return rtnKL
+
+
+def KL_div_info_gain_dct( priorB : dict, postB : dict ):
+    """ Get the discrete KL-Divergence of the posterior from the prior """
+    # NOTE: This will throw a `KeyError` if `postB` does not contain at least every key `priorB` does!
+    rtnKL = 0.0
+    for k in priorB.keys():
+        rtnKL += postB[k] * log( postB[k] / priorB[k] )
+    return rtnKL
+
+
 ########## SENSORY PLANNING ########################################################################
 
 
@@ -463,10 +481,20 @@ class Memory:
 
     def append_to_history( self, symLst : list[GraspObj] ):
         """ Save the current symbols so that the KL Divergence can be tracked """
+
+        # Store Distributions #
         nuDct = dict()
         for sym in symLst:
             nuDct[ sym.label ] = deepcopy( sym.labels )
-        
+        self.syHs.append( nuDct )
+
+        # Store Divergences #
+        if (len( self.syHs ) > 1):
+            nuKLd = dict()
+            lsDct = self.syHs[-2]
+            for nam_i, dst_i in nuDct.items():
+                nuKLd[ nam_i ] = KL_div_info_gain_dct( lsDct[ nam_i ], dst_i )
+            self.klHs.append( nuKLd )
 
 
     def get_current_most_likely( self, strat = "bayes" ) -> list[GraspObj]:
@@ -485,6 +513,8 @@ class Memory:
             datum = deep_copy_memory_list( symbols ),
             msg   = "symbols" 
         )
+
+        self.append_to_history( symbols )
 
         return symbols
         
