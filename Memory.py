@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import numpy as np
 
-from magpie_control.poses import vec_unit, repair_pose
+from magpie_control.poses import vec_unit, translation_diff
 from magpie_control.ur5 import UR5_Interface
 
 from aspire.env_config import env_var
@@ -395,12 +395,42 @@ class SensoryPlanner:
 class ThinSymbol:
     """ Barest Symbol """
     # HACK: IS THIS A BAD THING? YAGNI?
+    
     def __init__( self, label = "", pose = None ):
         self.id    = uuid4()
         self.label = label
-        self.pose  = np.eye(4) if (pose is None) else pose
+        self.pose  = np.eye(4) if (pose is None) else extract_pose_as_homog( pose )
         self.distH = list() # Distribution history
         self.KLDvH = list() # KL-Divergence history
+        self.visit = False
+
+
+    def append_dist( self, labelDist : dict ):
+        self.distH.append( deepcopy( labelDist ) )
+        if len( self.distH ) > 1:
+            lstDst = self.distH[-2]
+        else:
+            lstDst = get_uniform_prior_over_labels( list( labelDist.keys() ) )
+        self.KLDvH.append( KL_div_info_gain_dct( lstDst, labelDist ) )
+
+
+    def check_KL_criteria( self, N_falling : int, expectedLabel : str ):
+        """ Return `False` if evidence is gathering for a contrary indication, Otherwise return `True` """
+        if len( self.KLDvH ) < N_falling:
+            return True
+        for i in range( -N_falling, -1 ):
+            if (self.KLDvH[i] < self.KLDvH[i+1]):
+                return True
+        labelDist = zip_dict_sorted_by_decreasing_value( self.distH[-1] )
+        print( labelDist[0][0], "-vs-", expectedLabel )
+        if labelDist[0][0] != expectedLabel:
+            return False
+        else:
+            return True
+        
+
+
+
 
 
 ##### Object Location & Tracking ##########################################
@@ -415,27 +445,56 @@ class Memory:
         self.scan : list[GraspObj]   = list()
         self.mult : bool             = False
         self.bMem : BayesMemory      = BayesMemory()
-        self.symH : Dict[ThinSymbol] = dict()
+        self.symH : Dict[uuid4,ThinSymbol] = dict()
         # self.syHs : list[dict]     = list() # NOT THE WAY TO DO IT!
         # self.klHs : list[float]    = list()
 
 
     def closest_symbol_to_pose( self, pose, margin = None ):
         """ Fetch the closest symbol to the pose within `margin`, otherwise return None """
-        # FIXME
-        pass
+        if margin is None:
+            margin = 2.0 * env_var("_BLOCK_SCALE")
+        pose = extract_pose_as_homog( pose )
+        dMin = 1e9
+        sMin = None
+        for v in self.symH.values():
+            d = translation_diff( pose, v.pose )
+            if d < dMin:
+                dMin = d
+                sMin = v
+        if dMin <= margin:
+            return sMin
+        else:
+            return None
 
 
     def move_symbol_from_to_pose( self, srcPose, dstPose ):
-        """ Find the symbol at `srcPose` and move it to `dstPose` """
-        # FIXME
-        pass
+        """ Find the symbol at `srcPose` and move it to `dstPose`, Return thin symbols if it was moved, else return None """
+        dstPose  = extract_pose_as_homog( dstPose )
+        needMove = self.closest_symbol_to_pose( srcPose )
+        if (needMove is not None):
+            needMove.pose = dstPose.copy()
+            return needMove
+        else:
+            return None
 
 
     def update_symbol_history( self, symLst : list[GraspObj] ):
-        """ Find the symbol at `srcPose` and move it to `dstPose` """
-        # FIXME
-        pass
+        """ Match new symbols to current and calculate confidence changes """
+        for sym in symLst:
+            tSm = self.closest_symbol_to_pose( sym )
+            if tSm is None:
+                nuS = ThinSymbol( self, label = sym.label, pose = sym.pose )
+                nuS.append_dist( sym.labels )
+                self.symH[ nuS.id ] = nuS
+            else:
+                tSm.append_dist( sym.labels )
+
+
+    
+
+
+
 
 
     ##### Begin / End ############################
