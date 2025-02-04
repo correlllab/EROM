@@ -450,7 +450,7 @@ class Memory:
         # self.klHs : list[float]    = list()
 
 
-    def closest_symbol_to_pose( self, pose, margin = None ):
+    def closest_symbol_to_pose( self, pose, margin = None ) -> ThinSymbol:
         """ Fetch the closest symbol to the pose within `margin`, otherwise return None """
         if margin is None:
             margin = 2.0 * env_var("_BLOCK_SCALE")
@@ -491,10 +491,13 @@ class Memory:
                 tSm.append_dist( sym.labels )
 
 
-    
-
-
-
+    def check_KL_for_symbol_at_pose( self, pose, expectedLabel : str, poseMargin : float = None, N_falling : int = 3 ):
+        """ Return `check_KL_criteria` for the symbol nearest this pose """
+        chkSym = self.closest_symbol_to_pose( pose, margin = poseMargin )
+        if chkSym is not None:
+            return chkSym.check_KL_criteria( N_falling, expectedLabel )
+        else:
+            return False
 
 
     ##### Begin / End ############################
@@ -594,10 +597,6 @@ class Memory:
     
 
     ##### Symbol Grounding #######################
-
-    def p_KL_OK_per_class( self ):
-        """ Evaluate the KL """
-        pass
 
 
     def get_current_most_likely( self, strat = "bayes" ) -> list[GraspObj]:

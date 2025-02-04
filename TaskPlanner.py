@@ -387,14 +387,31 @@ class TaskPlanner:
 
     ##### Task Planner Main Loop ##########################################
 
+    def names_of_planned_symbols( self ):
+        """ Get the names of the symbols that matter """
+        rtnLst = list()
+        for bhv in self.symPln.nxtAct:
+            for arg in bhv.args:
+                if isinstance( arg, GraspObj ):
+                    rtnLst.append( {
+                        'label': arg.label,
+                        'pose':  arg.pose,
+                    } )
+        return rtnLst
+
+
     def p_belief_dist_OK( self ): 
         """ Return False if belief change criterion met, Otherwise return True """        
         # 1. Identify the objects being operated on
+        watchList = self.names_of_planned_symbols()
 
         # 2. Failure Criterion: KL has been falling for N steps
-
         # 3. Failure Criterion: Plurality class is different than the current class
+        for pair in watchList:
+            if not self.memory.check_KL_for_symbol_at_pose( pair['pose'], pair['label'] ):
+                return False
 
+        # 4. All checks pass
         return True
 
 
