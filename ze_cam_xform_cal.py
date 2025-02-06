@@ -3,13 +3,17 @@
     [ ] Collect data
 [ ] Iterate transform at each pose until the centers of the objects align
     * I think we basically guessed it an this always bugged me
-    [ ] Particle swarm optimization
+    [ ] Particle Swarm Optimization
+        [ ] Begin with translation only
 """
 
 ########## INIT ####################################################################################
 import os
 from time import sleep
 from pprint import pprint
+from random import random
+from collections import deque
+from uuid import uuid4
 
 import numpy as np
 
@@ -100,11 +104,81 @@ class CameraInspector:
             obsrv, metadata = self.perc.segment( _QUERIES )
             self.data.append({
                 'seq' : i,
-                'pose': np.array( pose ),
+                'pose': self.robot.get_tcp_pose(), # Use actual instead of ideal
                 'obrv': obsrv,
                 'meta': metadata,
             })
         return self.data
+
+
+
+########## PARTICLE SWARM OPTIMIZATION #############################################################
+
+def randrange_f( lo, hi ) -> float:
+    """ Return a random number within a float range """
+    span = hi - lo
+    return lo + span * random()
+
+
+def sample_bbox( bbox ) -> np.ndarray:
+    """ Generate a uniformly random coordinate within a `bbox` """
+    rtnPnt = list()
+    for coordRange in bbox:
+        rtnPnt.append( randrange_f( coordRange[0], coordRange[1] ) )
+    return np.array( rtnPnt )
+
+
+
+class Particle:
+    """ Element of PSO problem """
+
+    def __init__( self, coords : np.ndarray ):
+        """ Create a particle """
+        # Current
+        self.xCurr  = coords.copy()
+        self.score  = -1e9
+        # Best
+        self.sBest  = -1e9
+        self.xBest  = coords.copy()
+        # Delta
+        self.veloc  =  0.0
+
+
+
+class CameraPSO:
+    """ Iterate on collected data to arrive at a new camera transform """
+    # NOTE: There was probably a reasoned way to do this, but I'm just gonna fuzz it
+
+    def __init__( self, bbox, data, Nprt = 1000 ):
+        """ Setup problem """
+        self.N        = Nprt
+        self.bbox     = bbox
+        self.points   = deque()
+        self.data     = data
+        self.phiGlob  = 0.005
+        self.phiBest  = 0.005
+        self.Lambda   = 0.5
+        self.stepSize = None
+
+
+    def points_init( self ):
+        """ Generate initial points uniformly """
+        self.points = deque()
+        for _ in range( self.N ):
+            self.points.append( Particle( sample_bbox( self.bbox ) ) )
+
+    
+    def eval_point( self, point ):
+        """ Eval the disparity between the measured poses """
+        # FIXME, START HERE: SCORE ONE POINT AND ASSIGN TO POINT, UPDATE BEST SCORE
+        pass
+
+
+    def eval_swarm( self ):
+        """ Score the current positions of all particles """
+        for prtcl in self.points:
+            self.eval_point( prtcl )
+
 
 
 
