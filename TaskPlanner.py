@@ -109,7 +109,7 @@ def set_experiment_env():
         )
     )
 
-    env_sto( "_ANGRY_PUSH_M", 0.035 ) 
+    env_sto( "_UPDATE_PERIOD_S", 5.0 ) 
     
 
 
@@ -390,7 +390,7 @@ class TaskPlanner:
     def names_of_planned_symbols( self ):
         """ Get the names of the symbols that matter """
         rtnLst = list()
-        for bhv in self.symPln.nxtAct:
+        for bhv in self.symPln.nxtAct.children:
             for arg in bhv.args:
                 if isinstance( arg, GraspObj ):
                     rtnLst.append( {

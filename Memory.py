@@ -484,7 +484,7 @@ class Memory:
         for sym in symLst:
             tSm = self.closest_symbol_to_pose( sym )
             if tSm is None:
-                nuS = ThinSymbol( self, label = sym.label, pose = sym.pose )
+                nuS = ThinSymbol( label = sym.label, pose = sym.pose )
                 nuS.append_dist( sym.labels )
                 self.symH[ nuS.id ] = nuS
             else:
@@ -616,7 +616,7 @@ class Memory:
             msg   = "symbols" 
         )
 
-        self.append_to_history( symbols )
+        self.update_symbol_history( symbols )
 
         return symbols
         

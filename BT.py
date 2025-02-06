@@ -8,8 +8,9 @@ from time import sleep
 
 ### Special ###
 import numpy as np
-from py_trees.common import Status
-from py_trees.composites import Sequence, Parallel
+from py_trees.common import Status, ParallelPolicy
+from py_trees.composites import Sequence, Parallel, Selector
+from py_trees.decorators import FailureIsSuccess
 
 ### Local ###
 from magpie_control.BT import BasicBehavior, CycleTimer, SetBBVar, Pause_Robot, Resume_Robot
@@ -116,22 +117,34 @@ class MoveFree_and_PerceiveScene( GroundedAction ):
 
         # ?poseBgn ?poseEnd
         poseBgn, poseEnd = args
+
+        if name is None:
+            name = f"Move Free from {poseBgn} --to-> {poseEnd}"
+
+        super().__init__( args, robot, name )
+
         mfBT = MoveFree_w_Pause( args, robot, name, suppressGrasp )
 
-        root = Parallel( "MoveFree" )
         perc = Sequence( "Stop-and-Perceive", memory = True  )
         perc.add_children([
             CycleTimer( env_var("_UPDATE_PERIOD_S") ),
             CheckPerceptionShot( robot, "Okay for CPCD?" ),
-            Pause_Robot(), 
+            Pause_Robot( ctrl = robot ), 
             PerceiveScene( robot, "Check Distribution Change", perceive_cb, check_cb ),
-            Resume_Robot(),
+            Resume_Robot( ctrl = robot ),
         ])
+        
+
+        root = Sequence( "Perceive -or- Move", memory = False )
+        # root = Selector( "Perceive -or- Move", memory = False )
+        # root = Parallel( "MoveFree", ParallelPolicy.SuccessOnSelected([mfBT,]) )
         root.add_children([
-            perc,
+            # perc,
+            FailureIsSuccess( "Run Anyway", perc ),
             mfBT
         ])
-        return root
+        self.add_child( root )
+        # return root
 
 
 ########## PDLS --TO-> BT ##########################################################################
