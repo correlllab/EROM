@@ -1,6 +1,5 @@
 # Why are the distances given by the RealSense SO BAD???
-* `[ ]` Inaccurate transform to camera, "ze_cam_xform_cal.py"
-    - 
+* `[Y]` Inaccurate transform to camera, "ze_cam_xform_cal.py", 2025-02-06: No improvement
 * `[ ]` Inaccurate camera intrinsics
 * `[Y]` Bad Calibration, 2024-12-XX: Marginal improvment.
 * `[Y]` [I would also recommend checking that the Threshold Filter option in the Post-Processing section of the Viewer's stereo module options is not enabled in order to ensure that the depth image is rendering the full distance of detail that it is able to observe instead of being limited](https://github.com/IntelRealSense/librealsense/issues/8258#issuecomment-768931256), 2025-02-06: No improvement
