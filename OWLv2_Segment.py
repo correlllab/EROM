@@ -311,7 +311,8 @@ class Perception_OWLv2:
                     frac_jk =  mask[j,k]
                     cntr2d  += np.array( [(k-clHf)/clHf,(j-rwHf)/rwHf] ) * frac_jk
                     count   += frac_jk
-            cntr2d /= count
+            if count > 0.0:
+                cntr2d /= count
             return vec_unit( [cntr2d[0]*Xlen, cntr2d[1]*Ylen, 1.0] )
             
 
@@ -352,7 +353,7 @@ class Perception_OWLv2:
                     np.array( hit_i['bboxi'] ) 
                 )
                 samCount = (sam_mask > 0.1).sum()
-                print( f"SAM2 Mask Dims: {sam_mask.shape}, Mask Count: {samCount}, Image Dims: {img_i.shape}" )
+                # print( f"SAM2 Mask Dims: {sam_mask.shape}, Mask Count: {samCount}, Image Dims: {img_i.shape}" )
                 
                 if 100 < samCount < 50000:
                     mask_i = sam_mask.copy()
