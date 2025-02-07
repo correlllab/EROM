@@ -140,16 +140,16 @@ def vector_noise_by_dim( stepArr ) -> np.ndarray:
 class Particle:
     """ Element of PSO problem """
 
-    def __init__( self, coords : np.ndarray ):
+    def __init__( self, coords ):
         """ Create a particle """
         # Current
-        self.xCurr = coords.copy()
+        self.xCurr = coords
         self.score = -1e9
         # Best
-        self.xBest = coords.copy()
+        self.xBest = coords
         self.sBest = -1e9
         # Delta
-        self.veloc = np.zeros( coords.shape )
+        self.veloc = 0.0
 
 
 
@@ -163,11 +163,12 @@ class CameraPSO:
         self.bbox     = bbox
         self.prtcls   = deque()
         self.data     = data
-        self.Lambda   = 0.75
+        self.Lambda   = 0.50
         self.phiGlob  = (1.0-self.Lambda)/2.0
         self.phiBest  = (1.0-self.Lambda)/2.0
         # self.randStep = np.array( [0.0125, 0.0125, 0.0125,] )
-        self.randStep = np.array( [0.005, 0.005, 0.005,] )
+        # self.randStep = np.array( [0.005, 0.005, 0.005,] )
+        self.randStep = 0.005
         self.pBest    = None
 
 
@@ -175,22 +176,23 @@ class CameraPSO:
         """ Generate initial points uniformly """
         self.prtcls = deque()
         for _ in range( self.N ):
-            part = Particle( sample_bbox( self.bbox ) )
-            part.veloc = vector_noise_by_dim( [0.010, 0.010, 0.010,] )
+            part = Particle( random() )
+            # part.veloc = vector_noise_by_dim( [0.010, 0.010, 0.010,] )
+            part.veloc = randrange_f( -0.010, 0.010 )
             self.prtcls.append( part )
         self.pBest = self.prtcls[0]
 
 
-    def particle_2_xform( self, prtcl : Particle ):
-        """ Convert to the thing we are optimizing """
-        xform = _CAMERA_XFORM.copy()
-        xform[0:3,3] = prtcl.xCurr
-        return xform
+    # def particle_2_xform( self, prtcl : Particle ):
+    #     """ Convert to the thing we are optimizing """
+    #     xform = _CAMERA_XFORM.copy()
+    #     xform[0:3,3] = prtcl.xCurr
+    #     return xform
 
     
     def eval_particle( self, prtcl : Particle ):
         """ Eval the disparity between the measured poses """
-        xform  = self.particle_2_xform( prtcl )
+        xform  = _CAMERA_XFORM.copy()
         blocks = dict()
         for datum in self.data:
             robotPose_i = datum['pose']
@@ -199,7 +201,9 @@ class CameraPSO:
                 dist = zip_dict_sorted_by_decreasing_value( normalize_dist( obsrv['Probability'] ) )
                 labl = dist[0][0]
                 prob = dist[0][1]
-                pose = robotPose_i.dot( xform ).dot(  np.array( obsrv['Pose'] ).reshape( (4,4,) )  ) 
+                inPs = np.array( obsrv['Pose'] ).reshape( (4,4,) )
+                inPs[0:3,3] *= prtcl.xCurr
+                pose = robotPose_i.dot( xform ).dot( inPs ) 
                 item = (pose, prob,)
                 if labl not in blocks:
                     blocks[ labl ] = [ item, ]
@@ -214,7 +218,7 @@ class CameraPSO:
         prtcl.score = totScore
         if totScore > prtcl.sBest:
             prtcl.sBest = totScore
-            prtcl.xBest = prtcl.xCurr.copy()
+            prtcl.xBest = prtcl.xCurr
         if totScore > self.pBest.score:
             self.pBest = Particle( prtcl.xCurr )
             self.pBest.score = prtcl.score
@@ -233,14 +237,15 @@ class CameraPSO:
         totSwarm = 0.0
         for prtcl in self.prtcls:
             prtcl.veloc = prtcl.veloc*self.Lambda + (prtcl.xBest - prtcl.xCurr)*self.phiBest + (self.pBest.xCurr - prtcl.xCurr)*self.phiGlob
-            totSwarm += np.linalg.norm( prtcl.veloc )
+            totSwarm += abs( prtcl.veloc )
         print( f"Average Veloc: {totSwarm / self.N}" )
 
 
     def update_swarm( self ):
         """ Update the current positions of all particles """
         for prtcl in self.prtcls:
-            prtcl.xCurr = prtcl.xCurr + (prtcl.veloc + vector_noise_by_dim( self.randStep ) )
+            # prtcl.xCurr = prtcl.xCurr + (prtcl.veloc + vector_noise_by_dim( self.randStep ) )
+            prtcl.xCurr = prtcl.xCurr + (prtcl.veloc + randrange_f( -self.randStep, self.randStep ) )
 
 
     def run_N_iter( self, Nrun ):
@@ -250,13 +255,15 @@ class CameraPSO:
             self.eval_swarm()
             self.update_swarm()
             for prtcl in self.prtcls:
-                prtcl.xCurr += vector_noise_by_dim( self.randStep * 1.0 )
+                prtcl.xCurr += randrange_f( -self.randStep * 1.0, self.randStep * 1.0 )
+                # prtcl.xCurr += vector_noise_by_dim( self.randStep * 1.0 )
                 # prtcl.xCurr += vector_noise_by_dim( self.randStep * 2.0 )
                 # prtcl.xCurr += vector_noise_by_dim( self.randStep * 5.0 )
-                prtcl.veloc += vector_noise_by_dim( self.randStep / 2.0 )
+                prtcl.veloc += randrange_f( -self.randStep / 2.0, self.randStep / 2.0 )
+                # prtcl.veloc += vector_noise_by_dim( self.randStep / 2.0 )
                 # prtcl.veloc += vector_noise_by_dim( self.randStep / 5.0 )
             print( f"Best: {self.pBest.xCurr}, {self.pBest.score}" )
-        return self.particle_2_xform( self.pBest )
+        return self.pBest.xCurr
 
 
 
@@ -283,7 +290,8 @@ if __name__ == "__main__":
             pso      = CameraPSO( [[-0.075,+0.075],[-0.075,+0.075],[-0.200,+0.200],], data, Nprt = 2000 )
             camXform = pso.run_N_iter( 200 )
 
-            print( f"Winning Camera Transform:\n{camXform}" )
+            # print( f"Winning Camera Transform:\n{camXform}" )
+            print( f"Winning Scaling Factor:\n{camXform}" )
 
 
         ctrl.shutdown()

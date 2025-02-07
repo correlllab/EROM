@@ -251,6 +251,7 @@ class Perception_OWLv2:
         _, rgbd_image = self.rsc.getPCD()
         image = np.array( rgbd_image.color )
         depth = np.array( rgbd_image.depth )
+        # depth = np.array( rgbd_image.depth )*0.76 # 2025-02-06: This was not a good idea
 
         # print( f"Image shape: {image.shape}", flush=True, file=sys.stderr )
 
