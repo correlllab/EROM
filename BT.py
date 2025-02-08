@@ -13,14 +13,13 @@ from py_trees.composites import Sequence, Parallel, Selector
 from py_trees.decorators import FailureIsSuccess
 
 ### Local ###
-from magpie_control.BT import BasicBehavior, CycleTimer, SetBBVar, Pause_Robot, Resume_Robot
+from magpie_control.BT import BasicBehavior
 from magpie_control.ur5 import UR5_Interface
 from magpie_control.utils import vec_unit
 from aspire.symbols import env_var
 from aspire.actions.pdls_behaviors import ( GroundedAction, MoveFree_w_Pause, Plan, Place, 
                                             Stack, Pick, Unstack, MoveHolding, PlanParser, )
 from aspire.actions.utils import line_intersect_plane
-
 
 
 
@@ -103,48 +102,6 @@ class PerceiveScene( BasicBehavior ):
                 self.status = Status.FAILURE
         return self.status
 
-
-
-########## MOVE AND PERCEIVE #######################################################################
-
-class MoveFree_and_PerceiveScene( GroundedAction ):
-    """ Get a replacement sequence for `MoveFree` that stops for perception at the appropriate times """
-    # FUTURE: PROBABLY MORE SOPHISTICATED SENSORY PLANNING GOES HERE
-
-    def __init__( self, args, robot = None, name = None, suppressGrasp = False, perceive_cb = None, check_cb = None ):
-        """ Init BT """
-        self._VERBOSE = True
-
-        # ?poseBgn ?poseEnd
-        poseBgn, poseEnd = args
-
-        if name is None:
-            name = f"Move Free from {poseBgn} --to-> {poseEnd}"
-
-        super().__init__( args, robot, name )
-
-        mfBT = MoveFree_w_Pause( args, robot, name, suppressGrasp )
-
-        perc = Sequence( "Stop-and-Perceive", memory = True  )
-        perc.add_children([
-            CycleTimer( env_var("_UPDATE_PERIOD_S") ),
-            CheckPerceptionShot( robot, "Okay for CPCD?" ),
-            Pause_Robot( ctrl = robot ), 
-            PerceiveScene( robot, "Check Distribution Change", perceive_cb, check_cb ),
-            Resume_Robot( ctrl = robot ),
-        ])
-        
-
-        root = Sequence( "Perceive -or- Move", memory = False )
-        # root = Selector( "Perceive -or- Move", memory = False )
-        # root = Parallel( "MoveFree", ParallelPolicy.SuccessOnSelected([mfBT,]) )
-        root.add_children([
-            # perc,
-            FailureIsSuccess( "Run Anyway", perc ),
-            mfBT
-        ])
-        self.add_child( root )
-        # return root
 
 
 ########## PDLS --TO-> BT ##########################################################################
