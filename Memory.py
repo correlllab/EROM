@@ -27,8 +27,8 @@ from Bayes import BayesMemory
 
 _REVERSE_QUERIES = {
     "bluBlock": {'query': "a photo of a blue block"  , 'abbrv': "blu", },
-    "ylwBlock": {'query': "a photo of a yellow block", 'abbrv': "ylw", },
-    "grnBlock": {'query': "a photo of a green block" , 'abbrv': "grn", },
+    # "ylwBlock": {'query': "a photo of a yellow block", 'abbrv': "ylw", },
+    # "grnBlock": {'query': "a photo of a green block" , 'abbrv': "grn", },
 }
 
 
