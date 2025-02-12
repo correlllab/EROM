@@ -3,21 +3,6 @@ Entropy Ranked Object Memory
 
 # `DEV_PLAN`
 
-## ISSUE: POSES FROM THE CAMERA ARE <ins>BAD</ins>
-* `[>]` Test alternate means to fetch camera intrinsics
-* `[ ]` Characterize Problem
-    - `[ ]` Segment ONE BLOCK from several different angles
-    - `[ ]` Where are the UN-transformed point clouds?
-    - `[ ]` Where are the TRANSFORMED point clouds?
-* `[ ]` System Identification: Camera Transform
-    - `[ ]` What is the data?
-    - `[ ]` What is the error function?
-    - `[ ]` Optimization inner loop
-    - `[ ]` Optimization outer loop
-    - `[ ]` Optimize transform
-
-
-
 ## Basic System
 * `[Y]` Revive Bayesian Updates, 2025-01-21: Re-implemented!, NEEDS TESTING
     - `[Y]` Bayes Class, 2025-01-21: This seems intact, NEEDS TESTING

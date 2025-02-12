@@ -1,6 +1,9 @@
 # Why are the distances given by the RealSense SO BAD???
 * `[Y]` Inaccurate transform to camera, "ze_cam_xform_cal.py", 2025-02-06: No improvement
-* `[ ]` Inaccurate camera intrinsics
+
+* `[>]` Inaccurate camera intrinsics
+    - 2025-02-12: Found a different means of obtaining intrinsics online, testing
+
 * `[Y]` Bad Calibration, 2024-12-XX: Marginal improvment.
 * `[Y]` [I would also recommend checking that the Threshold Filter option in the Post-Processing section of the Viewer's stereo module options is not enabled in order to ensure that the depth image is rendering the full distance of detail that it is able to observe instead of being limited](https://github.com/IntelRealSense/librealsense/issues/8258#issuecomment-768931256), 2025-02-06: No improvement
     1. Install viewer: `sudo apt-get install librealsense2-utils`
@@ -14,6 +17,19 @@
             1. `rs-fw-update -l`, Confirm update
     - 2025-02-06: Setting turned off, but there is no difference in the viewer
     - 2025-02-06: Tried other adjustments via the sliders, no performance improvement in the viewer
+
+* `[>]` Characterize Problem
+    - `[Y]` Segment ONE BLOCK from several different angles, 2025-02-12: Ran segmentation with Blue Block only
+    - `[Y]` Where are the UN-transformed point clouds?, 2025-02-12: Basically in the sam neighborhood but a little spread out, tough to say
+       ![Untransformed](img/Screenshot_2025-02-12_15-27-09.png) 
+    - `[>]` Where are the TRANSFORMED point clouds?, 2025-02-12: There is a spread and I don't like it!
+        ![Untransformed](img/Screenshot_2025-02-12_15-56-51.png) 
+* `[ ]` System Identification: Camera Transform
+    - `[ ]` What is the data?
+    - `[ ]` What is the error function?
+    - `[ ]` Optimization inner loop
+    - `[ ]` Optimization outer loop
+    - `[ ]` Optimize transform
 
 # Alternate Paths
 * Match known cube to the image using edge detection

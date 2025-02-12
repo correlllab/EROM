@@ -348,8 +348,8 @@ def symbol_geo( sym : GraspObj ):
 
 def points_colors_geo( points : np.ndarray, colors : np.ndarray, size : float = 0.00125, div : int = 20 ):
     """ Draw a monochrome pointcloud of one object """
-    clr = np.mean( colors, axis = 0 ).tolist()
-    clr = clr + [1.0,] if (len( clr ) == 3) else clr
+    # clr = np.mean( colors, axis = 0 ).tolist()
+    # clr = clr + [1.0,] if (len( clr ) == 3) else clr
 
     totPts = {
         'verts': None, # np.zeros( (0,3), float ),
@@ -357,17 +357,38 @@ def points_colors_geo( points : np.ndarray, colors : np.ndarray, size : float = 
         'color': None,
         'total': 0
     }
+    totClr = list()
 
     for i, pnt_i in enumerate( points ):
         if ((i%div)==0):
-            # FIXME: START HERE
-            pass
+            clr_i = colors[i,:].tolist()
+            clr_i = clr_i + [1.0,] if (len( clr_i ) == 3) else clr_i
+            # print( pnt_i, size, clr_i )
+            info = cross_info( pnt_i, size, clr_i )
+            totPts['verts'] = np.vstack( (totPts['verts'], info['verts']) ) if (totPts['verts'] is not None) else info['verts']
+            totPts['ndces'] = np.vstack( (totPts['ndces'], info['ndces']+(totPts["total"])) ) if (totPts['ndces'] is not None) else info['ndces']
+            # print( info['ndces'] )
+            totPts["total"] = totPts['verts'].shape[0]
+            totClr.extend( [clr_i for _ in range(6)] )
+    totClr = np.array( totClr )
+
+    geo = scene.visuals.Line(
+        pos     = totPts['verts'].copy(),
+        connect = totPts['ndces'].copy(),
+        color   = totClr,
+    )
+    return [geo,]
 
 
-def cpcd_geo( sym : GraspObj, size : float = 0.00125, div : int = 20 ):
+def cpcd_geo( sym, size : float = 0.00125, div : int = 20 ):
     """ Draw a monochrome pointcloud of one object """
-    clr = np.mean( sym.cpcd.colors, axis = 0 ).tolist()
-    clr = clr + [1.0,] if (len( clr ) == 3) else clr
+    
+    if isinstance( sym, GraspObj ):
+        cpcd = sym.cpcd
+    elif isinstance( sym, CPCD ):
+        cpcd = sym
+    else:
+        raise TypeError( f"`sym` must be one of (`GraspObj`,`CPCD`), but got a {type(sym)}" )
     
     totPts = {
         'verts': None, # np.zeros( (0,3), float ),
@@ -375,31 +396,27 @@ def cpcd_geo( sym : GraspObj, size : float = 0.00125, div : int = 20 ):
         'color': None,
         'total': 0
     }
+    totClr = list()
 
-    for i, pnt_i in enumerate( sym.cpcd.points ):
+    for i, pnt_i in enumerate( cpcd.points ):
         if ((i%div)==0):
-            clr_i = sym.cpcd.colors[i,:]
+            clr_i = cpcd.colors[i,:].tolist()
+            clr_i = clr_i + [1.0,] if (len( clr_i ) == 3) else clr_i
             # print( pnt_i, size, clr_i )
             info  = cross_info( pnt_i, size, clr_i )
             totPts['verts'] = np.vstack( (totPts['verts'], info['verts']) ) if (totPts['verts'] is not None) else info['verts']
             totPts['ndces'] = np.vstack( (totPts['ndces'], info['ndces']+(totPts["total"])) ) if (totPts['ndces'] is not None) else info['ndces']
             # print( info['ndces'] )
             totPts["total"] = totPts['verts'].shape[0]
+            totClr.extend( [clr_i for _ in range(6)] )
+    totClr = np.array( totClr )
 
-    print( totPts['verts'].shape, totPts['verts'][-1] )
-    print( totPts['ndces'].shape, totPts['ndces'][-1] )
-
-    if 1:
-        geo = scene.visuals.Line(
-            pos     = totPts['verts'].copy(),
-            connect = totPts['ndces'].copy(),
-            color   = clr,
-        )
-        return [geo,]
-    else:
-        return list()
-
-    
+    geo = scene.visuals.Line(
+        pos     = totPts['verts'].copy(),
+        connect = totPts['ndces'].copy(),
+        color   = totClr,
+    )
+    return [geo,]
 
 
 def scan_geo( sym : GraspObj ):
