@@ -22,8 +22,8 @@ from math import isnan
 ### Special ###
 import numpy as np
 from py_trees.common import Status
-# from py_trees.composites import Sequence
-from magpie_control.BT import Open_Gripper
+from py_trees.composites import Sequence
+from magpie_control.BT import Open_Gripper, BT_Runner, BasicBehavior
 from magpie_control.ur5 import UR5_Interface
 from magpie_control.poses import repair_pose
 # import open3d as o3d
@@ -32,7 +32,7 @@ from magpie_control.poses import repair_pose
 from aspire.env_config import env_var, env_sto
 from aspire.symbols import ( ObjPose, GraspObj, )
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
-from aspire.actions.pdls_behaviors import BT_Runner, GroundedAction, MoveFree
+from aspire.actions.pdls_behaviors import GroundedAction, MoveFree, Plan
 
 ### ASPIRE::PDDLStream ### 
 from aspire.pddlstream.pddlstream.language.generator import from_gen_fn, from_test
@@ -121,6 +121,54 @@ def basic_BT_run( btAction ):
     while not btr.p_ended():
         btr.tick_once()
         btr.per_sleep()        
+
+
+
+
+
+########## BT Execution ############################################################################
+
+class BTRunnerwPeriodicScan:
+    """ Wrapper for the BT runner that stops for periodic updates """
+
+
+    def __init__( self, rootBH : Plan, scanInterval_s, scan_cb, check_cb, shot_cb, sleepTime_s = 1.0 ):
+        """ Set up perodic scans """
+        self.root    = rootBH
+        self.period  = scanInterval_s
+        self.scanCB  = scan_cb
+        self.checkCB = check_cb
+        self.shotCB  = shot_cb
+        self.runner  = BT_Runner( rootBH, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
+        self.tSleep  = sleepTime_s
+
+
+    def p_pause_OK( self ):
+        """ Is it okay to pause the BT? """
+        return ("pause" in str( self.root.current_child.__class__.__name__ ).lower())
+        
+
+    def updating_BT_run( self ):
+        """ Stop the BT to run callbacks to check the distribution """
+        self.lstStop = now()
+        self.runner.setup_BT_for_running()
+
+        while not self.runner.p_ended():
+            elapsed = now() - self.lstStop
+            if elapsed >= self.period:
+                if self.p_pause_OK():
+                    self.runner.pause()
+                    sleep( self.tSleep )
+                    if self.shotCB():
+                        self.scanCB()
+                        if not self.checkCB():
+                            self.runner.set_fail( "Distribution does NOT support this action!" )
+                    self.runner.resume()
+                    sleep( self.tSleep )
+                self.lstStop = now()
+            self.runner.tick_once()
+            self.runner.per_sleep()   
+
 
 
 
@@ -337,44 +385,72 @@ class TaskPlanner:
             } )
 
 
+    def check_current_KL_OK( self ):
+        """ Find out where we expect important symbols and run the check """
+        return True
+    
+
+    def p_OK_to_take_shot( self ):
+        """ Return true if we are not too close to the table """
+        return True
+
+
     def phase_4_Execute_Action( self ):
         """ Attempt to execute the first action in the symbolic plan """
-        
-        btr = BT_Runner( self.symPln.nxtAct, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
-        btr.setup_BT_for_running()
 
-        lastTip = None
-        currTip = None
+        if 1:
 
-        while not btr.p_ended():
-            
-            currTip = btr.tick_once()
-            if currTip != lastTip:
-                self.memory.history.append( msg = f"Behavior: {currTip}, {str(btr.status)}" )
-            lastTip = currTip
-            
-            if (btr.status == Status.FAILURE):
+            btr = BTRunnerwPeriodicScan( 
+                self.symPln.nxtAct, 
+                env_var("_UPDATE_PERIOD_S"), 
+                self.phase_1_Perceive, 
+                self.check_current_KL_OK, 
+                self.p_OK_to_take_shot, 
+                sleepTime_s = 0.75 
+            )
+            btr.updating_BT_run()
+            if (btr.runner.status == Status.FAILURE):
                 self.status = Status.FAILURE
-                self.memory.history.append( msg = f"Action Failure: {btr.msg}" )
+                self.memory.history.append( msg = f"Action Failure: {btr.runner.msg}" )
             else:
                 self.status = Status.RUNNING
+        
+        if 0:
+            btr = BT_Runner( self.symPln.nxtAct, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
+            btr.setup_BT_for_running()
 
-            btr.per_sleep()
+            lastTip = None
+            currTip = None
 
-        self.memory.history.append( msg = f"BT END: {btr.status}" )
+            while not btr.p_ended():
+                
+                currTip = btr.tick_once()
+                if currTip != lastTip:
+                    self.memory.history.append( msg = f"Behavior: {currTip}, {str(btr.status)}" )
+                lastTip = currTip
+                
+                if (btr.status == Status.FAILURE):
+                    self.status = Status.FAILURE
+                    self.memory.history.append( msg = f"Action Failure: {btr.msg}" )
+                else:
+                    self.status = Status.RUNNING
 
-        if (btr.status == Status.FAILURE):
-            self.memory.history.append( msg = "Annotation", datum = {
-                "Event": "The robot's plan was not executed correctly.",
-            } )
-        elif (btr.status == Status.SUCCESS):
-            self.memory.history.append( msg = "Annotation", datum = {
-                "Event": "The robot's plan was executed correctly.",
-            } )
-        else:
-            self.memory.history.append( msg = "Annotation", datum = {
-                "Event": "The final outcome of the robot's actions was undetermined.",
-            } )
+                btr.per_sleep()
+
+            self.memory.history.append( msg = f"BT END: {btr.status}" )
+
+            if (btr.status == Status.FAILURE):
+                self.memory.history.append( msg = "Annotation", datum = {
+                    "Event": "The robot's plan was not executed correctly.",
+                } )
+            elif (btr.status == Status.SUCCESS):
+                self.memory.history.append( msg = "Annotation", datum = {
+                    "Event": "The robot's plan was executed correctly.",
+                } )
+            else:
+                self.memory.history.append( msg = "Annotation", datum = {
+                    "Event": "The final outcome of the robot's actions was undetermined.",
+                } )
 
 
     def phase_5_Return_Home( self, goPose ):
