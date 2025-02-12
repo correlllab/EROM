@@ -346,6 +346,24 @@ def symbol_geo( sym : GraspObj ):
     return [wf1, wf2, blc,] 
 
 
+def points_colors_geo( points : np.ndarray, colors : np.ndarray, size : float = 0.00125, div : int = 20 ):
+    """ Draw a monochrome pointcloud of one object """
+    clr = np.mean( colors, axis = 0 ).tolist()
+    clr = clr + [1.0,] if (len( clr ) == 3) else clr
+
+    totPts = {
+        'verts': None, # np.zeros( (0,3), float ),
+        'ndces': None, # np.zeros( (0,2), int   ),
+        'color': None,
+        'total': 0
+    }
+
+    for i, pnt_i in enumerate( points ):
+        if ((i%div)==0):
+            # FIXME: START HERE
+            pass
+
+
 def cpcd_geo( sym : GraspObj, size : float = 0.00125, div : int = 20 ):
     """ Draw a monochrome pointcloud of one object """
     clr = np.mean( sym.cpcd.colors, axis = 0 ).tolist()
