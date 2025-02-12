@@ -106,13 +106,13 @@ class PerceiveScene( BasicBehavior ):
 
 ########## PDLS --TO-> BT ##########################################################################
 
-def get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, perceive_cb = None, check_cb = None ):
+def get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot ):
     """ Fetch the `i`th item from `pdlsPlan` and parameterize a BT that operates on the environment """
 
-    def dummy_cb( *args ):
-        """ SHOULD NOT BE USED! """
-        print( f"`dummy_cb` was called with {args}" )
-        return True
+    # def dummy_cb( *args ):
+    #     """ SHOULD NOT BE USED! """
+    #     print( f"`dummy_cb` was called with {args}" )
+    #     return True
 
     if i >= len( pdlsPlan ):
         return None
@@ -122,12 +122,13 @@ def get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, perceive_cb = None, ch
     # print( f"Planner Type: {type( planner )}" )
     if actName == "move_free":
         # btAction = MoveFree( actArgs, robot = robot )
-        btAction = MoveFree_and_PerceiveScene(
-            actArgs,
-            robot,
-            perceive_cb = perceive_cb if(perceive_cb is not None) else dummy_cb, 
-            check_cb    = check_cb if(check_cb is not None) else dummy_cb  
-        )
+        # btAction = MoveFree_and_PerceiveScene(
+        #     actArgs,
+        #     robot,
+        #     perceive_cb = perceive_cb if(perceive_cb is not None) else dummy_cb, 
+        #     check_cb    = check_cb if(check_cb is not None) else dummy_cb  
+        # )
+        btAction =  MoveFree_w_Pause( actArgs, robot = robot )
     elif actName == "pick":
         btAction = Pick( actArgs, robot = robot )
     elif actName == "unstack":
@@ -144,12 +145,12 @@ def get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, perceive_cb = None, ch
     return btAction
 
 
-def get_BT_plan_until_block_change( pdlsPlan, robot, perceive_cb = None, check_cb = None ):
+def get_BT_plan_until_block_change( pdlsPlan, robot ):
     """ Translate the PDLS plan to one that can be executed by the robot """
     rtnBTlst = []
     if pdlsPlan is not None:
         for i in range( len( pdlsPlan ) ):
-            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, perceive_cb = perceive_cb, check_cb = check_cb )
+            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot )
             rtnBTlst.append( btAction )
             if btAction.__class__ in ( Place, Stack ):
                 break
@@ -158,12 +159,12 @@ def get_BT_plan_until_block_change( pdlsPlan, robot, perceive_cb = None, check_c
     return rtnPlan
 
 
-def get_BT_plan( pdlsPlan, robot, perceive_cb = None, check_cb = None ):
+def get_BT_plan( pdlsPlan, robot ):
     """ Translate the PDLS plan to one that can be executed by the robot """
     rtnBTlst = []
     if pdlsPlan is not None:
         for i in range( len( pdlsPlan ) ):
-            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot, perceive_cb = perceive_cb, check_cb = check_cb  )
+            btAction = get_ith_BT_action_from_PDLS_plan( pdlsPlan, i, robot )
             rtnBTlst.append( btAction )
     rtnPlan = Plan()
     rtnPlan.add_children( rtnBTlst )
@@ -185,12 +186,10 @@ def display_PDLS_plan( plan ):
 class ReactivePlanParser( PlanParser ):
     """ Actually transform plans """
 
-    def __init__( self, robot = None, perceive_cb = None, check_cb = None ):
+    def __init__( self, robot = None ):
         """ Set internal var """
         super().__init__()
         self.robot       = robot
-        self.perceive_cb = perceive_cb
-        self.check_cb    = check_cb
 
 
     def display_PDLS_plan( self, plan ):
@@ -200,11 +199,11 @@ class ReactivePlanParser( PlanParser ):
 
     def parse_PDLS_plan( self, pdlsPlan ):
         """ SHOULD NOT BE USED! """
-        return get_BT_plan( pdlsPlan, self.robot, perceive_cb = self.perceive_cb, check_cb = self.check_cb )
+        return get_BT_plan( pdlsPlan, self.robot )
     
 
     def parse_PDLS_action( self, pdlsPlan ):
         """ Executable BT up until the next required replan """
-        return get_BT_plan_until_block_change( pdlsPlan, self.robot, perceive_cb = self.perceive_cb, check_cb = self.check_cb )
+        return get_BT_plan_until_block_change( pdlsPlan, self.robot )
 
     

@@ -26,13 +26,14 @@ from py_trees.composites import Sequence
 from magpie_control.BT import Open_Gripper, BT_Runner, BasicBehavior
 from magpie_control.ur5 import UR5_Interface
 from magpie_control.poses import repair_pose
-# import open3d as o3d
+from magpie_control.utils import vec_unit
 
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
 from aspire.symbols import ( ObjPose, GraspObj, )
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
 from aspire.actions.pdls_behaviors import GroundedAction, MoveFree, Plan
+from aspire.actions.utils import line_intersect_plane
 
 ### ASPIRE::PDDLStream ### 
 from aspire.pddlstream.pddlstream.language.generator import from_gen_fn, from_test
@@ -387,12 +388,38 @@ class TaskPlanner:
 
     def check_current_KL_OK( self ):
         """ Find out where we expect important symbols and run the check """
+        for action in self.symPln.nxtAct.children:
+            name_i = str( action.__class__.__name__ ).lower()
+            if ("pick" in name_i) or ("unstack" in name_i):
+                objName = action.args[0]
+                objPose = action.args[1]
+                return self.memory.check_KL_for_symbol_at_pose( objPose, objName )
         return True
     
 
     def p_OK_to_take_shot( self ):
         """ Return true if we are not too close to the table """
-        return True
+        tcpPose = self.robot.get_tcp_pose()
+        camPose = np.dot( tcpPose, self.robot.camXform )
+        zzMag   = camPose[2,2]
+        rtnShot = False
+
+        # 1. If downward-facing, then Check for correction
+        if (zzMag < 0.0):
+            hndZdir = vec_unit( np.dot( camPose, np.array( [0.0, 0.0, -1.0, 1.0,] ) )[0:3] )
+            camPosn = camPose[0:3,3]
+            XYintrc = line_intersect_plane( camPosn, hndZdir, [0.0, 0.0, 0.0,], [0.0, 0.0, 1.0,], pntParallel = False )
+            if XYintrc is None:
+                rtnShot = False
+            else:
+                dShot = np.linalg.norm( np.subtract( XYintrc, camPosn ) )
+                if dShot >= env_var("_MIN_CAM_PCD_DIST_M"):
+                    rtnShot = True
+                else:
+                    rtnShot = False
+        else:
+            rtnShot = False
+        return rtnShot
 
 
     def phase_4_Execute_Action( self ):
