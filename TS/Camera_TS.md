@@ -4,6 +4,7 @@
 * `[>]` Inaccurate camera intrinsics
     - 2025-02-12: Found a different means of obtaining intrinsics online, No improvement
     - `[>]` [Run calibration, but use the printed values instead of the stored values](https://support.intelrealsense.com/hc/en-us/community/posts/21405010455443/comments/21516681407507)
+    - `[ ]` Re-run block PCD display
 
 * `[Y]` Bad Calibration, 2024-12-XX: Marginal improvment.
 * `[Y]` [I would also recommend checking that the Threshold Filter option in the Post-Processing section of the Viewer's stereo module options is not enabled in order to ensure that the depth image is rendering the full distance of detail that it is able to observe instead of being limited](https://github.com/IntelRealSense/librealsense/issues/8258#issuecomment-768931256), 2025-02-06: No improvement
@@ -25,7 +26,10 @@
        ![Untransformed](img/Screenshot_2025-02-12_15-27-09.png) 
     - `[Y]` Where are the TRANSFORMED point clouds?, 2025-02-12: There is a spread and I don't like it!
         ![Untransformed](img/Screenshot_2025-02-12_15-56-51.png) 
+
 * `[>]` System Identification: Camera Transform
+    - `[>]` Generate Checkerboard
+    - `[>]` Print Checkerboard
     - `[>]` What is the data?
         * Color images
         * Checkerboard poses
