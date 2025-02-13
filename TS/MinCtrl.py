@@ -5,6 +5,7 @@ from time import sleep
 import numpy as np
 
 from magpie_control.ur5 import UR5_Interface
+from magpie_control.realsense_wrapper import RealSense
 from OWLv2_Segment import Perception_OWLv2, _QUERIES
 
 ########## CONTROLLER ##############################################################################
@@ -43,13 +44,15 @@ _POSE_4 = np.array( [[ 0.5943,  0.6201,  0.5122, -0.4646],
 class MinController:
     """ Minimal controller to investigate camera transform """
 
-    def __init__( self, noViz = False ):
+    def __init__( self, noPerc = False ):
         """ Load control and perception interfaces """
-        self.noViz = noViz
-        if self.noViz:
+        self.noPerc = noPerc
+        if self.noPerc:
             self.perc = None
+            self.rsc  = RealSense()
         else:
             self.perc = Perception_OWLv2()
+            self.rsc  = None
         self.robot : UR5_Interface = UR5_Interface()
         self.data     = list()
         self.safePose = None
@@ -58,7 +61,7 @@ class MinController:
     def start( self ):
         """ Start control and perception interfaces """
         self.robot.start()
-        if not self.noViz:
+        if not self.noPerc:
             self.perc.start_vision()
         else:
             sleep( 2.0 )
@@ -69,8 +72,10 @@ class MinController:
         """ Stop the Perception Process and the UR5 connection """
         self.robot.reset_gripper_overload( restart = False )
         self.robot.stop()
-        if not self.noViz:
+        if not self.noPerc:
             self.perc.shutdown()
+        else:
+            self.rsc.disconnect()
 
 
     def move_arm_to_pose( self, poseHomog ):
@@ -91,5 +96,20 @@ class MinController:
                 'pose': self.robot.get_tcp_pose(), # Use actual instead of ideal
                 'obrv': obsrv,
                 'meta': metadata,
+            })
+        return self.data
+    
+    
+    def images_at_poses( self, poseList : list[np.ndarray] ):
+        """ Go to each pose, then run the perception pipeline """
+        self.data = list() # Erase data
+        for i, pose in enumerate( poseList ):
+            self.move_arm_to_pose( _SAFE_POSE )
+            self.move_arm_to_pose( pose )
+            image_i = self.rsc.take_image()
+            self.data.append({
+                'seq'  : i,
+                'pose' : self.robot.get_tcp_pose(), # Use actual instead of ideal
+                'image': image_i,
             })
         return self.data

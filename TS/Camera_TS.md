@@ -24,9 +24,12 @@
        ![Untransformed](img/Screenshot_2025-02-12_15-27-09.png) 
     - `[>]` Where are the TRANSFORMED point clouds?, 2025-02-12: There is a spread and I don't like it!
         ![Untransformed](img/Screenshot_2025-02-12_15-56-51.png) 
-* `[ ]` System Identification: Camera Transform
-    - `[ ]` What is the data?
+* `[>]` System Identification: Camera Transform
+    - `[>]` What is the data?
+        * Color images
+        * Checkerboard poses
     - `[ ]` What is the error function?
+        * Sum of distances from the pose average???
     - `[ ]` Optimization inner loop
     - `[ ]` Optimization outer loop
     - `[ ]` Optimize transform
