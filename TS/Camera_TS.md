@@ -3,8 +3,12 @@
 
 * `[>]` Inaccurate camera intrinsics
     - 2025-02-12: Found a different means of obtaining intrinsics online, No improvement
-    - `[>]` [Run calibration, but use the printed values instead of the stored values](https://support.intelrealsense.com/hc/en-us/community/posts/21405010455443/comments/21516681407507)
-    - `[ ]` Re-run block PCD display
+    - `[N]` [Run calibration, but use the printed values instead of the stored values](https://support.intelrealsense.com/hc/en-us/community/posts/21405010455443/comments/21516681407507), 2025-02-13: This was not necessary and Open3D does not take distortion into account anyway
+    - `[Y]` Re-run block PCD display, 2025-02-13: pyrealsense2 takes the RealSense distortion model into account!
+    - `[Y]` Where are the TRANSFORMED point clouds?, 2025-02-12: There is a spread and I don't like it!
+        ![Transformed](img/Screenshot_2025-02-12_15-56-51.png) ![Undistorted](img/Screenshot_2025-02-13_18-16-34.png)  
+        2025-02-13: The second shot takes the RealSense distortion model into account!
+    - `[>]` Can I reshape the large array from pyrealsense2 in a sane manner?
 
 * `[Y]` Bad Calibration, 2024-12-XX: Marginal improvment.
 * `[Y]` [I would also recommend checking that the Threshold Filter option in the Post-Processing section of the Viewer's stereo module options is not enabled in order to ensure that the depth image is rendering the full distance of detail that it is able to observe instead of being limited](https://github.com/IntelRealSense/librealsense/issues/8258#issuecomment-768931256), 2025-02-06: No improvement
@@ -24,9 +28,7 @@
     - `[Y]` Segment ONE BLOCK from several different angles, 2025-02-12: Ran segmentation with Blue Block only
     - `[Y]` Where are the UN-transformed point clouds?, 2025-02-12: Basically in the sam neighborhood but a little spread out, tough to say
        ![Untransformed](img/Screenshot_2025-02-12_15-27-09.png) 
-    - `[Y]` Where are the TRANSFORMED point clouds?, 2025-02-12: There is a spread and I don't like it!
-        ![Transformed](img/Screenshot_2025-02-12_15-56-51.png) ![Undistorted](img/Screenshot_2025-02-13_18-16-34.png)  
-        The second shot takes the RealSense distortion model into account!
+    
 
 * `[>]` System Identification: Camera Transform
     - `[>]` Generate Checkerboard
