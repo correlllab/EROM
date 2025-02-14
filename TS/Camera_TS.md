@@ -30,10 +30,10 @@
        ![Untransformed](img/Screenshot_2025-02-12_15-27-09.png) 
     
 
-* `[>]` System Identification: Camera Transform
-    - `[>]` Generate Checkerboard
-    - `[>]` Print Checkerboard
-    - `[>]` What is the data?
+* `[P]` System Identification: Camera Transform, 2025-02-14: PAUSED
+    - `[P]` Generate Checkerboard
+    - `[P]` Print Checkerboard
+    - `[P]` What is the data?
         * Color images
         * Checkerboard poses
     - `[ ]` What is the error function?
