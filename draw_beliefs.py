@@ -362,6 +362,8 @@ def points_colors_geo( points : np.ndarray, colors : np.ndarray, size : float = 
     for i, pnt_i in enumerate( points ):
         if ((i%div)==0):
             clr_i = colors[i,:].tolist()
+            if np.linalg.norm( clr_i ) > 3.0:
+                clr_i = (np.array( clr_i ) / 255.0).tolist()
             clr_i = clr_i + [1.0,] if (len( clr_i ) == 3) else clr_i
             # print( pnt_i, size, clr_i )
             info = cross_info( pnt_i, size, clr_i )
@@ -401,6 +403,8 @@ def cpcd_geo( sym, size : float = 0.00125, div : int = 20 ):
     for i, pnt_i in enumerate( cpcd.points ):
         if ((i%div)==0):
             clr_i = cpcd.colors[i,:].tolist()
+            if np.linalg.norm( clr_i ) > 3.0:
+                clr_i = (np.array( clr_i ) / 255.0).tolist()
             clr_i = clr_i + [1.0,] if (len( clr_i ) == 3) else clr_i
             # print( pnt_i, size, clr_i )
             info  = cross_info( pnt_i, size, clr_i )

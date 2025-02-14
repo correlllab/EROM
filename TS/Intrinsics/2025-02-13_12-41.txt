@@ -1,0 +1,37 @@
+/usr/bin/Intel.Realsense.CustomRW -r -sn 126122270157
+CustomRW for Intel RealSense D400, Version: 2.13.1.0
+
+  Device PID: 0B5B
+  Device name: Intel RealSense D405
+  Serial number: 126122270157
+  Firmware version: 05.16.00.01
+  Type: 3.2
+  Physical port: /sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1.4/2-1.4.3/2-1.4.3:1.0/video4linux/video6
+
+Calibration parameters from the device:
+  resolutionLeftRight: 1288 808
+
+  FocalLengthLeft: 641.341675 640.458862
+  PrincipalPointLeft: 639.255493 400.394073
+  DistortionLeft: -0.053333 0.058852 -0.000014 0.000675 -0.018307
+
+  FocalLengthRight: 642.531677 641.480225
+  PrincipalPointRight: 644.226562 400.167999
+  DistortionRight: -0.053837 0.059197 -0.000090 0.000789 -0.018759
+
+  RotationLeftRight: 0.999996 0.000526 -0.002636
+                     -0.000522 0.999998 0.001739
+                     0.002637 -0.001738 0.999995
+  TranslationLeftRight: -18.062878 -0.029914 -0.100466
+
+  HasRGB: 1
+
+  resolutionRGB: 1280 720
+
+  FocalLengthColor: 641.381104 640.520447
+  PrincipalPointColor: 635.127991 356.310791
+  DistortionColor: -0.053880 0.060007 -0.000015 0.000627 -0.018871
+  RotationLeftColor: 1.000000 0.000001 0.000110
+                     -0.000001 1.000000 0.000057
+                     -0.000110 -0.000057 1.000000
+  TranslationLeftColor: 0.010180 0.005698 0.062815

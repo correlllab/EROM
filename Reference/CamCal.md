@@ -9,7 +9,7 @@
 1. Print and flatly mount "print-target-fixed-width.pdf"
 1. `/usr/bin/Intel.Realsense.DynamicCalibrator -v`
 1. `/usr/bin/Intel.Realsense.DynamicCalibrator -list`
-1. `/usr/bin/Intel.Realsense.CustomRW -r`
+1. `/usr/bin/Intel.Realsense.CustomRW -r -sn 126122270157`
 1. Point the camera in a convenient direction that allows you to move the target freely within the camera's FOV
 1. `/usr/bin/Intel.Realsense.DynamicCalibrator`
 1. Follow the onscreen instructions in order to calibrate the camera and upload new intrinsics.

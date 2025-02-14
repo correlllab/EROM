@@ -12,6 +12,7 @@ import numpy as np
 
 ### MAGPIE ###
 from magpie_control.ur5 import _CAMERA_XFORM
+from magpie_control.realsense_wrapper import RealSense
 
 ### ASPIRE ###
 from aspire.env_config import set_camera_env, set_object_env
@@ -77,25 +78,32 @@ def find_checkerboard_pose( image : np.ndarray, checkerboard_size, square_size, 
 
 
 ########## MAIN ####################################################################################
+
+
+##### Modes ###############################################################
 _GET_DATA = False
-_VIZ_DATA = False
-_CHKR_CAM = True
+_VIZ_DATA = True
+_TEST_PCD = False
+_CHKR_CAM = False
 _CHKR_XFM = False
-# _DATA_FIL = "data/CameraTSData.pkl"
-_DATA_FIL = "data/CameraCheckerData.pkl"
+
+
+##### Settings ############################################################
+_DATA_FIL = "data/CameraTSData.pkl"
+# _DATA_FIL = "data/CameraCheckerData.pkl"
 _TRANSFRM = True
 _CHKR_DIM = (8,8,)
 _CHKR_SIZ = 0.020
 
+
+##### Main ################################################################
 if __name__ == "__main__":
 
-    
+    poseSeq = [ _SAFE_POSE, _POSE_1, _POSE_2, _POSE_3, _POSE_4, ]
 
     ##### Collect Data ####################################################
 
     if _GET_DATA:
-
-        poseSeq = [ _SAFE_POSE, _POSE_1, _POSE_2, _POSE_3, _POSE_4, ]
         
         try:
             set_object_env()
@@ -143,11 +151,26 @@ if __name__ == "__main__":
                         xform = rbtPos.dot( _CAMERA_XFORM )
                         print( xform )
                         obj.transform( xform )
-                        geoLst.extend( cpcd_geo( obj ) )
+                        geoLst.extend( cpcd_geo( obj, div = 5 ) )
         vispy_geo_list_window( geoLst )
 
 
-    
+
+    ##### Alternate PCD Generation ########################################
+
+    if _TEST_PCD:
+        rs  = RealSense( device_serial = "126122270157" )
+        rs.initConnection()
+        # rs  = RealSense()
+        pcd, _ = rs.getPCD()
+        print( type( pcd.colors ) )
+        print( type( pcd.points ) )
+        print( np.asarray( pcd.colors ).shape )
+        print( np.asarray( pcd.points ).shape )
+        pcd = rs.getPCD_alt()
+
+
+
     ##### Collect Checkerboard Data #######################################
 
     if _CHKR_CAM:

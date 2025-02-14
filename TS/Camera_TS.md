@@ -25,7 +25,8 @@
     - `[Y]` Where are the UN-transformed point clouds?, 2025-02-12: Basically in the sam neighborhood but a little spread out, tough to say
        ![Untransformed](img/Screenshot_2025-02-12_15-27-09.png) 
     - `[Y]` Where are the TRANSFORMED point clouds?, 2025-02-12: There is a spread and I don't like it!
-        ![Untransformed](img/Screenshot_2025-02-12_15-56-51.png) 
+        ![Transformed](img/Screenshot_2025-02-12_15-56-51.png) ![Undistorted](img/Screenshot_2025-02-13_18-16-34.png)  
+        The second shot takes the RealSense distortion model into account!
 
 * `[>]` System Identification: Camera Transform
     - `[>]` Generate Checkerboard

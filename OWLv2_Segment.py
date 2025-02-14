@@ -41,6 +41,9 @@ _QUERIES = [
     # {'query': "a photo of a orange block", 'abbrv': "orn", },
 ]
 
+_USE_ALT  = True
+_NB_CLUST = 50
+
 
 
 ########## ENVIRONMENT #############################################################################
@@ -248,10 +251,15 @@ class Perception_OWLv2:
 
     def bound( self, query, abbrevq ):
         """Bounds the given query with the OWLViT model."""
-        _, rgbd_image = self.rsc.getPCD()
+        mpcd = None
+        if _USE_ALT:
+            mpcd       = self.rsc.getPCD_alt()
+            rgbd_image = mpcd.rgbd
+        else:
+            _, rgbd_image = self.rsc.getPCD()
         image = np.array( rgbd_image.color )
         depth = np.array( rgbd_image.depth )
-        # depth = np.array( rgbd_image.depth )*0.76 # 2025-02-06: This was not a good idea
+    # depth = np.array( rgbd_image.depth )*0.76 # 2025-02-06: This was not a good idea
 
         # print( f"Image shape: {image.shape}", flush=True, file=sys.stderr )
 
@@ -285,11 +293,12 @@ class Perception_OWLv2:
                 break
 
         return {
-            'id'   : imgID,
-            'rgbd' : rgbd_image,
-            'image': image,
-            'depth': depth,
-            'hits' : rtnHits,
+            'id'    : imgID,
+            'rgbd'  : rgbd_image,
+            'image' : image,
+            'depth' : depth,
+            'mpcd'  : mpcd,
+            'hits'  : rtnHits,
         }
     
     
@@ -322,6 +331,7 @@ class Perception_OWLv2:
             'input'  : dict(),
             'hits'   : list(),
         }
+        mpcd = None
 
         try:
 
@@ -332,6 +342,7 @@ class Perception_OWLv2:
                 query  = q['query']
                 abbrv  = q['abbrv']
                 result = self.bound( query, abbrv )
+                mpcd   = result['mpcd'] if ('mpcd' in result) else None
 
                 metadata['input'][ result['id'] ] = {
                     'query': query, 'abbrv': abbrv, 
@@ -363,28 +374,37 @@ class Perception_OWLv2:
 
                 ray_i = mask_ray( mask_i, hit_i['bboxi'] )
 
-                if np.sum( mask_i ) < 100:
+                if (50000 < np.sum( mask_i )) or (np.sum( mask_i ) < 100):
                     print( "MASK ERROR" )
+                    continue
 
                 cpcd = None
 
-                try:
+                if _USE_ALT and (mpcd is not None):
 
-                    # print( type( metadata['input'][ hit_i['shotID'] ]['rgbd'] ) )
+                    cpcd = mpcd.get_masked_cpcd( mask_i, NB = _NB_CLUST )
 
-                    # _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
-                    _, cpcd = pcd.get_masked_cpcd( 
-                        metadata['input'][ hit_i['shotID'] ]['rgbd'], 
-                        mask_i, 
-                        self.rsc, 
-                        NB = 50 
-                    )
+                else:
 
-                except Exception as e:
-                    print( f"Segmentation error: {e}", flush = True, file = sys.stderr )
-                    raise e
+                    try:
+
+                        # print( type( metadata['input'][ hit_i['shotID'] ]['rgbd'] ) )
+
+                        # _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
+                        _, cpcd = pcd.get_masked_cpcd( 
+                            metadata['input'][ hit_i['shotID'] ]['rgbd'], 
+                            mask_i, 
+                            self.rsc, 
+                            NB = _NB_CLUST 
+                        )
+
+                    except Exception as e:
+                        print( f"Segmentation error: {e}", flush = True, file = sys.stderr )
+                        raise e
 
                 if len( np.asarray( cpcd.points ) ):
+
+                    print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {hit_i['bboxi']}!" )
 
                     item = {
                         ## Updated ##
