@@ -69,58 +69,6 @@ def p_sphere_inside_plane_list( qCen, qRad, planeList ):
     return True
 
 
-def HACK_MERGE( exist : GraspObj, input : GraspObj ):
-    """ HACK: Just average the poses """
-
-    exist.meta['poseHist'].append( {
-        'pose'  : extract_pose_as_homog( input ),
-        'rayOrg': input.meta['rayOrg'],
-        'rayDir': input.meta['rayDir'],
-    } )
-
-    rayFac = 5.5 
-
-    def ray_merge( objLst : list[dict] ):
-        """ What is the mutually closes point between all cam rays? """
-        N      = len( objLst )
-        pntLst = list()
-        for i in range( N-1 ):
-            obj_i = objLst[i]
-            for j in range( i+1, N ):
-                obj_j = objLst[j]
-                try:
-                    pnt_ij, pnt_ji = closest_ray_points( 
-                        obj_i['rayOrg'], 
-                        obj_i['rayDir'], 
-                        obj_j['rayOrg'], 
-                        obj_j['rayDir'], 
-                    )
-                    pntLst.extend([pnt_ij, pnt_ji,])
-                except ValueError:
-                    pass
-        if len( pntLst ):
-            return np.mean( pntLst, axis = 0 )
-        else:
-            return np.zeros(3)
-                
-    cntr = np.zeros( 3 )
-    for obj_i in exist.meta['poseHist']:
-        cntr += obj_i['pose'][0:3,3].reshape( 3 )
-    ryCn = ray_merge( exist.meta['poseHist'] )
-    if np.linalg.norm( ryCn ) > 0.00001:
-        cntr += ryCn * rayFac
-        cntr /= (len(exist.meta['poseHist'])+rayFac)
-    else:
-        cntr /= (1.0 * len(exist.meta['poseHist']))
-
-
-    nuPose = np.eye(4)
-    nuPose[0:3,3] = cntr
-
-    exist.pose = ObjPose( nuPose )
-    
-    
-
 
 ########## SENSOR PLACEMENT ########################################################################
 
@@ -207,6 +155,16 @@ class BayesMemory:
         relevant = False
         tsNow    = now()
 
+        def pose_update( objUpdate, reading ):
+            updtFrac = 0.45 
+            belPosn  = posn_from_xform( extract_pose_as_homog( objUpdate.pose ) )
+            objPosn  = posn_from_xform( extract_pose_as_homog( reading.pose   ) )
+            updPosn  = objPosn * updtFrac + belPosn * (1.0 - updtFrac)
+            updPose  = np.eye(4)
+            updPose[0:3,3] = updPosn
+            objUpdate.pose  = ObjPose( updPose )
+
+
         # 1. Determine if this belief provides evidence for an existing belief
         dMin     = 1e6
         belBest  = None
@@ -226,17 +184,7 @@ class BayesMemory:
             self.accum_evidence_for_belief( objReading, belBest )
             
             ## Update Pose ##
-            if 0:
-                # updtFrac = objReading.score / (belBest.score + objReading.score)
-                updtFrac = 0.45 
-                belPosn  = posn_from_xform( extract_pose_as_homog( belBest.pose    ) )
-                objPosn  = posn_from_xform( extract_pose_as_homog( objReading.pose ) )
-                updPosn  = objPosn * updtFrac + belPosn * (1.0 - updtFrac)
-                updPose  = np.eye(4)
-                updPose[0:3,3] = updPosn
-                belBest.pose  = ObjPose( updPose )
-            else:
-                HACK_MERGE( belBest, objReading )
+            pose_update( belBest, objReading )
 
             ## Update Score ##
             belBest.count += objReading.count

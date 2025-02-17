@@ -2,7 +2,6 @@
 
 import time
 now = time.time
-from random import choice
 from collections import deque
 from typing import Dict, Deque
 from math import log
@@ -19,8 +18,7 @@ from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean
 
 
 ### Local ###
-from utils import ( snap_z_to_nearest_block_unit_above_zero, LogPickler, zip_dict_sorted_by_decreasing_value, 
-                    deep_copy_memory_list, closest_ray_points )
+from utils import ( LogPickler, zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, )
 from OWLv2_Segment import Perception_OWLv2
 from Bayes import BayesMemory
 
@@ -34,42 +32,6 @@ _REVERSE_QUERIES = {
 
 
 ########## HELPER FUNCTIONS ########################################################################
-
-
-def hacked_offset_map( pose ) -> np.ndarray:
-    """ Calculate a hack to the pose """
-    hackXfrm = np.eye(4)
-    offset   = np.zeros( (3,) )
-    vec      = pose[0:3,3]
-    
-    minX     = env_var("_MIN_X_OFFSET")
-    midX     = env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")*0.50
-    maxX     = env_var("_MAX_X_OFFSET")
-    
-    minY     = env_var("_MIN_Y_OFFSET")
-    midY     = env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")*0.50
-    maxY     = env_var("_MAX_Y_OFFSET")
-
-    height   = 0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE")
-
-    hackMap  = [ [[minX, minY, height], [ 1.0/100.0,  0.0/100.0, 0.0]],
-                 [[minX, maxY, height], [ 1.0/100.0, -1.0/100.0, 0.0]],
-
-                 [[midX, minY, height], [ 3.0/100.0,  0.0/100.0, 0.0]],
-                 [[midX, midY, height], [ 2.0/100.0,  0.0/100.0, 0.0]],
-
-                 [[maxX, minY, height], [ 2.0/100.0,  0.0/100.0, 0.0]], 
-                 [[maxX, maxY, height], [ 2.0/100.0, -1.0/100.0, 0.0]],]
-    
-    weights = list()
-    for hack in hackMap:
-        weights.append( 1.0 / np.linalg.norm( np.subtract( vec, hack[0] ) ) )
-    tot = sum( weights )
-    for i, hack in enumerate( hackMap ):
-        offset += (weights[i]/tot) * np.array( hack[1] )
-    hackXfrm[0:3,3] = offset
-    return hackXfrm
-
 
 def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
     """ Parse the Perception Process output struct """
@@ -100,16 +62,7 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
             dstrb = normalize_dist( dstrb )
 
         if len( item['Pose'] ) == 16:
-            # HACK: THERE IS A PERSISTENT GRASP OFFSET IN THE SCENE
-            if 0:
-                hackXfrm = hacked_offset_map( xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) )  )
-                xform    = hackXfrm.dot( xform ) #env_var("_HACKED_OFFSET").dot( xform )
-                objPose  = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
-            else:
-                objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
-            
-            # HACK: SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE
-            objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] + zOffset )
+            objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
         else:
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         
@@ -220,11 +173,6 @@ def most_likely_non_conflict( objLst : list[GraspObj], zOffset : float ) -> list
         compare = deepcopy( picked )
 
     symbols = list( picked.values() )
-
-    # HACK: SNAP TO NEAREST BLOCK UNIT && SNAP ABOVE TABLE
-    # for sym in symbols:
-    #     # sym.pose.pose[2,3] = snap_z_to_nearest_block_unit_above_zero( sym.pose.pose[2,3] + zOffset )
-    #     sym.pose.pose[2,3] = snap_z_to_nearest_block_unit_above_zero( sym.pose.pose[2,3] )
 
     print( f"About to return {len(symbols)} symbols!" )
     return symbols
@@ -386,8 +334,6 @@ class SensoryPlanner:
 
 
 
-
-
 ########## OBJECT MEMORY ###########################################################################
 
 ##### BAD, YAGNI ##########################################################
@@ -517,7 +463,6 @@ class Memory:
 
     def plan_3d_shots( self, defaultPose : np.ndarray ):
         """ Ask the sensory planner to get us a shot """
-        # HACK: WORKING FROM SCAN, NOT THE BELIEF
         return self.camPlan.plan_3d_shots( self.scan, defaultPose )
     
 
@@ -529,11 +474,9 @@ class Memory:
     def process_observations( self, obs, xform = None, Append = False ):
         """ Integrate one noisy scan into the current beliefs """
         if (Append and self.mult):
-            # HACK: BUMP EVERYTHING UP BY SOME OFFSET
-            self.scan.extend( observation_to_readings( obs, xform, self.camPlan.get_camera_Z_offset() ) )
+            self.scan.extend( observation_to_readings( obs, xform ) )
         else:
-            # HACK: BUMP EVERYTHING UP BY SOME OFFSET
-            self.scan = observation_to_readings( obs, xform, self.camPlan.get_camera_Z_offset() )
+            self.scan = observation_to_readings( obs, xform )
             if Append:
                 self.mult = True
 
@@ -546,54 +489,6 @@ class Memory:
             },
             msg = "memory" 
         )
-
-
-    def HACK_MERGE( self ):
-        """ HACK: Just average the poses """
-
-        rayFac = 5.5 # 3.0 # 8.0
-
-        def ray_merge( objLst : list[GraspObj] ):
-            """ What is the mutually closes point between all cam rays? """
-            N      = len( objLst )
-            pntLst = list()
-            for i in range( N-1 ):
-                obj_i = objLst[i]
-                for j in range( i+1, N ):
-                    obj_j = objLst[j]
-                    pnt_ij, pnt_ji = closest_ray_points( 
-                        obj_i.meta['rayOrg'], 
-                        obj_i.meta['rayDir'], 
-                        obj_j.meta['rayOrg'], 
-                        obj_j.meta['rayDir'], 
-                    )
-                    pntLst.extend([pnt_ij, pnt_ji,])
-            return np.mean( pntLst, axis = 0 )
-                    
-        cat    = dict()
-        rtnLst = list()
-        for obj in self.scan:
-            labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
-            labelMax  = labelDist[0][0]
-            if labelMax in cat:
-                cat[ labelMax ].append( obj )
-            else:
-                cat[ labelMax ] = [ obj, ]
-        for k, v in cat.items():
-            cntr = np.zeros( 3 )
-            for obj_i in v:
-                cntr += extract_pose_as_homog( obj_i )[0:3,3].reshape( 3 )
-            ryCn = ray_merge( v )
-            cntr += ryCn * rayFac
-            cntr /= (len(v)+rayFac)
-            
-            rtnObj = v[0]
-            rtnObj.pose.pose[0:3,3] = cntr
-            # rtnObj.pose.pose[0:3,3] = ryCn
-            rtnObj.pose.pose[2,3] = max( rtnObj.pose.pose[2,3], 0.5*env_var("_BLOCK_SCALE") )
-            print( f"There are {len(v)} examples of {k}, Pose:\n{rtnObj.pose.pose[0:3,3]}" )
-            rtnLst.append( rtnObj )
-        return rtnLst
     
 
     ##### Symbol Grounding #######################
@@ -604,8 +499,6 @@ class Memory:
         symbols = list()
         if strat == "bayes":
             symbols = most_likely_non_conflict( self.bMem.beliefs, self.camPlan.get_camera_Z_offset() ) 
-        elif strat == "hack":
-            symbols = strongest_symbols_from_readings( self.HACK_MERGE(), env_var("_N_REQD_OBJS") )
         elif strat == "score":
             symbols = strongest_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
         else:
