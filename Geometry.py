@@ -22,37 +22,18 @@ def tri_normal( p0, p1, p2 ):
     return vec_unit( np.cross( vec1 , vec2 ) )
 
 
-def facet_adjacency_list_ordered( F ) -> list[list[int]]:
-    """ Given a facet vertex lookup matrix 'F' , find all of the side-sharing neighbors of each facet , ORDERED VERSION """
-    indices_RH = [ ( 0 , 1 ) , ( 1 , 2 ) , ( 2 , 0 ) ] # Right-hand indices
-    indices_LH = [ ( 1 , 0 ) , ( 2 , 1 ) , ( 0 , 2 ) ] # Left-hand  indices , Neighbor will see vertices of the border segment in reverse order
-    N = len( F ) # Number of facets
-    neighborList = [ [ None , None , None ] for i in range( N ) ] # Ordered list of neighbors ( neighbor pointers )
-    
-    for i in range( N - 1 ):
-        # Copy right-hand edges for each neighbor position that has not yet been associated with a neighbor
-        neighbors = [ indices_RH[ checkDex ] if neighborList[i][ checkDex ] == None else None for checkDex in range(3) ] # Avoid repeat search
-        for j in range( i + 1 , N ): # For each unique pairing of facets ( i , j )
-            for nDex , neighbor in enumerate( neighbors ):
-                if neighbor != None: # If we have not yet located the neighbor for this edge , Check needed to avoid repeats , see above
-                    for nnDex , neighborNeighbor in enumerate( indices_LH ):
-                        # nDex : This facet's edge  ,  nnDex : Candidate neighbor edge
-                        if neighborList[ j ][ nnDex ] == None:
-                            match = True
-                            for pairDex in range( 2 ): # For each of the points that form the candidate border
-                                # Unless this edge has two vertices that are in reverse order of the other facet edge , this edge is not the 
-                                #  border between the two
-                                if F[ i ][ neighbor[ pairDex ] ] != F[ j ][ neighborNeighbor[ pairDex ] ]:
-                                    match = False
-                            if match:
-                                neighborList[ i ][ nDex  ] = j # Mark the located neighbor
-                                neighbors[ nDex ] = None # Mark this neighbor as found
-                                neighborList[ j ][ nnDex ] = i # This facet is the neighbor's neighbor at its identified border
-                            # else no match , no action , continue
-                        # else the neighbor already has a match for this neighbor-nerighbor
-                # else 'neighbor' is Null , we found this neighbor already and there is no action
-    return neighborList
+def VF_to_N( verts , facets ):
+    """ Given a list of vertices and a list of facets, return N perpendicular to each facet """
+    N = deque()
+    for f_i in facets:
+        p_i = [ verts[j] for j in f_i ]
+        N.append( tri_normal( p_i[0] , p_i[1] , p_i[2] ) )
+    return np.array( list(N) )
 
+
+def ray_dir( absOrg, absPnt ):
+    """ Return the unit direction `absOrg`--to->`absPnt` """
+    return vec_unit( np.subtract( absPnt, absOrg ) )
 
 
 ########## NUMPY MESH (VFN) ########################################################################
@@ -63,7 +44,7 @@ class npVFN:
     def build_from_unshared_vertices( self, V ):
         """ Populate mesh assuming an ordered list of vertices """
         pass
-    
+
 
     def __init__( self, V = None, F = None, N = None ):
         """ Set arrays """
@@ -113,23 +94,66 @@ class npVFN:
             if np.dot( dir_i, nrm_i ) > 0.0:
                 rtnVFN.add_tri( tri_i )
         return rtnVFN
+    
+
+    def erase_shared_faces( self ):
+        """ Eliminate interior faces """
+        pass
 
 
-    def get_raw_edges( self ):
-        """ Get a list of any exposed edges in a non-enclosed mesh """
-        rtnEdges = deque()
-        adjacent = facet_adjacency_list_ordered( self.F )
-        facDices = [ ( 0 , 1 ) , ( 1 , 2 ) , ( 2 , 0 ) ] # Right-hand indices
-        for i, neighbors_i in enumerate( adjacent ):
-            for nghbr_j in neighbors_i:
-                if nghbr_j is None:
-                    rtnEdges.append( [
-                        self.V[ self.F[ i, facDices[0] ], : ],
-                        self.V[ self.F[ i, facDices[1] ], : ]
-                    ] )
-        return list( rtnEdges )
-
-
-    def get_occlusion_frustum( self, viewPoint : np.ndarray ):
+    def get_occlusion_frustum( self, viewPoint : np.ndarray, dMax : float ):
         """ Get a region blocked by this object from the given viewpoint """
-        surf = self.get_visible_submesh( viewPoint )
+        surf  = self.get_visible_submesh( viewPoint )
+        faces = surf.get_faces_as_tris()
+        pt0 = pt1 = pt2 = pt3 = None
+        for tri_i in faces:
+            farTri = list()
+            for edge_j in range(3):
+                # Add quad projected from this edge #
+                pt0 = tri_i[ edge_j ]
+                pt1 = tri_i[ (edge_j+1)%3 ]
+                pt2 = np.add( pt1, ray_dir( viewPoint, pt1 ) * dMax )
+                pt3 = np.add( pt0, ray_dir( viewPoint, pt0 ) * dMax )
+                surf.add_tri( pt0, pt1, pt2 )
+                surf.add_tri( pt0, pt2, pt3 )
+                farTri.append( pt2 )
+            # Add the oposite triangle #
+            surf.add_tri( farTri[2], farTri[1], farTri[0] )
+            
+
+
+
+########## COMMON SOLIDS ###########################################################################
+
+def make_cuboid( xLen, yLen, zLen ):
+    """ Return a cube mesh """
+    hX  = xLen / 2.0
+    hY  = yLen / 2.0
+    hZ  = zLen / 2.0
+    cbd = npVFN()
+    # /// Load Vertices ///
+    cbd.V = np.zeros( (8, 3,), dtype = float )
+    cbd.V[0,:] = np.array( [-hX, -hY, -hZ,] )
+    cbd.V[1,:] = np.array( [ hX, -hY, -hZ,] )
+    cbd.V[2,:] = np.array( [ hX,  hY, -hZ,] )
+    cbd.V[3,:] = np.array( [-hX,  hY, -hZ,] )
+    cbd.V[4,:] = np.array( [-hX, -hY,  hZ,] )
+    cbd.V[5,:] = np.array( [ hX, -hY,  hZ,] )
+    cbd.V[6,:] = np.array( [ hX,  hY,  hZ,] )
+    cbd.V[7,:] = np.array( [-hX,  hY,  hZ,] )
+    # /// Load Faces ///
+    cbd.F = np.zeros( (8, 3,), dtype = int )
+    cbd.F[ 0,:] = np.array( [0, 2, 1,] )
+    cbd.F[ 1,:] = np.array( [0, 3, 2,] )
+    cbd.F[ 2,:] = np.array( [0, 1, 5,] )
+    cbd.F[ 3,:] = np.array( [0, 5, 4,] )
+    cbd.F[ 4,:] = np.array( [0, 4, 3,] )
+    cbd.F[ 5,:] = np.array( [3, 4, 7,] )
+    cbd.F[ 6,:] = np.array( [3, 7, 2,] )
+    cbd.F[ 7,:] = np.array( [2, 7, 6,] )
+    cbd.F[ 8,:] = np.array( [2, 6, 1,] )
+    cbd.F[ 9,:] = np.array( [1, 6, 5,] )
+    cbd.F[10,:] = np.array( [6, 7, 5,] )
+    cbd.F[11,:] = np.array( [5, 7, 4,] )
+    # /// Load Normals ///
+    cbd.N = VF_to_N( cbd.V , cbd.N )
