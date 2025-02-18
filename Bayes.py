@@ -22,7 +22,7 @@ from aspire.symbols import ( euclidean_distance_between_symbols, extract_pose_as
 
 
 ### Local ###
-from utils import set_quality_score, closest_ray_points
+from utils import set_quality_score
 
 
 

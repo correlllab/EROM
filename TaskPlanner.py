@@ -10,20 +10,18 @@ Contacts: {james.watson-2@colorado.edu,}
 ##### Imports #############################################################
 
 ### Standard ###
-import sys, time, os, json
+import time, os
 now = time.time
 from time import sleep
 # from random import random
 from traceback import print_exc
 from datetime import datetime
-from math import isnan
 
 
 ### Special ###
 import numpy as np
 from py_trees.common import Status
-from py_trees.composites import Sequence
-from magpie_control.BT import Open_Gripper, BT_Runner, BasicBehavior
+from magpie_control.BT import Open_Gripper, BT_Runner
 from magpie_control.ur5 import UR5_Interface
 from magpie_control.poses import repair_pose
 from magpie_control.utils import vec_unit
@@ -92,8 +90,11 @@ def set_experiment_env():
     env_sto( "_N_REQD_OBJS"      ,   3      )
     env_sto( "_CONFUSE_PROB"     ,   0.025  )
 
+    env_sto( "_BAYES_RAD_L2_M"   , 0.95*env_var("_BLOCK_SCALE") )
     env_sto( "_PLACE_XY_ACCEPT"  , 0.60*env_var("_BLOCK_SCALE") )
     env_sto( "_WIDE_XY_ACCEPT"   , 0.75*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_COLLIDE"     , 1.25*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_PLACEMENT"   , 2.0*env_var("_WIDE_COLLIDE") )
 
     env_sto( "_WIDE_Z_ABOVE"     , 1.75*env_var("_BLOCK_SCALE") )
 
@@ -110,7 +111,14 @@ def set_experiment_env():
         )
     )
 
-    env_sto( "_UPDATE_PERIOD_S", 5.0 ) 
+    env_sto( "_UPDATE_PERIOD_S", 5.0       ) 
+    env_sto( "_OBJ_TIMEOUT_S"  , 60.0*10.0 )
+
+    env_sto( "_SCORE_FILTER_EXP", 0.85 )
+
+    env_sto( "_NULL_EVIDENCE" , True )
+    env_sto( "_DEF_NULL_SCORE", 1.00 )
+    env_sto( "_NULL_THRESH"   , 0.75 )
     
 
 
@@ -211,7 +219,8 @@ class TaskPlanner:
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
             os.path.join( os.path.dirname( __file__ ), "pddl", "stream.pddl" ),
-            planParser = ReactivePlanParser( self.robot, self.phase_1_Perceive, self.p_belief_dist_OK )
+            # planParser = ReactivePlanParser( self.robot, self.phase_1_Perceive, self.p_belief_dist_OK )
+            planParser = ReactivePlanParser( self.robot )
         )
         self.blcMod = BlockFunctions( self.symPln )
         if (not noBot):
@@ -300,7 +309,7 @@ class TaskPlanner:
         """ Get the necessary initial state, Check for goals already met """
         self.symPln.symbols = self.memory.get_current_most_likely()
 
-        self.memory.locate_all( self.symPln.symbols )
+        # self.memory.locate_all( self.symPln.symbols )
 
         if len( self.symPln.symbols ):
             self.status = Status.RUNNING

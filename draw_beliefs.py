@@ -258,8 +258,10 @@ def cam_ray_geo( objReading : GraspObj, linLen : float = 1.0 ):
 
 def reading_geo( objReading : GraspObj, alpha = None ):
     """ Get geo for a single observation """
-    belClr = [0.5, 0.0, 1.0, 1.0,]
-    lkgClr = [1.0, 0.0, 0.0, 1.0,]
+    if alpha is None:
+        alpha = 1.0
+    belClr = [0.5, 0.0, 1.0, alpha,]
+    lkgClr = [1.0, 0.0, 0.0, alpha,]
     labelSort = zip_dict_sorted_by_decreasing_value( objReading.labels )
     objXfrm   = extract_pose_as_homog( objReading, noRot = True )
     # posn      = objPose[:3]
@@ -303,8 +305,9 @@ def reading_geo( objReading : GraspObj, alpha = None ):
         bClr = env_var("_CLR_TABLE")[ objReading.label[:3] ]
         bClr.append( 1.0 )
         bClr[-1] = env_var("_BLOCK_ALPHA") if (alpha is None) else alpha
+        edgC = [0.0, 0.0, 0.0, alpha,]
         blc  = scene.visuals.Box( scl, scl, scl,  
-                                  color = bClr, edge_color="black" )
+                                  color = bClr, edge_color=edgC )
         for i in range(3):
             # objXfrm[i,3] += hf-(scl/2.0)
             pass
@@ -436,8 +439,9 @@ def scan_geo( sym : GraspObj ):
         scl  = env_var("_BLOCK_SCALE") * prb
         bClr = env_var("_CLR_TABLE")[ lbl[:3] ]
         bClr.append( env_var("_SCAN_ALPHA") )
+        egdC = [0.0,0.0,0.0,env_var("_SCAN_ALPHA")]
         blc  = scene.visuals.Box( scl, scl, scl,  
-                                color = bClr, edge_color="black" )
+                                color = bClr, edge_color=egdC )
         blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
         rtnGeo = [wf1, blc, cam_ray_geo( sym ) ]
         rtnGeo.extend( cpcd_geo( sym, div = 4 ) )
