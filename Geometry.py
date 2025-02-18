@@ -10,16 +10,53 @@ import numpy as np
 
 ### Local ###
 from magpie_control.poses import vec_unit
+from magpie_control.homog_utils import vec_angle_between
+from magpie_control.utils import vec_diff_mag
 
 
 
 ########## GEOMETRY HELPERS ########################################################################
+# Neighbor will see vertices of the border segment in reverse order
+_tri_indices_RH = [ ( 0 , 1 ) , ( 1 , 2 ) , ( 2 , 0 ) ] # Right-hand indices
+_tri_indices_LH = [ ( 1 , 0 ) , ( 2 , 1 ) , ( 0 , 2 ) ] # Left-hand  indices 
+
 
 def tri_normal( p0, p1, p2 ):
     """ Return the unit normal vector for a triangle with points specified in CCW order """
     vec1 = np.subtract( p1 , p0 )
     vec2 = np.subtract( p2 , p0 )
     return vec_unit( np.cross( vec1 , vec2 ) )
+
+
+def tris_to_quad( triA, triB ):
+    """ Attempt to merge 2 triangles into a quad """
+    quad = list()
+    shA = shB = None
+    # 1. Find the shared edge
+    for idxRH in _tri_indices_RH:
+        a0 = triA[ idxRH[0], : ]
+        a1 = triA[ idxRH[1], : ]
+        for idxLH in _tri_indices_LH:
+            b0 = triB[ idxLH[0], : ]
+            b1 = triB[ idxLH[1], : ]
+            if ((vec_diff_mag( a0, b0 ) + vec_diff_mag( a1, b1 )) < 0.00002):
+                shA = list( idxRH )
+                shB = [idxLH[1], idxLH[0],]
+                break
+        if shA is not None:
+            break
+    if shA is None:
+        return None
+    # 2. Construct the quad
+    iA = shA[1]
+    iB = shB[1]
+    for _ in range(2):
+        quad.append( triA[iA,:] )
+        iA = (iA+1)%3
+    for _ in range(2):
+        quad.append( triB[iB,:] )
+        iB = (iB+1)%3
+    return np.array( quad )
 
 
 def VF_to_N( verts , facets ):
@@ -36,6 +73,36 @@ def ray_dir( absOrg, absPnt ):
     return vec_unit( np.subtract( absPnt, absOrg ) )
 
 
+def facet_adjacency_list_ordered( F ):
+    """ Given a facet vertex lookup matrix 'F', Find all of the side-sharing neighbors of each facet, ORDERED VERSION """
+    N = len( F ) # Number of facets
+    neighborList = [ [ None , None , None ] for i in range( N ) ] # Ordered list of neighbors ( neighbor pointers )
+    for i in range( N - 1 ):
+        # Copy right-hand edges for each neighbor position that has not yet been associated with a neighbor
+        neighbors = [ _tri_indices_RH[ checkDex ] if neighborList[i][ checkDex ] == None else None for checkDex in range(3) ] # Avoid repeat search
+        for j in range( i + 1 , N ): # For each unique pairing of facets ( i , j )
+            for nDex , neighbor in enumerate( neighbors ):
+                if neighbor != None: # If we have not yet located the neighbor for this edge , Check needed to avoid repeats , see above
+                    for nnDex , neighborNeighbor in enumerate( _tri_indices_LH ):
+                        # nDex : This facet's edge, nnDex : Candidate neighbor edge
+                        if neighborList[ j ][ nnDex ] == None:
+                            match = True
+                            for pairDex in range( 2 ): # For each of the points that form the candidate border
+                                # Unless this edge has two vertices that are in reverse order of the other facet edge , this edge is not the 
+                                #  border between the two
+                                if F[ i ][ neighbor[ pairDex ] ] != F[ j ][ neighborNeighbor[ pairDex ] ]:
+                                    match = False
+                            if match:
+                                neighborList[ i ][ nDex  ] = j # Mark the located neighbor
+                                neighbors[ nDex ] = None # Mark this neighbor as found
+                                neighborList[ j ][ nnDex ] = i # This facet is the neighbor's neighbor at its identified border
+                            # else no match , no action , continue
+                        # else the neighbor already has a match for this neighbor-nerighbor
+                # else 'neighbor' is Null , we found this neighbor already and there is no action
+    return neighborList
+
+
+
 ########## NUMPY MESH (VFN) ########################################################################
 
 class npVFN:
@@ -48,9 +115,10 @@ class npVFN:
 
     def __init__( self, V = None, F = None, N = None ):
         """ Set arrays """
-        self.V = np.array( V, dtype = float ) if (V is not None) else np.zeros( (0,3), dtype = float )
-        self.F = np.array( F, dtype = int   ) if (F is not None) else np.zeros( (0,3), dtype = int   )
-        self.N = np.array( N, dtype = float ) if (N is not None) else np.zeros( (0,3), dtype = float )
+        self.V = np.array( V, dtype = float ) if (V is not None) else np.zeros( (0,3), dtype = float ) # Vertices
+        self.F = np.array( F, dtype = int   ) if (F is not None) else np.zeros( (0,3), dtype = int   ) # Faces
+        self.N = np.array( N, dtype = float ) if (N is not None) else np.zeros( (0,3), dtype = float ) # Normals
+        self.Q = None # -------------------------------------------------------------------------------- Quads
         
     
     def __len__( self ):
@@ -96,8 +164,26 @@ class npVFN:
         return rtnVFN
     
 
-    def erase_shared_faces( self ):
+    def find_quads( self ):
+        """ Get neighboring triangles that have a low angle between their normals """
+        tris = self.get_faces_as_tris()
+        adjc = facet_adjacency_list_ordered( self.F )
+        quad = deque()
+        for i in range( len( self ) ):
+            norm_i = self.N[i,:]
+            for j in adjc[i]:
+                if j is not None:
+                    norm_j = self.N[j,:]
+                    if (vec_angle_between( norm_i, norm_j ) < 0.00001):
+                        tri_i = tris[i,:,:]
+                        tri_j = tris[j,:,:]
+
+
+
+
+    def erase_shared_quads( self ):
         """ Eliminate interior faces """
+        # FIXME: ERASE TRIANGLES THAT PARTICIPATE IN SHARED QUADS
         pass
 
 
