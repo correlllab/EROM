@@ -29,8 +29,8 @@ from Bayes import BayesMemory
 ##### Constants #####
 _REVERSE_QUERIES = {
     "bluBlock": {'query': "a photo of a blue block"  , 'abbrv': "blu", },
-    # "ylwBlock": {'query': "a photo of a yellow block", 'abbrv': "ylw", },
-    # "grnBlock": {'query': "a photo of a green block" , 'abbrv': "grn", },
+    "ylwBlock": {'query': "a photo of a yellow block", 'abbrv': "ylw", },
+    "grnBlock": {'query': "a photo of a green block" , 'abbrv': "grn", },
 }
 
 
@@ -154,7 +154,7 @@ def most_likely_non_conflict( objLst : list[GraspObj], zOffset : float ) -> list
         obj_i   = ranked[ lbl_i ].popleft()
         collide = False
         for lbl_j, obj_j in compare.items():
-            if euclidean_distance_between_symbols( obj_i, obj_j ) < env_var( "_BLOCK_SCALE" ):
+            if euclidean_distance_between_symbols( obj_i, obj_j ) < env_var( "_WIDE_COLLIDE" ):
                 collide = True
                 if obj_i.prob > obj_j.prob:
                     picked[ lbl_i ] = obj_i
@@ -284,7 +284,7 @@ class SensoryPlanner:
         return [
             self.plan_3d_shot_centroid( objects, [  1.25, -0.25, 1.0, ], self.dShot, defaultPose ),
             self.plan_3d_shot_centroid( objects, [  1.25,  0.25, 1.0, ], self.dShot, defaultPose ),
-            self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
+            # self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
             self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
         ]
     
@@ -295,27 +295,40 @@ class SensoryPlanner:
         self.robot.moveL( initShot, asynch = False )
         query   = _REVERSE_QUERIES[ obj.label ]['query']
         abbrevq = _REVERSE_QUERIES[ obj.label ]['abbrv']
-        res     = self.perc.bound( query, abbrevq )
-        while not len( res['hits'] ):
+        
+        while( True ):
+
             res = self.perc.bound( query, abbrevq )
-        offset  = image_offset( res['image'], res['hits'][0]['bboxi'], self.dLoc )
-        curPose = self.robot.get_tcp_pose()
-        camPose = self.robot.get_cam_pose()
-        while( np.linalg.norm( offset[:2] ) > 0.5*env_var("_PLACE_XY_ACCEPT") ):
+            while not len( res['hits'] ):
+                res = self.perc.bound( query, abbrevq )
+
+            if 0:
+                dLim = 2*env_var("_BLOCK_SCALE")
+                for hit in res['hits']:
+                    offset_i  = image_offset( res['image'], hit['bboxi'], self.dLoc )
+                    dist_i    = np.linalg.norm( offset_i[:2] )
+                    if dist_i < dLim:
+                        offset = offset_i
+                        break
+            else:
+                offset = image_offset( res['image'], res['hits'][0]['bboxi'], self.dLoc )
+
+            if np.linalg.norm( offset[:2] ) <= 0.5*env_var("_PLACE_XY_ACCEPT"):
+                break
+
+            curPose = self.robot.get_tcp_pose()
+            camPose = self.robot.get_cam_pose()
+
             tcpOfst = np.dot( camPose[0:3,0:3], offset ).reshape(3)
             print( tcpOfst )
-            if np.linalg.norm( offset[:2] ) > 0.1:
-                break
+            
             movPose = curPose.copy()
             movPose[0:2,3] += tcpOfst[0:2]
             obj.pose.pose[0:2,3] += tcpOfst[0:2]
             self.robot.moveL( movPose, asynch = False )
-            res = self.perc.bound( query, abbrevq )
-            while not len( res['hits'] ):
-                res = self.perc.bound( query, abbrevq )
-            offset  = image_offset( res['image'], res['hits'][0]['bboxi'], self.dLoc )
-            curPose = self.robot.get_tcp_pose()
-            camPose = self.robot.get_cam_pose()
+            
+
+            
 
 
     def locate_all( self, objLst : list[GraspObj] ):
@@ -484,7 +497,8 @@ class Memory:
             if Append:
                 self.mult = True
 
-        self.bMem.belief_update( self.scan, xform )
+        # self.bMem.belief_update( self.scan, xform )
+        self.bMem.belief_update( self.scan, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
 
         self.history.append( 
             datum = {
