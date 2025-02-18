@@ -1,5 +1,8 @@
 ########## INIT ####################################################################################
 
+##### Imports #####
+
+### Standard ###
 import time
 now = time.time
 from collections import deque
@@ -7,8 +10,10 @@ from typing import Dict, Deque
 from math import log
 from uuid import uuid4
 
+### Special ###
 import numpy as np
 
+### Local ###
 from magpie_control.poses import vec_unit, translation_diff
 from magpie_control.ur5 import UR5_Interface
 
@@ -16,13 +21,12 @@ from aspire.env_config import env_var
 from aspire.utils import match_name, normalize_dist
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols )
 
-
-### Local ###
 from utils import ( LogPickler, zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, )
 from OWLv2_Segment import Perception_OWLv2
 from Bayes import BayesMemory
 
 
+##### Constants #####
 _REVERSE_QUERIES = {
     "bluBlock": {'query': "a photo of a blue block"  , 'abbrv': "blu", },
     # "ylwBlock": {'query': "a photo of a yellow block", 'abbrv': "ylw", },
