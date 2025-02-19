@@ -28,7 +28,7 @@ from magpie_control.utils import vec_unit
 
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
-from aspire.symbols import ( ObjPose, GraspObj, )
+from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog )
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
 from aspire.actions.pdls_behaviors import GroundedAction, MoveFree, Plan
 from aspire.actions.utils import line_intersect_plane
@@ -491,10 +491,13 @@ class TaskPlanner:
 
     def phase_5_Return_Home( self, goPose ):
         """ Get ready for next iteration while updating beliefs """
-        self.return_home( goPose )
-        self.memory.history.append( msg = "Annotation", datum = {
-            "Event": "The robot moved to the home pose.",
-        } )
+        if 0:
+            self.return_home( goPose )
+            self.memory.history.append( msg = "Annotation", datum = {
+                "Event": "The robot moved to the home pose.",
+            } )
+        else:
+            self.robot.moveL( _SAFE, asynch = False )
         
 
     ##### Task Planner Main Loop ##########################################
@@ -542,7 +545,7 @@ class TaskPlanner:
 
         self.memory.history.append( msg = "Task Start" )
 
-        self.memory.scan.append( self.dummy_object() ) # NOT REAL: For first iteration sensory planning
+        # self.memory.scan.append( self.dummy_object() ) # NOT REAL: For first iteration sensory planning
 
         while (self.status != Status.SUCCESS) and (i < maxIter): # and (not self.PANIC):
             
@@ -558,7 +561,8 @@ class TaskPlanner:
 
             # for bgnPose in beginPlanPose:
 
-            bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
+            # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
+            bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
             self.memory.reset_memory()
 
             if env_var("_USE_GRAPHICS"):
@@ -615,7 +619,7 @@ class TaskPlanner:
             ##### Phase 5 ########################
 
             print( f"Phase 5, {self.status} ..." )
-            self.phase_5_Return_Home( beginPlanPose )
+            self.phase_5_Return_Home( _SAFE )
 
             print()
 

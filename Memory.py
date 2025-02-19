@@ -480,7 +480,8 @@ class Memory:
 
     def plan_3d_shots( self, defaultPose : np.ndarray ):
         """ Ask the sensory planner to get us a shot """
-        return self.camPlan.plan_3d_shots( self.scan, defaultPose )
+        # return self.camPlan.plan_3d_shots( self.scan, defaultPose )
+        return self.camPlan.plan_3d_shots( list(), defaultPose )
     
 
     def locate_all( self, objLst : list[GraspObj] ):

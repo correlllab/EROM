@@ -65,11 +65,17 @@ def vispy_geo_list_window( geoLst, robotPose = None ):
         nonlocal geoLst
         rbtAxs  = scene.visuals.XYZAxis()
         # VISPY IS COLUMN-MAJOR
-        vizXfrm = transforms.linear.MatrixTransform( matrix = pose.transpose() )
+        # vizXfrm = transforms.linear.MatrixTransform( matrix = pose.transpose() )
+        rot = np.eye(4)
+        rot[0:3,0:3] = pose[0:3,0:3]
+        vizXfrm = transforms.linear.MatrixTransform( matrix = rot.transpose() )
+        vizXfrm.scale( [0.15,0.15,0.15,] )
+        vizXfrm.translate( pose[0:3,3] )
+        
         rbtAxs.transform = vizXfrm
         geoLst.append( rbtAxs )
 
-    if 0:
+    if 1:
         if isinstance( robotPose, np.ndarray ):
             add_pose( robotPose )
         elif isinstance( robotPose, list ):
