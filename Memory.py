@@ -122,10 +122,31 @@ from pprint import pprint
 from copy import deepcopy
 
 
-def most_likely_non_conflict( objLst : list[GraspObj], zOffset : float ) -> list[GraspObj]:
+def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
     """ Choose the most likely in each class that does not conflict with an even more likely label of a different class """
 
     print( f"There are {len(objLst)} to evaluate!" )
+
+    def p_conflict( objs : list[GraspObj] ):
+        """ Are any of the objects in conflict? """
+        N = len( objs )
+        C = [False for _ in range(N)]
+        R = False
+        for i in range( N-1 ):
+            obj_i = objs[i]
+            for j in range( i+1, N ):
+                obj_j = objs[j]
+                if (obj_i.label != env_var("_NULL_NAME")) and (obj_j.label != env_var("_NULL_NAME")):
+                    if euclidean_distance_between_symbols( obj_i, obj_j ) < env_var( "_WIDE_COLLIDE" ):
+                        R = True
+                        C[i] = True
+                        C[j] = True
+        cObjs = [objs[i] for i in range(N) if C[i]]
+        cObjs.sort( key = lambda x: x.prob, reverse = True )
+        print( f"Conflicts:" )
+        pprint( cObjs )
+        return R, [obj.label for obj in cObjs]
+
     
     ranked : Dict[str, Deque[GraspObj]] = dict()
     for obj in objLst:
@@ -146,37 +167,17 @@ def most_likely_non_conflict( objLst : list[GraspObj], zOffset : float ) -> list
     print( "Label Ranking" )
     pprint( ranked )
 
-    picked  : Dict[str, GraspObj] = dict()
-    compare : Dict[str, GraspObj] = dict()
-    for lbl_i in ranked.keys():
-        if lbl_i == env_var( "_NULL_NAME" ):
-            continue
-        obj_i   = ranked[ lbl_i ].popleft()
-        collide = False
-        for lbl_j, obj_j in compare.items():
-            if euclidean_distance_between_symbols( obj_i, obj_j ) < env_var( "_WIDE_COLLIDE" ):
-                collide = True
-                if obj_i.prob > obj_j.prob:
-                    picked[ lbl_i ] = obj_i
-                    picked[ lbl_j ] = ranked[ lbl_j ].popleft()
-                    while euclidean_distance_between_symbols( picked[ lbl_i ], picked[ lbl_j ] ) < env_var( "_BLOCK_SCALE" ):
-                        if len( ranked[ lbl_j ] ):
-                            picked[ lbl_j ] = ranked[ lbl_j ].popleft()
-                        else:
-                            break
-                else:
-                    picked[ lbl_i ] = ranked[ lbl_i ].popleft()
-                    picked[ lbl_j ] = obj_j
-                    while euclidean_distance_between_symbols( picked[ lbl_i ], picked[ lbl_j ] ) < env_var( "_BLOCK_SCALE" ):
-                        if len( ranked[ lbl_i ] ):
-                            picked[ lbl_i ] = ranked[ lbl_i ].popleft()
-                        else:
-                            break
-        if not collide:
-            picked[ lbl_i ] = obj_i
-        compare = deepcopy( picked )
+    picked : Dict[str, GraspObj] = dict()
+    for k, vQ in ranked.items():
+        picked[ k ] = vQ.popleft()
+    overlap, conflicts = p_conflict( list( picked.values() ) )
+    
+    while( overlap ):
+        for keyflict in conflicts[1:]:
+            picked[ keyflict ] = ranked[ keyflict ].popleft()
+        overlap, conflicts = p_conflict( list( picked.values() ) )
 
-    symbols = list( picked.values() )
+    symbols = [sym for sym in list( picked.values() ) if sym.label != env_var("_NULL_NAME")]
 
     print( f"About to return {len(symbols)} symbols!" )
     return symbols
@@ -515,7 +516,7 @@ class Memory:
         """ Generate symbols """
         symbols = list()
         if strat == "bayes":
-            symbols = most_likely_non_conflict( self.bMem.beliefs, self.camPlan.get_camera_Z_offset() ) 
+            symbols = most_likely_non_conflict( self.bMem.beliefs ) 
         elif strat == "score":
             symbols = strongest_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
         else:

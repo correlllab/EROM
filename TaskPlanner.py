@@ -90,11 +90,11 @@ def set_experiment_env():
     env_sto( "_N_REQD_OBJS"      ,   3      )
     env_sto( "_CONFUSE_PROB"     ,   0.025  )
 
-    env_sto( "_BAYES_RAD_L2_M"   , 0.95*env_var("_BLOCK_SCALE") )
-    env_sto( "_PLACE_XY_ACCEPT"  , 0.60*env_var("_BLOCK_SCALE") )
-    env_sto( "_WIDE_XY_ACCEPT"   , 0.75*env_var("_BLOCK_SCALE") )
-    env_sto( "_WIDE_COLLIDE"     , 1.25*env_var("_BLOCK_SCALE") )
-    env_sto( "_WIDE_PLACEMENT"   , 2.0*env_var("_WIDE_COLLIDE") )
+    env_sto( "_BAYES_RAD_L2_M"   , 0.950*env_var("_BLOCK_SCALE") )
+    env_sto( "_PLACE_XY_ACCEPT"  , 0.600*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_XY_ACCEPT"   , 0.750*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_COLLIDE"     , 1.125*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_PLACEMENT"   , 2.000*env_var("_WIDE_COLLIDE") )
 
     env_sto( "_WIDE_Z_ABOVE"     , 1.75*env_var("_BLOCK_SCALE") )
 
