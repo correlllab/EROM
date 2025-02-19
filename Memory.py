@@ -326,9 +326,6 @@ class SensoryPlanner:
             movPose[0:2,3] += tcpOfst[0:2]
             obj.pose.pose[0:2,3] += tcpOfst[0:2]
             self.robot.moveL( movPose, asynch = False )
-            
-
-            
 
 
     def locate_all( self, objLst : list[GraspObj] ):
@@ -409,8 +406,6 @@ class Memory:
         self.mult : bool             = False
         self.bMem : BayesMemory      = BayesMemory()
         self.symH : Dict[uuid4,ThinSymbol] = dict()
-        # self.syHs : list[dict]     = list() # NOT THE WAY TO DO IT!
-        # self.klHs : list[float]    = list()
 
 
     def closest_symbol_to_pose( self, pose, margin = None ) -> ThinSymbol:
@@ -457,8 +452,11 @@ class Memory:
     def check_KL_for_symbol_at_pose( self, pose, expectedLabel : str, poseMargin : float = None, N_falling : int = 3 ):
         """ Return `check_KL_criteria` for the symbol nearest this pose """
         chkSym = self.closest_symbol_to_pose( pose, margin = poseMargin )
+        print( f"About to check {expectedLabel} @ {pose}, found {chkSym}" )
         if chkSym is not None:
-            return chkSym.check_KL_criteria( N_falling, expectedLabel )
+            res = chkSym.check_KL_criteria( N_falling, expectedLabel )
+            print( f"Result?: {res}" )
+            return 
         else:
             return False
 
