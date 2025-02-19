@@ -4,13 +4,14 @@
 
 ### Standard ###
 from collections import deque
+from random import random
 
 ### Special ###
 import numpy as np
 
 ### Local ###
 from magpie_control.poses import vec_unit
-from magpie_control.homog_utils import vec_angle_between
+from magpie_control.homog_utils import R_krot
 from magpie_control.utils import vec_diff_mag
 
 
@@ -26,37 +27,6 @@ def tri_normal( p0, p1, p2 ):
     vec1 = np.subtract( p1 , p0 )
     vec2 = np.subtract( p2 , p0 )
     return vec_unit( np.cross( vec1 , vec2 ) )
-
-
-def tris_to_quad( triA, triB ):
-    """ Attempt to merge 2 triangles into a quad """
-    quad = list()
-    shA = shB = None
-    # 1. Find the shared edge
-    for idxRH in _tri_indices_RH:
-        a0 = triA[ idxRH[0], : ]
-        a1 = triA[ idxRH[1], : ]
-        for idxLH in _tri_indices_LH:
-            b0 = triB[ idxLH[0], : ]
-            b1 = triB[ idxLH[1], : ]
-            if ((vec_diff_mag( a0, b0 ) + vec_diff_mag( a1, b1 )) < 0.00002):
-                shA = list( idxRH )
-                shB = [idxLH[1], idxLH[0],]
-                break
-        if shA is not None:
-            break
-    if shA is None:
-        return None
-    # 2. Construct the quad
-    iA = shA[1]
-    iB = shB[1]
-    for _ in range(2):
-        quad.append( triA[iA,:] )
-        iA = (iA+1)%3
-    for _ in range(2):
-        quad.append( triB[iB,:] )
-        iB = (iB+1)%3
-    return np.array( quad )
 
 
 def VF_to_N( verts , facets ):
@@ -118,7 +88,7 @@ class npVFN:
         self.V = np.array( V, dtype = float ) if (V is not None) else np.zeros( (0,3), dtype = float ) # Vertices
         self.F = np.array( F, dtype = int   ) if (F is not None) else np.zeros( (0,3), dtype = int   ) # Faces
         self.N = np.array( N, dtype = float ) if (N is not None) else np.zeros( (0,3), dtype = float ) # Normals
-        self.Q = None # -------------------------------------------------------------------------------- Quads
+        self.B = None # -------------------------------------------------------------------------------- Bounding Box
         
     
     def __len__( self ):
@@ -150,62 +120,72 @@ class npVFN:
         index  = len( self ) * 3
         self.F = np.vstack( (self.F, [index, index+1, index+2]) )
         self.N = np.vstack( (self.N, tri_normal( p0, p1, p2 )) )
+    
 
+    def get_aabb( self ):
+        """ Get the Axis-Aligned Bounding Box """
+        aabb = np.array( [[1e9 for _ in range(3)],[-1e9 for _ in range(3)],] )
+        for vtx in self.V:
+            # Min Corner #
+            aabb[0,0] = np.min( aabb[0,0], vtx[0] )
+            aabb[0,1] = np.min( aabb[0,1], vtx[1] )
+            aabb[0,2] = np.min( aabb[0,2], vtx[2] )
+            # Max Corner #
+            aabb[1,0] = np.max( aabb[1,0], vtx[0] )
+            aabb[1,1] = np.max( aabb[1,1], vtx[1] )
+            aabb[1,2] = np.max( aabb[1,2], vtx[2] )
+        self.B = aabb.copy()
+        return aabb
+    
 
-    def get_visible_submesh( self, viewPoint : np.ndarray ):
-        """ Get all surfaces with a normal facing the `viewPoint` """
-        faces  = self.get_faces_as_tris()
-        rtnVFN = npVFN()
-        for i, nrm_i in enumerate( self.N ):
-            tri_i = faces[i]
-            dir_i = np.subtract( viewPoint, tri_i[0] )
-            if np.dot( dir_i, nrm_i ) > 0.0:
-                rtnVFN.add_tri( tri_i )
+    def get_approx_width( self ):
+        """ Get the distance between the corners of the AABB """
+        aabb = self.get_aabb()
+        return vec_diff_mag( aabb[1,:], aabb[0,:] )
+
+    
+    def get_occlusion_frustum( self, viewPoint : np.ndarray, dMax : float, numDiv = 6 ):
+        """ Get a (approx. hexagonal prism) region blocked by this object from the given viewpoint """
+        rtn = npVFN()
+        rad = (self.get_approx_width() / 2.0) * 0.85
+        ctr = (self.B[0,:] + self.B[1,:])/2.0
+        axs = ray_dir( viewPoint, ctr )
+        cbt = ctr + (axs*dMax)
+        bgn = np.cross( axs, vec_unit([random() for _ in range(3)]) )*rad + ctr
+        bbg = bgn + (ray_dir( viewPoint, bgn )*dMax)
+        tLs = bgn
+        bLs = bbg
+        for i in range( 1, numDiv+1 ):
+            t_i = ctr + R_krot( axs, i*(2.0*np.pi/numDiv)).dot( (bgn-ctr) ) 
+            b_i = cbt + R_krot( axs, i*(2.0*np.pi/numDiv)).dot( (bbg-cbt) ) 
+            rtn.add_tri( ctr, t_i, tLs ) # Top
+            rtn.add_tri( tLs, t_i, b_i ) # Side 1/2
+            rtn.add_tri( tLs, b_i, bLs ) # Side 2/2
+            rtn.add_tri( cbt, bLs, b_i ) # Side 2/2
+            tLs = t_i.copy()
+            bLs = b_i.copy()
+        return rtn
+    
+
+    def copy( self ):
+        """ Get a copy of this mesh """
+        return npVFN( self.V.copy(), self.F.copy(), self.N.copy() )
+    
+
+    def copy_as_bounds( self ):
+        """ Copy the mesh, Reverse the normals, and Return """
+        rtnVFN = self.copy()
+        rtnVFN.N = -rtnVFN.N
         return rtnVFN
     
 
-    def find_quads( self ):
-        """ Get neighboring triangles that have a low angle between their normals """
-        tris = self.get_faces_as_tris()
-        adjc = facet_adjacency_list_ordered( self.F )
-        quad = deque()
-        for i in range( len( self ) ):
-            norm_i = self.N[i,:]
-            for j in adjc[i]:
-                if j is not None:
-                    norm_j = self.N[j,:]
-                    if (vec_angle_between( norm_i, norm_j ) < 0.00001):
-                        tri_i = tris[i,:,:]
-                        tri_j = tris[j,:,:]
+    def p_inside( self, q ):
+        """ Is `q` inside of this mesh, NOTE: Assumes *inward*-facing normals! """
+        for i, fDices in enumerate( self.F ):
+            nrm_i = self.N[i,:]
+            pnt_i = self.V[ fDices[0], : ]
+            # FIXME, START HERE: TEST EACH FACET!
 
-
-
-
-    def erase_shared_quads( self ):
-        """ Eliminate interior faces """
-        # FIXME: ERASE TRIANGLES THAT PARTICIPATE IN SHARED QUADS
-        pass
-
-
-    def get_occlusion_frustum( self, viewPoint : np.ndarray, dMax : float ):
-        """ Get a region blocked by this object from the given viewpoint """
-        surf  = self.get_visible_submesh( viewPoint )
-        faces = surf.get_faces_as_tris()
-        pt0 = pt1 = pt2 = pt3 = None
-        for tri_i in faces:
-            farTri = list()
-            for edge_j in range(3):
-                # Add quad projected from this edge #
-                pt0 = tri_i[ edge_j ]
-                pt1 = tri_i[ (edge_j+1)%3 ]
-                pt2 = np.add( pt1, ray_dir( viewPoint, pt1 ) * dMax )
-                pt3 = np.add( pt0, ray_dir( viewPoint, pt0 ) * dMax )
-                surf.add_tri( pt0, pt1, pt2 )
-                surf.add_tri( pt0, pt2, pt3 )
-                farTri.append( pt2 )
-            # Add the oposite triangle #
-            surf.add_tri( farTri[2], farTri[1], farTri[0] )
-            
 
 
 
