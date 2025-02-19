@@ -12,6 +12,7 @@ from uuid import uuid4
 
 ### Special ###
 import numpy as np
+import matplotlib.pyplot as plt
 
 ### Local ###
 from magpie_control.poses import vec_unit, translation_diff
@@ -388,9 +389,6 @@ class ThinSymbol:
             return False
         else:
             return True
-        
-
-
 
 
 
@@ -460,6 +458,22 @@ class Memory:
             return 
         else:
             return False
+        
+        
+    def plot_KL_history_for_all_obj( self ):
+        """ Simple plot of the KL divergence for each symbol """
+        for k, v in self.symH.items():
+            print( f"Item {k}: Dist = {v.distH[-1]}\nKL History:{v.KLDvH}\n" )
+            plt.plot( v.KLDvH, label = v.label )
+
+        # Adding the legend
+        plt.legend()
+
+        # Adding title and labels
+        plt.title('Multiple Line Plot')
+        plt.xlabel('Time')
+        plt.ylabel('KL Divergence')
+        
 
 
     ##### Begin / End ############################

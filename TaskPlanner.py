@@ -219,7 +219,6 @@ class TaskPlanner:
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
             os.path.join( os.path.dirname( __file__ ), "pddl", "stream.pddl" ),
-            # planParser = ReactivePlanParser( self.robot, self.phase_1_Perceive, self.p_belief_dist_OK )
             planParser = ReactivePlanParser( self.robot )
         )
         self.blcMod = BlockFunctions( self.symPln )
@@ -397,6 +396,10 @@ class TaskPlanner:
 
     def check_current_KL_OK( self ):
         """ Find out where we expect important symbols and run the check """
+
+        if env_var("_USE_GRAPHICS"):
+            self.memory.plot_KL_history_for_all_obj()
+
         for action in self.symPln.nxtAct.children:
             name_i = str( action.__class__.__name__ ).lower()
             if ("pick" in name_i) or ("unstack" in name_i):
@@ -513,21 +516,6 @@ class TaskPlanner:
                         'pose':  arg.pose,
                     } )
         return rtnLst
-
-
-    def p_belief_dist_OK( self ): 
-        """ Return False if belief change criterion met, Otherwise return True """        
-        # 1. Identify the objects being operated on
-        watchList = self.names_of_planned_symbols()
-
-        # 2. Failure Criterion: KL has been falling for N steps
-        # 3. Failure Criterion: Plurality class is different than the current class
-        for pair in watchList:
-            if not self.memory.check_KL_for_symbol_at_pose( pair['pose'], pair['label'] ):
-                return False
-
-        # 4. All checks pass
-        return True
 
 
     def solve_task( self, maxIter, beginPlanPose ):
