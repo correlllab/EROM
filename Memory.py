@@ -473,6 +473,9 @@ class Memory:
         plt.title('Multiple Line Plot')
         plt.xlabel('Time')
         plt.ylabel('KL Divergence')
+
+        # Display
+        plt.show()
         
 
 
