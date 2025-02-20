@@ -59,6 +59,7 @@ _BLOCK_DESC = {
     'bluBlock' : f"blue {_BLOCK_TYPE} block",
     'table'    : f"wooden table",
 }
+_RESPONSIVE_MODE = True
 
 ########## HELPER FUNCTIONS ########################################################################
 
@@ -81,26 +82,26 @@ def set_experiment_env():
     env_sto( "_USE_GRAPHICS", True )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
 
-    env_sto( "_Z_SNAP_BOOST"     ,  -0.75*env_var("_BLOCK_SCALE")   )
-    env_sto( "_Z_STACK_BOOST"    ,   0.00*env_var("_BLOCK_SCALE")   )
+    env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )
+    env_sto( "_Z_STACK_BOOST",  0.00*env_var("_BLOCK_SCALE")   )
 
     env_sto( "_N_INTAKE_SCANS"   ,   1     )
 
-    env_sto( "_N_XTRA_SPOTS"     ,   3      )
-    env_sto( "_N_REQD_OBJS"      ,   3      )
-    env_sto( "_CONFUSE_PROB"     ,   0.025  )
+    env_sto( "_N_XTRA_SPOTS",   3     )
+    env_sto( "_N_REQD_OBJS" ,   3     )
+    env_sto( "_CONFUSE_PROB",   0.025 )
 
-    env_sto( "_BAYES_RAD_L2_M"   , 0.950*env_var("_BLOCK_SCALE") )
-    env_sto( "_PLACE_XY_ACCEPT"  , 0.600*env_var("_BLOCK_SCALE") )
-    env_sto( "_WIDE_XY_ACCEPT"   , 0.750*env_var("_BLOCK_SCALE") )
-    env_sto( "_WIDE_COLLIDE"     , 1.125*env_var("_BLOCK_SCALE") )
-    env_sto( "_WIDE_PLACEMENT"   , 2.000*env_var("_WIDE_COLLIDE") )
+    env_sto( "_BAYES_RAD_L2_M" , 0.950*env_var("_BLOCK_SCALE")  )
+    env_sto( "_PLACE_XY_ACCEPT", 0.600*env_var("_BLOCK_SCALE")  )
+    env_sto( "_WIDE_XY_ACCEPT" , 0.750*env_var("_BLOCK_SCALE")  )
+    env_sto( "_WIDE_COLLIDE"   , 1.125*env_var("_BLOCK_SCALE")  )
+    env_sto( "_WIDE_PLACEMENT" , 2.000*env_var("_WIDE_COLLIDE") )
 
-    env_sto( "_WIDE_Z_ABOVE"     , 1.75*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_Z_ABOVE", 1.75*env_var("_BLOCK_SCALE") )
 
-    env_sto( "_ROBOT_FREE_SPEED",  0.125 ) 
-    env_sto( "_ROBOT_HOLD_SPEED",  0.125 )
-    env_sto( "_ACCEPT_POSN_ERR" ,  0.60*env_var( "_BLOCK_SCALE" ) ) # 0.75 # 0.90
+    env_sto( "_ROBOT_FREE_SPEED", 0.125 ) 
+    env_sto( "_ROBOT_HOLD_SPEED", 0.125 )
+    env_sto( "_ACCEPT_POSN_ERR" , 0.60*env_var( "_BLOCK_SCALE" ) ) # 0.75 # 0.90
     
     env_sto( "_GOAL" ,
         ( 'and',
@@ -111,7 +112,7 @@ def set_experiment_env():
         )
     )
 
-    env_sto( "_UPDATE_PERIOD_S", 5.0       ) 
+    env_sto( "_UPDATE_PERIOD_S", 3.0       ) 
     env_sto( "_OBJ_TIMEOUT_S"  , 60.0*10.0 )
 
     env_sto( "_SCORE_FILTER_EXP", 0.85 )
@@ -130,8 +131,6 @@ def basic_BT_run( btAction ):
     while not btr.p_ended():
         btr.tick_once()
         btr.per_sleep()        
-
-
 
 
 
@@ -177,9 +176,6 @@ class BTRunnerwPeriodicScan:
                 self.lstStop = now()
             self.runner.tick_once()
             self.runner.per_sleep()   
-
-
-
 
 
 
@@ -394,19 +390,42 @@ class TaskPlanner:
             } )
 
 
+    def fetch_src_label_and_pose( self ):
+        """ Get the label and initial pose for the current action """
+        objName = None
+        objPose = None
+        for action in self.symPln.nxtAct.children:
+            name_i = str( action.__class__.__name__ ).lower()
+            if ("pick" in name_i) or ("unstack" in name_i):
+                objName = action.args[0]
+                objPose = action.args[1]
+                break
+        return objName, objPose
+    
+
+    def fetch_dst_label_and_pose( self ):
+        """ Get the label and initial pose for the current action """
+        objName = None
+        objPose = None
+        for action in self.symPln.nxtAct.children:
+            name_i = str( action.__class__.__name__ ).lower()
+            if ("place" in name_i) or ("stack" in name_i):
+                objName = action.args[0]
+                objPose = action.args[1]
+                break
+        return objName, objPose
+    
+
     def check_current_KL_OK( self ):
         """ Find out where we expect important symbols and run the check """
 
         if env_var("_USE_GRAPHICS"):
             self.memory.plot_KL_history_for_all_obj()
 
-        for action in self.symPln.nxtAct.children:
-            name_i = str( action.__class__.__name__ ).lower()
-            if ("pick" in name_i) or ("unstack" in name_i):
-                objName = action.args[0]
-                objPose = action.args[1]
-                return self.memory.check_KL_for_symbol_at_pose( objPose, objName )
-        return True
+        objName, objPose = self.fetch_src_label_and_pose()
+        if objName is None:
+            return False
+        return self.memory.check_KL_for_symbol_at_pose( objPose, objName )
     
 
     def p_OK_to_take_shot( self ):
@@ -437,7 +456,7 @@ class TaskPlanner:
     def phase_4_Execute_Action( self ):
         """ Attempt to execute the first action in the symbolic plan """
 
-        if 1:
+        if _RESPONSIVE_MODE:
 
             btr = BTRunnerwPeriodicScan( 
                 self.symPln.nxtAct, 
@@ -453,8 +472,11 @@ class TaskPlanner:
                 self.memory.history.append( msg = f"Action Failure: {btr.runner.msg}" )
             else:
                 self.status = Status.RUNNING
+                _, srcPose = self.fetch_src_label_and_pose()
+                _, dstPose = self.fetch_dst_label_and_pose()
+                self.memory.move_symbol_from_to_pose( srcPose, dstPose )
         
-        if 0:
+        else:
             btr = BT_Runner( self.symPln.nxtAct, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
             btr.setup_BT_for_running()
 
@@ -551,10 +573,15 @@ class TaskPlanner:
 
             # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
             bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
-            self.memory.reset_memory()
+
+            if not _RESPONSIVE_MODE:
+                self.memory.reset_memory()
 
             if env_var("_USE_GRAPHICS"):
-                vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
+                if _RESPONSIVE_MODE:
+                    render_memory_list( syms = self.symPln.symbols, robotPose = bgnPoses )
+                else:
+                    vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
 
             for bgnPose in bgnPoses:
                 self.robot.moveL( _SAFE, asynch = False )

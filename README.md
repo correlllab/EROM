@@ -9,17 +9,20 @@ Entropy Ranked Object Memory
     - `[Y]` Update as part of the scan process, 2025-01-21: Added!, NEEDS TESTING
     - `[Y]` Use rays in the pose update!, 2025-01-21: Seems pretty hacky!, NEEDS TESTING
 * `[Y]` Run planner with Bayesian Updates on multiple scans, 2025-01-22: TESTED! Stacks blocks and recognizes it
+* `[Y]` Re-implement periodic scanning, 2025-02-20: **Pauseable** BTs!
+    - `[Y]` Planner runs the BT with periodic pause, 2025-02-20: **Pauseable** BTs!
+    - `[Y]` Test pause, 2025-02-20: **Pauseable** BTs!
+    - `[Y]` Perceive during pause, 2025-02-20: **Pauseable** BTs!
+* `[Y]` Evaluate the Memory Implementation
+    - `[Y]` Is there inappropriate merging in the Bayesian Update?, 2025-02-20: *No*, **WARNING**: Z-snapping at the scan stage!
+    - `[Y]` Is my implementation of Maximum Likelyhood masking potential problems?, 2025-02-20: *No problems so far*, 
+    - `[Y]` Is there a simpler Maximum Likelyhood implementation?, 2025-02-20: *Maybe*, but I don't care right now
 
-* `[>]` Re-implement periodic scanning
-    - `[>]` Planner runs the BT with periodic pause
-    - `[ ]` Test pause
-    - `[ ]` Perceive during pause
+* `[>]` Run planner with Bayesian Updates on periodic scans
+    - `[>]` Do NOT erase memory between steps!
+    - `[>]` Consider the occlusion of supporting blocks!
+        * **WARNING**: "Geometry.py" is a **YAGNI** threat!
 
-* `[ ]` Evaluate the Memory Implementation
-    - `[ ]` Is there inappropriate merging in the Bayesian Update?
-    - `[ ]` Is my implementation of Maximum Likelyhood masking potential problems?
-    - `[ ]` Is there a simpler Maximum Likelyhood implementation?
-* `[ ]` Run planner with Bayesian Updates on periodic scans
 * `[ ]` Baseline Experiments
 * `[ ]` Shortcut Experiments
 

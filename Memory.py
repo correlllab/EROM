@@ -22,7 +22,8 @@ from aspire.env_config import env_var
 from aspire.utils import match_name, normalize_dist
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols )
 
-from utils import ( LogPickler, zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, )
+from utils import ( LogPickler, zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, 
+                    snap_z_to_nearest_block_unit_above_zero )
 from OWLv2_Segment import Perception_OWLv2
 from Bayes import BayesMemory
 
@@ -68,11 +69,11 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
 
         if len( item['Pose'] ) == 16:
             objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
+            # HACK: SNAP THE Z-COMPONENT DURING SCAN
+            objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
         else:
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         
-        # item['CPCD']
-
         # Create reading
         rtnObj = GraspObj( 
             labels = dstrb, 
@@ -151,6 +152,7 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
     
     ranked : Dict[str, Deque[GraspObj]] = dict()
     for obj in objLst:
+        
         labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
         for lbl_i, prb_i in labelDist:
             if (lbl_i not in ranked):
@@ -175,7 +177,10 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
     
     while( overlap ):
         for keyflict in conflicts[1:]:
-            picked[ keyflict ] = ranked[ keyflict ].popleft()
+            if len( ranked[ keyflict ] ):
+                picked[ keyflict ] = ranked[ keyflict ].popleft()
+            else:
+                break # HACK: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT
         overlap, conflicts = p_conflict( list( picked.values() ) )
 
     symbols = [sym for sym in list( picked.values() ) if sym.label != env_var("_NULL_NAME")]
@@ -428,12 +433,14 @@ class Memory:
     def move_symbol_from_to_pose( self, srcPose, dstPose ):
         """ Find the symbol at `srcPose` and move it to `dstPose`, Return thin symbols if it was moved, else return None """
         dstPose  = extract_pose_as_homog( dstPose )
+        self.bMem.update_belief_pose( extract_pose_as_homog( srcPose ), dstPose )
         needMove = self.closest_symbol_to_pose( srcPose )
         if (needMove is not None):
             needMove.pose = dstPose.copy()
             return needMove
         else:
             return None
+        
 
 
     def update_symbol_history( self, symLst : list[GraspObj] ):
@@ -463,9 +470,10 @@ class Memory:
     def plot_KL_history_for_all_obj( self ):
         """ Simple plot of the KL divergence for each symbol """
         for k, v in self.symH.items():
-            print( f"Item {k}: Dist = {v.distH[-1]}\nKL History:{v.KLDvH}\n" )
+            print( f"Item {k}: Dist = {v.distH[-1]}\nKL History: {v.KLDvH}\n" )
             plt.plot( v.KLDvH, label = v.label )
 
+        print( f"About to draw graph of {len(self.symH)} symbols ..." )
         # Adding the legend
         plt.legend()
 
@@ -474,9 +482,13 @@ class Memory:
         plt.xlabel('Time')
         plt.ylabel('KL Divergence')
 
-        # Display
-        plt.show()
-        
+        print( f"About to render graph of {len(self.symH)} symbols ..." )
+        # Display / Render
+        # plt.show()
+        plt.savefig( f"data/KL-Plot_{now()}.pdf" )
+
+        print( "Graph COMPLETE!" )
+                
 
 
     ##### Begin / End ############################

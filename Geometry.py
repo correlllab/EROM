@@ -78,9 +78,14 @@ def facet_adjacency_list_ordered( F ):
 class npVFN:
     """ Simple Mesh made of `np.ndarray`s of [V]ertices, [F]aces, and [N]ormals """
 
-    def build_from_unshared_vertices( self, V ):
-        """ Populate mesh assuming an ordered list of vertices """
-        pass
+    @property
+    def X( self ):
+        return self._X
+
+    @X.setter
+    def X( self, value ):
+        self._X    : np.ndarray = np.array( value )
+        self.fresh : bool       = True
 
 
     def __init__( self, V = None, F = None, N = None ):
@@ -89,11 +94,27 @@ class npVFN:
         self.F = np.array( F, dtype = int   ) if (F is not None) else np.zeros( (0,3), dtype = int   ) # Faces
         self.N = np.array( N, dtype = float ) if (N is not None) else np.zeros( (0,3), dtype = float ) # Normals
         self.B = None # -------------------------------------------------------------------------------- Bounding Box
+        self.X = np.eye(4) # --------------------------------------------------------------------------- Homogeneous Transform
         
     
     def __len__( self ):
         """ Return the number of triangles """
         return len( self.F ) 
+    
+
+    def transform( self, xform = None ):
+        """ Transform all the points and directions """
+        if xform is not None:
+            self.X = xform
+        if self.fresh:
+            # 1. Transform Vertices
+            Vp = np.hstack( (self.V, np.ones( (self.V.shape[0],1,) )) ).transpose()
+            Vp = self.X.dot( Vp )
+            self.V = np.array( Vp[0:3,:] ).transpose()
+            # 2. Rotate Normals
+            R  = self.X[0:3,0:3]
+            Np = self.N.transpose()
+            self.N = R.dot( Np ).transpose()
 
 
     def get_faces_as_tris( self ) -> np.ndarray:
@@ -223,3 +244,6 @@ def make_cuboid( xLen, yLen, zLen ):
     cbd.F[11,:] = np.array( [5, 7, 4,] )
     # /// Load Normals ///
     cbd.N = VF_to_N( cbd.V , cbd.N )
+
+
+# def make_block(  )

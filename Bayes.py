@@ -291,4 +291,28 @@ class BayesMemory:
             print()
 
 
+    ##### Belief Update ####################################################
+
+    def get_belief_closest_to_pose( self, q : np.ndarray, margin : float = 3.0*env_var("_BLOCK_SCALE") ):
+        """ Get the belief closest to `q` within `margin` """
+        qPos    = posn_from_xform( extract_pose_as_homog( q ) )
+        dMin    = 1e9
+        belBest = None
+        for belief in self.beliefs:
+            belPosn  = posn_from_xform( extract_pose_as_homog( belief ) )
+            dist     = np.linalg.norm( np.subtract( qPos, belPosn ) )
+            if (dist <= margin) and (dist < dMin):
+                dMin     = dist
+                belBest  = belief
+        return belBest
+    
+
+    def update_belief_pose( self, srcPose : np.ndarray, dstPose : np.ndarray, margin : float = 3.0*env_var("_BLOCK_SCALE") ):
+        """ Find the symbol at `srcPose` and move it to `dstPose`, return whether the belief was moved """
+        belief = self.get_belief_closest_to_pose( srcPose, margin )
+        if belief is None:
+            return False
+        belief.pose = ObjPose( extract_pose_as_homog( dstPose ) )
+        return True
+
     

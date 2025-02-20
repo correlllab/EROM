@@ -500,7 +500,7 @@ def scan_list_geo( objs : list[GraspObj], noTable = True ):
 
 ########## RENDER MEMORY ###########################################################################
 
-def render_memory_list( objs : list[GraspObj] = None, syms = None ):
+def render_memory_list( objs : list[GraspObj] = None, syms = None, robotPose = None ):
     """ Render the memory """
     if objs is not None:
         objLst       = reading_list_geo( objs )
@@ -510,7 +510,7 @@ def render_memory_list( objs : list[GraspObj] = None, syms = None ):
         missingTable = True
     if syms is not None:
         objLst.extend( symbol_list_geo( syms, noTable = (not missingTable) ) )
-    vispy_geo_list_window( objLst )
+    vispy_geo_list_window( objLst, robotPose )
 
 
 def render_scan_list( objs : list[GraspObj] ):
