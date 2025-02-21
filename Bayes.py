@@ -307,12 +307,24 @@ class BayesMemory:
         return belBest
     
 
+    def del_beliefs_close_to_pose( self, q : np.ndarray, margin : float = 2.0*env_var("_BLOCK_SCALE") ):
+        qPos = posn_from_xform( extract_pose_as_homog( q ) )
+        hits = set([])
+        for belief in self.beliefs:
+            belPosn  = posn_from_xform( extract_pose_as_homog( belief ) )
+            dist     = np.linalg.norm( np.subtract( qPos, belPosn ) )
+            if (dist <= margin):
+                hits.add( belief.index )
+        self.beliefs = [bel for bel in self.beliefs if (bel.index not in hits)]
+        
+
     def update_belief_pose( self, srcPose : np.ndarray, dstPose : np.ndarray, margin : float = 3.0*env_var("_BLOCK_SCALE") ):
         """ Find the symbol at `srcPose` and move it to `dstPose`, return whether the belief was moved """
         belief = self.get_belief_closest_to_pose( srcPose, margin )
         if belief is None:
             return False
         belief.pose = ObjPose( extract_pose_as_homog( dstPose ) )
+        self.del_beliefs_close_to_pose( srcPose , margin = 2.0*env_var("_BLOCK_SCALE") )
         return True
 
     

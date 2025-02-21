@@ -82,8 +82,9 @@ def set_experiment_env():
     env_sto( "_USE_GRAPHICS", True )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
 
-    env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )
-    env_sto( "_Z_STACK_BOOST",  0.00*env_var("_BLOCK_SCALE")   )
+    # env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )
+    env_sto( "_Z_SNAP_BOOST" , 0.00*env_var("_BLOCK_SCALE") )
+    env_sto( "_Z_STACK_BOOST", 0.00*env_var("_BLOCK_SCALE") )
 
     env_sto( "_N_INTAKE_SCANS"   ,   1     )
 
@@ -266,7 +267,7 @@ class TaskPlanner:
 
     ##### Phase 1 ################################
 
-    def phase_1_Perceive( self, Append = False ):
+    def phase_1_Perceive( self, Append = False, suppressDeterm = False ):
         """ Take in evidence and form beliefs """
 
         camPose  = self.robot.get_cam_pose()
@@ -281,6 +282,9 @@ class TaskPlanner:
             camPose,
             Append
         ) 
+
+        if not suppressDeterm:
+            self.memory.get_current_most_likely()
 
 
     ##### Phase 2 ################################
@@ -466,14 +470,20 @@ class TaskPlanner:
                 self.p_OK_to_take_shot, 
                 sleepTime_s = 0.75 
             )
+
             btr.updating_BT_run()
+
+            _, srcPose = self.fetch_src_label_and_pose()
+            _, dstPose = self.fetch_dst_label_and_pose()
             if (btr.runner.status == Status.FAILURE):
                 self.status = Status.FAILURE
-                self.memory.history.append( msg = f"Action Failure: {btr.runner.msg}" )
+                if 0:
+                    self.memory.history.append( msg = f"Action Failure: {btr.runner.msg}" )
+                    self.memory.fail_symbol( srcPose )
+                else:
+                    self.memory.reset_memory()
             else:
                 self.status = Status.RUNNING
-                _, srcPose = self.fetch_src_label_and_pose()
-                _, dstPose = self.fetch_dst_label_and_pose()
                 self.memory.move_symbol_from_to_pose( srcPose, dstPose )
         
         else:
@@ -579,14 +589,18 @@ class TaskPlanner:
 
             if env_var("_USE_GRAPHICS"):
                 if _RESPONSIVE_MODE:
-                    render_memory_list( syms = self.symPln.symbols, robotPose = bgnPoses )
+                    if len( self.memory.bMem.beliefs ):
+                        symLst = self.memory.get_current_most_likely()
+                    else:
+                        symLst = self.symPln.symbols
+                    render_memory_list( syms = symLst, robotPose = bgnPoses )
                 else:
                     vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
 
             for bgnPose in bgnPoses:
                 self.robot.moveL( _SAFE, asynch = False )
                 self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
-                self.phase_1_Perceive( Append = True )
+                self.phase_1_Perceive( Append = True, suppressDeterm = True )
 
             if env_var("_USE_GRAPHICS"):
                 render_scan_list( self.memory.scan )
@@ -613,13 +627,15 @@ class TaskPlanner:
             print( f"Phase 3, {self.status} ..." )
             self.phase_3_Plan_Task()
 
+            if self.p_failed():
+                self.memory.reset_memory()
+
             if self.status in (Status.SUCCESS, Status.FAILURE):
                 print( f"LOOP, {self.status} ..." )
                 continue
 
-            if self.p_failed():
-                print( f"LOOP, {self.status} ..." )
-                continue
+            
+                
 
             ##### Phase 4 ########################
 

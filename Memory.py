@@ -176,11 +176,14 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
     overlap, conflicts = p_conflict( list( picked.values() ) )
     
     while( overlap ):
+        fault = False
         for keyflict in conflicts[1:]:
             if len( ranked[ keyflict ] ):
                 picked[ keyflict ] = ranked[ keyflict ].popleft()
             else:
-                break # HACK: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT
+                fault = True # HACK: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT
+        if fault:
+            break
         overlap, conflicts = p_conflict( list( picked.values() ) )
 
     symbols = [sym for sym in list( picked.values() ) if sym.label != env_var("_NULL_NAME")]
@@ -441,6 +444,12 @@ class Memory:
         else:
             return None
         
+
+    def fail_symbol( self, srcPose ):
+        """ Stop believing in the thing we tried to move """
+        needFail = self.closest_symbol_to_pose( srcPose )
+        del self.symH[ needFail.id ]
+        self.bMem.del_beliefs_close_to_pose( srcPose )
 
 
     def update_symbol_history( self, symLst : list[GraspObj] ):
