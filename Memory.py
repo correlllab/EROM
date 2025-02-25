@@ -179,6 +179,9 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
         fault = False
         # for keyflict in conflicts[1:]:
         keyflict = conflicts[-1]
+        
+
+
         if len( ranked[ keyflict ] ):
             picked[ keyflict ] = ranked[ keyflict ].popleft()
         else:
@@ -297,7 +300,7 @@ class SensoryPlanner:
             self.plan_3d_shot_centroid( objects, [  1.25, -0.25, 1.0, ], self.dShot, defaultPose ),
             self.plan_3d_shot_centroid( objects, [  1.25,  0.25, 1.0, ], self.dShot, defaultPose ),
             # self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
-            # self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
+            self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
         ]
     
 
