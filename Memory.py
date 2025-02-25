@@ -69,8 +69,8 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
 
         if len( item['Pose'] ) == 16:
             objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
-            # # HACK: SNAP THE Z-COMPONENT DURING SCAN
-            # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
+            # HACK: SNAP THE Z-COMPONENT DURING SCAN
+            objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
         else:
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         
@@ -177,11 +177,13 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
     
     while( overlap ):
         fault = False
-        for keyflict in conflicts[1:]:
-            if len( ranked[ keyflict ] ):
-                picked[ keyflict ] = ranked[ keyflict ].popleft()
-            else:
-                fault = True # HACK: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT
+        # for keyflict in conflicts[1:]:
+        keyflict = conflicts[-1]
+        if len( ranked[ keyflict ] ):
+            picked[ keyflict ] = ranked[ keyflict ].popleft()
+        else:
+            fault = True # HACK: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT
+            print( "deque empty!: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT" )
         if fault:
             break
         overlap, conflicts = p_conflict( list( picked.values() ) )
