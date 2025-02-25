@@ -114,8 +114,12 @@ def set_experiment_env():
 
     env_sto( "_PLACE_XY_ACCEPT", 0.600*env_var("_BLOCK_SCALE")  )
     env_sto( "_WIDE_XY_ACCEPT" , 0.750*env_var("_BLOCK_SCALE")  )
-    env_sto( "_WIDE_COLLIDE"   , 1.125*env_var("_BLOCK_SCALE")  )
+
+    env_sto( "_WIDE_COLLIDE"   , 0.95*env_var("_BLOCK_SCALE")  )
+    # env_sto( "_WIDE_COLLIDE"   , 1.125*env_var("_BLOCK_SCALE")  ) # WHY WOULD I EVEN DO THAT?
+
     env_sto( "_WIDE_PLACEMENT" , 2.000*env_var("_WIDE_COLLIDE") )
+
 
     env_sto( "_WIDE_Z_ABOVE", 1.75*env_var("_BLOCK_SCALE") )
 

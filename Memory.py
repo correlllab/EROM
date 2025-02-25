@@ -177,16 +177,19 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
     
     while( overlap ):
         fault = False
-        # for keyflict in conflicts[1:]:
-        keyflict = conflicts[-1]
-        
-
-
-        if len( ranked[ keyflict ] ):
-            picked[ keyflict ] = ranked[ keyflict ].popleft()
-        else:
-            fault = True # HACK: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT
-            print( "deque empty!: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT" )
+        pNxMx = 0.0
+        lblMx = None
+        for label_i in conflicts:
+            pNext_i = ranked[ label_i ][0].prob
+            if pNext_i > pNxMx:
+                pNxMx = pNext_i
+                lblMx = label_i
+        if lblMx is not None:
+            if len( ranked[ lblMx ] ):
+                picked[ lblMx ] = ranked[ lblMx ].popleft()
+            else:
+                fault = True # HACK: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT
+                print( "deque empty!: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT" )
         if fault:
             break
         overlap, conflicts = p_conflict( list( picked.values() ) )
