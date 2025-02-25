@@ -306,7 +306,7 @@ def reading_geo( objReading : GraspObj, alpha = None ):
                                         color = colr_i, edge_color = lkgClr if objReading.LKG else belClr , )
             bloc_i.transform = transforms.STTransform( translate = xfrm_i[:3,3] )
             rtnGeo.append( bloc_i )
-    if objReading.prob > 0.0:
+    if (objReading.prob > 0.0) and (objReading.label != env_var("_NULL_NAME")):
         scl  = env_var("_BLOCK_SCALE") * objReading.prob
         bClr = env_var("_CLR_TABLE")[ objReading.label[:3] ]
         bClr.append( 1.0 )

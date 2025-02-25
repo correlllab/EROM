@@ -22,6 +22,7 @@ import numpy as np
 from magpie_control.poses import vec_unit
 from magpie_perception import pcd
 from magpie_control import realsense_wrapper as real
+from magpie_control.realsense_wrapper import get_oPCD_aabb_volume
 from magpie_perception.label_owlv2 import LabelOWLv2
 
 ### ASPIRE ###
@@ -35,8 +36,8 @@ _VERBOSE = 1
 _QUERIES = [ 
     # {'query': "a photo of a violet block", 'abbrv': "vio", },
     {'query': "a photo of a blue block"  , 'abbrv': "blu", },
-    # {'query': "a photo of a red block"   , 'abbrv': "red", },
-    {'query': "a photo of a yellow block", 'abbrv': "ylw", },
+    {'query': "a photo of a red block"   , 'abbrv': "red", },
+    # {'query': "a photo of a yellow block", 'abbrv': "ylw", },
     {'query': "a photo of a green block" , 'abbrv': "grn", },
     # {'query': "a photo of a orange block", 'abbrv': "orn", },
 ]
@@ -372,17 +373,41 @@ class Perception_OWLv2:
                 else:
                     mask_i = bbox_to_mask( img_i.shape, hit_i['bboxi'] )
 
-                ray_i = mask_ray( mask_i, hit_i['bboxi'] )
+                # ray_i = mask_ray( mask_i, hit_i['bboxi'] )
 
-                if (50000 < np.sum( mask_i )) or (np.sum( mask_i ) < 100):
+                loCount =   500 #100  # 2025-02-24: ?? WINNING PARAMS ??
+                hiCount = 50000  # 2025-02-24: ?? WINNING PARAMS ??
+                smCount = np.sum( mask_i )
+
+                if (hiCount < smCount) or (smCount < loCount):
                     print( "MASK ERROR" )
                     continue
 
                 cpcd = None
 
-                if _USE_ALT and (mpcd is not None):
+                if _USE_ALT:
 
-                    cpcd = mpcd.get_masked_cpcd( mask_i, NB = _NB_CLUST )
+                    if mpcd is None:
+                        print( "`segment`: `mpcd` is None!" )
+                        continue
+
+                    cpcd    = mpcd.get_masked_cpcd( mask_i, NB = _NB_CLUST )
+                    pcdVol  = get_oPCD_aabb_volume( cpcd )
+
+                    vThresh = 2.0 * env_var("_BLOCK_VOLUME") # 2025-02-24: ?? WINNING PARAMS ??
+                    # vThresh = 3.0 * env_var("_BLOCK_VOLUME")
+                    # vThresh = 4.0 * env_var("_BLOCK_VOLUME")
+
+                    # epsilon = 2.5e-07
+                    # epsilon = 5.0e-07
+                    epsilon = 7.5e-07 # 2025-02-24: ?? WINNING PARAMS ??
+
+                    if pcdVol > vThresh:
+                        print( f"CPCD TOO BIG: {pcdVol} > {vThresh}" )
+                        continue
+                    if pcdVol < epsilon:
+                        print( f"CPCD TOO SMALL: {pcdVol} < {epsilon}" )
+                        continue
 
                 else:
 
@@ -418,7 +443,8 @@ class Perception_OWLv2:
                         'CPCD'       : { 'points' : np.asarray( cpcd.points ).copy(),
                                          'colors' : np.asarray( cpcd.colors ).copy(), },
                         'shotID'     : hit_i['shotID'],
-                        'camRay'     : ray_i,
+                        # 'camRay'     : np.array([[0,0,0,],[1,1,1,]]),
+                        'camRay'     : np.array([0,0,1,]),
                     }
                     item['Probability'][ hit_i['abbrv'] ] = hit_i['score']
                     rtnObjs.append( item )

@@ -147,6 +147,7 @@ class BayesMemory:
         for i, key in enumerate( keys ):
             nuLabels[ key ] = pstrr[i]
         belief.labels = nuLabels
+        belief.cpcd.merge( evidence.cpcd )
 
 
     def integrate_one_reading( self, objReading : GraspObj, camXform : np.ndarray = None, 
@@ -328,3 +329,22 @@ class BayesMemory:
         return True
 
     
+    ##### HACK ############################################################
+
+    def scale_by_pcd_pop( self ):
+        """ Count points as in indication of confidence """
+        Nmax = 0
+        for bel in self.beliefs:
+            Nmax = max( Nmax, len( bel.cpcd.points ) )
+
+        for bel in self.beliefs:
+            pTot = 0.0
+            frac = 1.0 * len( bel.cpcd.points ) / Nmax
+            nDct = dict()
+            for l_j, p_j in bel.labels.items():
+                if l_j != env_var("_NULL_NAME"):
+                    p_jp = p_j * frac
+                    pTot += p_jp
+                    nDct[ l_j ] = p_jp
+            nDct[ env_var("_NULL_NAME") ] = 1.0 - pTot
+            bel.labels = nDct

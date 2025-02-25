@@ -69,8 +69,8 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
 
         if len( item['Pose'] ) == 16:
             objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
-            # HACK: SNAP THE Z-COMPONENT DURING SCAN
-            objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
+            # # HACK: SNAP THE Z-COMPONENT DURING SCAN
+            # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
         else:
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         
@@ -295,7 +295,7 @@ class SensoryPlanner:
             self.plan_3d_shot_centroid( objects, [  1.25, -0.25, 1.0, ], self.dShot, defaultPose ),
             self.plan_3d_shot_centroid( objects, [  1.25,  0.25, 1.0, ], self.dShot, defaultPose ),
             # self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
-            self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
+            # self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
         ]
     
 
@@ -526,17 +526,24 @@ class Memory:
         self.camPlan.locate_all( objLst )
 
 
+    # def belief_update( self, xform = None ):
+    #     """ Integrate current scan into the current beliefs """
+    #     self.bMem.belief_update( self.scan, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
+
+
     def process_observations( self, obs, xform = None, Append = False ):
         """ Integrate one noisy scan into the current beliefs """
+        gObs = observation_to_readings( obs, xform )
         if (Append and self.mult):
-            self.scan.extend( observation_to_readings( obs, xform ) )
+            self.scan.extend( gObs )
         else:
-            self.scan = observation_to_readings( obs, xform )
+            self.scan = gObs[:]
             if Append:
                 self.mult = True
 
         # self.bMem.belief_update( self.scan, xform )
-        self.bMem.belief_update( self.scan, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
+        # self.bMem.belief_update( self.scan, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
+        self.bMem.belief_update( gObs, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
 
         self.history.append( 
             datum = {
@@ -554,6 +561,10 @@ class Memory:
         """ Generate symbols """
         symbols = list()
         if strat == "bayes":
+
+            # HACK: USE POINT COUNT AS A SCALE OF CONFIDENCE
+            self.bMem.scale_by_pcd_pop()
+
             symbols = most_likely_non_conflict( self.bMem.beliefs ) 
         elif strat == "score":
             symbols = strongest_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
@@ -564,6 +575,10 @@ class Memory:
             datum = deep_copy_memory_list( symbols ),
             msg   = "symbols" 
         )
+
+        # # HACK: SNAP SYMBOL Z
+        # for sym in symbols:
+        #     sym.pose.pose[2,3] = snap_z_to_nearest_block_unit_above_zero( sym.pose.pose[2,3] )
 
         self.update_symbol_history( symbols )
 

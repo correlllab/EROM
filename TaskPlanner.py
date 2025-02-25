@@ -55,11 +55,13 @@ _SAFE = repair_pose( np.array( [[-0.985, -0.163, -0.052, -0.252],
 _BLOCK_TYPE = "plastic" if (env_var("_BLOCK_SCALE") > 0.030) else "wooden"
 _BLOCK_DESC = {
     'grnBlock' : f"green {_BLOCK_TYPE} block",
-    'ylwBlock' : f"yellow {_BLOCK_TYPE} block",
+    # 'ylwBlock' : f"yellow {_BLOCK_TYPE} block",
+    'redBlock' : f"red {_BLOCK_TYPE} block",
     'bluBlock' : f"blue {_BLOCK_TYPE} block",
     'table'    : f"wooden table",
 }
-_RESPONSIVE_MODE = True
+
+_RESPONSIVE_MODE = False
 
 ########## HELPER FUNCTIONS ########################################################################
 
@@ -79,12 +81,18 @@ def set_experiment_env():
 
     _trgtGrn = BASE_TARGET()
     
+    env_sto( "_BLOCK_VOLUME", env_var( "_BLOCK_SCALE" )**3 )
+
     env_sto( "_USE_GRAPHICS", True )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
 
     # env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )
-    env_sto( "_Z_SNAP_BOOST" , 0.00*env_var("_BLOCK_SCALE") )
+    # env_sto( "_Z_SNAP_BOOST" , 0.00*env_var("_BLOCK_SCALE") )
+    env_sto( "_Z_SNAP_BOOST" , 0.125*env_var("_BLOCK_SCALE") )
+    # env_sto( "_Z_SNAP_BOOST" , 0.25*env_var("_BLOCK_SCALE") )
+
     env_sto( "_Z_STACK_BOOST", 0.00*env_var("_BLOCK_SCALE") )
+    # env_sto( "_Z_STACK_BOOST", 0.125*env_var("_BLOCK_SCALE") )
 
     env_sto( "_N_INTAKE_SCANS"   ,   1     )
 
@@ -92,7 +100,17 @@ def set_experiment_env():
     env_sto( "_N_REQD_OBJS" ,   3     )
     env_sto( "_CONFUSE_PROB",   0.025 )
 
-    env_sto( "_BAYES_RAD_L2_M" , 0.950*env_var("_BLOCK_SCALE")  )
+    # env_sto( "_BAYES_RAD_L2_M" , 1.000*env_var("_BLOCK_SCALE")  )
+    # env_sto( "_BAYES_RAD_L2_M" , 0.950*env_var("_BLOCK_SCALE")  )
+    # env_sto( "_BAYES_RAD_L2_M" , 0.900*env_var("_BLOCK_SCALE")  )
+    # env_sto( "_BAYES_RAD_L2_M" , 0.800*env_var("_BLOCK_SCALE")  ) # 2025-02-24: This helped!
+    # env_sto( "_BAYES_RAD_L2_M" , 0.750*env_var("_BLOCK_SCALE")  ) 
+    # env_sto( "_BAYES_RAD_L2_M" , 0.700*env_var("_BLOCK_SCALE")  ) 
+    # env_sto( "_BAYES_RAD_L2_M" , 0.650*env_var("_BLOCK_SCALE")  ) 
+    # env_sto( "_BAYES_RAD_L2_M" , 0.500*env_var("_BLOCK_SCALE")  ) 
+    # env_sto( "_BAYES_RAD_L2_M" , 0.300*env_var("_BLOCK_SCALE")  ) 
+    env_sto( "_BAYES_RAD_L2_M" , 0.250*env_var("_BLOCK_SCALE")  ) # 2025-02-24: ?? WINNING PARAMS ??
+
     env_sto( "_PLACE_XY_ACCEPT", 0.600*env_var("_BLOCK_SCALE")  )
     env_sto( "_WIDE_XY_ACCEPT" , 0.750*env_var("_BLOCK_SCALE")  )
     env_sto( "_WIDE_COLLIDE"   , 1.125*env_var("_BLOCK_SCALE")  )
@@ -107,8 +125,12 @@ def set_experiment_env():
     env_sto( "_GOAL" ,
         ( 'and',
             ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
-            ('Supported', 'ylwBlock', 'grnBlock'), 
-            ('Supported', 'bluBlock', 'ylwBlock'), 
+
+            # ('Supported', 'ylwBlock', 'grnBlock'), 
+            # ('Supported', 'bluBlock', 'ylwBlock'), 
+            ('Supported', 'redBlock', 'grnBlock'), 
+            ('Supported', 'bluBlock', 'redBlock'), 
+
             ('HandEmpty',),
         )
     )
@@ -120,7 +142,10 @@ def set_experiment_env():
 
     env_sto( "_NULL_EVIDENCE" , True )
     env_sto( "_DEF_NULL_SCORE", 1.00 )
-    env_sto( "_NULL_THRESH"   , 0.75 )
+
+    # env_sto( "_NULL_THRESH"   , 0.65 )
+    env_sto( "_NULL_THRESH"   , 0.75 ) # 2025-02-24: ?? WINNING PARAMS ??
+    # env_sto( "_NULL_THRESH"   , 0.95 )
     
 
 
@@ -526,13 +551,7 @@ class TaskPlanner:
 
     def phase_5_Return_Home( self, goPose ):
         """ Get ready for next iteration while updating beliefs """
-        if 0:
-            self.return_home( goPose )
-            self.memory.history.append( msg = "Annotation", datum = {
-                "Event": "The robot moved to the home pose.",
-            } )
-        else:
-            self.robot.moveL( _SAFE, asynch = False )
+        self.robot.moveL( _SAFE, asynch = False )
         
 
     ##### Task Planner Main Loop ##########################################
@@ -564,8 +583,6 @@ class TaskPlanner:
         self.symPln.set_goal( env_var("_GOAL") )
 
         self.memory.history.append( msg = "Task Start" )
-
-        # self.memory.scan.append( self.dummy_object() ) # NOT REAL: For first iteration sensory planning
 
         while (self.status != Status.SUCCESS) and (i < maxIter): # and (not self.PANIC):
             
@@ -604,6 +621,7 @@ class TaskPlanner:
 
             if env_var("_USE_GRAPHICS"):
                 render_scan_list( self.memory.scan )
+
 
             ##### Phase 2 ########################
 
