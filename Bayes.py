@@ -253,30 +253,46 @@ class BayesMemory:
         self.unvisit_beliefs()
 
 
+    def reconcile_conflicts( self ):
+        """ Decide between overlapping beliefs """
+        # Option 1: Delete Weaker
+        # Option 2: Merge as Evidence
+
+
     def belief_update( self, evdncLst : list[GraspObj], camXform : np.ndarray, maxRadius = 3.0*env_var("_BLOCK_SCALE") ):
         """ Gather and aggregate evidence """
 
         ## Integrate Beliefs ##
         cNu = 0
         cIn = 0
+        bgn = 0
         self.unvisit_beliefs()
         
         if not len( self.beliefs ):
-            # WARNING: ASSUMING EACH OBJECT IS REPRESENTED BY EXACTLY 1 READING
-            for objEv in evdncLst:
+            for i, objEv in enumerate( evdncLst ):
                 if p_symbol_inside_workspace_bounds( objEv ):
                     self.beliefs.append( objEv )
-        else:
+                    bgn = i+1
+                    break
+
+        if bgn < len( evdncLst ):
+            evdncLst = evdncLst[ bgn: ]
             for objEv in evdncLst:
-                # if not objEv.visitRD:
-                #     objEv.visitRD = True
                 if self.integrate_one_reading( objEv, camXform, maxRadius = maxRadius ):
                     cIn += 1
                 else:
                     cNu += 1
-            ## Decay Irrelevant Beliefs ##
-            if env_var("_NULL_EVIDENCE"):
-                self.decay_beliefs( camXform )
+
+        ## Decay Irrelevant Beliefs ##
+        if env_var("_NULL_EVIDENCE"):
+            self.decay_beliefs( camXform )
+
+        # WARNING: THIS PROBABLY INDICATES A PROBLEM
+        ## Reconcile Overlapping ##
+        # bInput = self.beliefs[ 1: ]
+        # self.beliefs = self.beliefs[ :1 ]
+        # for objIn in bInput:
+        #     self.integrate_one_reading( objIn, camXform, maxRadius = maxRadius )
 
         if env_var("_VERBOSE"):
             if (cNu or cIn):
@@ -284,12 +300,12 @@ class BayesMemory:
                 print( f"\t{cIn} object beliefs updated!" )
             else:
                 print( f"\tNO belief update!" )
-        
-        if env_var("_VERBOSE"):
             print( f"Total Beliefs: {len(self.beliefs)}" )
             for bel in self.beliefs:
                 print( f"\t{bel}" )
             print()
+        
+            
 
 
     ##### Belief Update ####################################################

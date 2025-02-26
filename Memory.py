@@ -69,8 +69,10 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
 
         if len( item['Pose'] ) == 16:
             objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
-            # HACK: SNAP THE Z-COMPONENT DURING SCAN
-            objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
+
+            # # HACK: SNAP THE Z-COMPONENT DURING SCAN
+            # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
+
         else:
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         
@@ -180,16 +182,19 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
         pNxMx = 0.0
         lblMx = None
         for label_i in conflicts:
-            pNext_i = ranked[ label_i ][0].prob
-            if pNext_i > pNxMx:
-                pNxMx = pNext_i
-                lblMx = label_i
+            if len( ranked[ label_i ] ):
+                pNext_i = ranked[ label_i ][0].prob
+                if pNext_i > pNxMx:
+                    pNxMx = pNext_i
+                    lblMx = label_i
         if lblMx is not None:
             if len( ranked[ lblMx ] ):
                 picked[ lblMx ] = ranked[ lblMx ].popleft()
             else:
                 fault = True # HACK: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT
                 print( "deque empty!: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT" )
+        else:
+            fault = True
         if fault:
             break
         overlap, conflicts = p_conflict( list( picked.values() ) )
@@ -302,8 +307,8 @@ class SensoryPlanner:
         return [
             self.plan_3d_shot_centroid( objects, [  1.25, -0.25, 1.0, ], self.dShot, defaultPose ),
             self.plan_3d_shot_centroid( objects, [  1.25,  0.25, 1.0, ], self.dShot, defaultPose ),
-            # self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
-            self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
+            self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
+            # self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
         ]
     
 
@@ -570,8 +575,8 @@ class Memory:
         symbols = list()
         if strat == "bayes":
 
-            # HACK: USE POINT COUNT AS A SCALE OF CONFIDENCE
-            self.bMem.scale_by_pcd_pop()
+            # # HACK: USE POINT COUNT AS A SCALE OF CONFIDENCE
+            # self.bMem.scale_by_pcd_pop()
 
             symbols = most_likely_non_conflict( self.bMem.beliefs ) 
         elif strat == "score":

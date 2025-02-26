@@ -103,22 +103,28 @@ def set_experiment_env():
     # env_sto( "_BAYES_RAD_L2_M" , 1.000*env_var("_BLOCK_SCALE")  )
     # env_sto( "_BAYES_RAD_L2_M" , 0.950*env_var("_BLOCK_SCALE")  )
     # env_sto( "_BAYES_RAD_L2_M" , 0.900*env_var("_BLOCK_SCALE")  )
-    # env_sto( "_BAYES_RAD_L2_M" , 0.800*env_var("_BLOCK_SCALE")  ) # 2025-02-24: This helped!
+    env_sto( "_BAYES_RAD_L2_M" , 0.800*env_var("_BLOCK_SCALE")  ) # 2025-02-24: This helped!
     # env_sto( "_BAYES_RAD_L2_M" , 0.750*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.700*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.650*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.500*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.350*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.300*env_var("_BLOCK_SCALE")  ) 
-    env_sto( "_BAYES_RAD_L2_M" , 0.250*env_var("_BLOCK_SCALE")  ) # 2025-02-24: ?? WINNING PARAMS ??
+    # env_sto( "_BAYES_RAD_L2_M" , 0.250*env_var("_BLOCK_SCALE")  ) # 2025-02-24: ?? WINNING PARAMS ??
 
     env_sto( "_PLACE_XY_ACCEPT", 0.600*env_var("_BLOCK_SCALE")  )
     env_sto( "_WIDE_XY_ACCEPT" , 0.750*env_var("_BLOCK_SCALE")  )
 
-    env_sto( "_WIDE_COLLIDE"   , 0.95*env_var("_BLOCK_SCALE")  )
+
+    env_sto( "_WIDE_COLLIDE"   , env_var("_BAYES_RAD_L2_M")  ) # These should be in agreement?
+
+    # env_sto( "_WIDE_COLLIDE"   , 0.450*env_var("_BLOCK_SCALE")  )
+    # env_sto( "_WIDE_COLLIDE"   , 0.625*env_var("_BLOCK_SCALE")  )
+    # env_sto( "_WIDE_COLLIDE"   , 0.800*env_var("_BLOCK_SCALE")  )
+    # env_sto( "_WIDE_COLLIDE"   , 0.950*env_var("_BLOCK_SCALE")  )
     # env_sto( "_WIDE_COLLIDE"   , 1.125*env_var("_BLOCK_SCALE")  ) # WHY WOULD I EVEN DO THAT?
 
-    env_sto( "_WIDE_PLACEMENT" , 2.000*env_var("_WIDE_COLLIDE") )
+    env_sto( "_WIDE_PLACEMENT" , 3.000*env_var("_BLOCK_SCALE") )
 
 
     env_sto( "_WIDE_Z_ABOVE", 1.75*env_var("_BLOCK_SCALE") )
@@ -145,11 +151,15 @@ def set_experiment_env():
 
     env_sto( "_SCORE_FILTER_EXP", 0.85 )
 
-    env_sto( "_NULL_EVIDENCE" , True )
+    # env_sto( "_NULL_EVIDENCE" , True )
+    env_sto( "_NULL_EVIDENCE" , False )
+
     env_sto( "_DEF_NULL_SCORE", 1.00 )
 
+    # env_sto( "_NULL_THRESH"   , 0.50 )
+    env_sto( "_NULL_THRESH"   , 0.60 )
     # env_sto( "_NULL_THRESH"   , 0.65 )
-    env_sto( "_NULL_THRESH"   , 0.75 ) # 2025-02-24: ?? WINNING PARAMS ??
+    # env_sto( "_NULL_THRESH"   , 0.75 ) # 2025-02-24: ?? WINNING PARAMS ??
     # env_sto( "_NULL_THRESH"   , 0.95 )
     
 
@@ -609,15 +619,15 @@ class TaskPlanner:
             if not _RESPONSIVE_MODE:
                 self.memory.reset_memory()
 
-            if env_var("_USE_GRAPHICS"):
-                if _RESPONSIVE_MODE:
-                    if len( self.memory.bMem.beliefs ):
-                        symLst = self.memory.get_current_most_likely()
-                    else:
-                        symLst = self.symPln.symbols
-                    render_memory_list( syms = symLst, robotPose = bgnPoses )
-                else:
-                    vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
+            # if env_var("_USE_GRAPHICS"):
+            #     if _RESPONSIVE_MODE:
+            #         if len( self.memory.bMem.beliefs ):
+            #             symLst = self.memory.get_current_most_likely()
+            #         else:
+            #             symLst = self.symPln.symbols
+            #         render_memory_list( syms = symLst, robotPose = bgnPoses )
+            #     else:
+            #         vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
 
             for bgnPose in bgnPoses:
                 self.robot.moveL( _SAFE, asynch = False )
