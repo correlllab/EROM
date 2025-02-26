@@ -135,6 +135,16 @@ class BayesMemory:
 
     def accum_evidence_for_belief( self, evidence : GraspObj, belief : GraspObj ):
         """ Use Bayesian multiclass update on `belief`, destructive """
+
+        def pose_update( objUpdate : GraspObj, reading : GraspObj ):
+            updtFrac = env_var("_UPDATE_FRAC")
+            belPosn  = posn_from_xform( extract_pose_as_homog( objUpdate.pose ) )
+            objPosn  = posn_from_xform( extract_pose_as_homog( reading.pose   ) )
+            updPosn  = objPosn * updtFrac + belPosn * (1.0 - updtFrac)
+            updPose  = np.eye(4)
+            updPose[0:3,3] = updPosn
+            objUpdate.pose  = ObjPose( updPose )
+
         evdnc = extract_class_dist_in_order( evidence )
         prior = extract_class_dist_in_order( belief   )
         keys  = env_var("_BLOCK_NAMES")
@@ -148,6 +158,8 @@ class BayesMemory:
             nuLabels[ key ] = pstrr[i]
         belief.labels = nuLabels
         belief.cpcd.merge( evidence.cpcd )
+        ## Update Pose ##
+        pose_update( belief, evidence )
 
 
     def integrate_one_reading( self, objReading : GraspObj, camXform : np.ndarray = None, 
@@ -155,16 +167,6 @@ class BayesMemory:
         """ Fuse this belief with the current beliefs """
         relevant = False
         tsNow    = now()
-
-        def pose_update( objUpdate, reading ):
-            updtFrac = 0.45 
-            belPosn  = posn_from_xform( extract_pose_as_homog( objUpdate.pose ) )
-            objPosn  = posn_from_xform( extract_pose_as_homog( reading.pose   ) )
-            updPosn  = objPosn * updtFrac + belPosn * (1.0 - updtFrac)
-            updPose  = np.eye(4)
-            updPose[0:3,3] = updPosn
-            objUpdate.pose  = ObjPose( updPose )
-
 
         # 1. Determine if this belief provides evidence for an existing belief
         dMin     = 1e6
@@ -183,9 +185,6 @@ class BayesMemory:
         if relevant:
             belBest.visited = True
             self.accum_evidence_for_belief( objReading, belBest )
-            
-            ## Update Pose ##
-            pose_update( belBest, objReading )
 
             ## Update Score ##
             belBest.count += objReading.count
@@ -270,7 +269,7 @@ class BayesMemory:
                     cnflc.append( bel_j )
                     check.add( bel_j.index )
             # Option 0: Keep strongest
-            if 1:
+            if 0:
                 cnflc.sort( key = lambda x: max(list(x.labels.values())) )
                 nuBels.append( cnflc[0] )
             # Option 1: Delete Weaker
@@ -278,7 +277,8 @@ class BayesMemory:
                 cnflc.sort( key = lambda x: entropy_factor( x.labels ) )
                 nuBels.append( cnflc[0] )
             # Option 2: Merge as Evidence
-            if 0:
+            if 1:
+                cnflc.sort( key = lambda x: entropy_factor( x.labels ) )
                 addBel = cnflc[0]
                 if len( cnflc ) > 1:
                     for evcBel in cnflc[1:]:

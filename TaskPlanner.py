@@ -103,7 +103,7 @@ def set_experiment_env():
     # env_sto( "_BAYES_RAD_L2_M" , 1.000*env_var("_BLOCK_SCALE")  )
     # env_sto( "_BAYES_RAD_L2_M" , 0.950*env_var("_BLOCK_SCALE")  )
     # env_sto( "_BAYES_RAD_L2_M" , 0.900*env_var("_BLOCK_SCALE")  )
-    env_sto( "_BAYES_RAD_L2_M" , 0.800*env_var("_BLOCK_SCALE")  ) # 2025-02-24: This helped!
+    env_sto( "_BAYES_RAD_L2_M" , 0.800*env_var("_BLOCK_SCALE")  ) # 2025-02-25: ?? WINNING PARAMS ??
     # env_sto( "_BAYES_RAD_L2_M" , 0.750*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.700*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.650*env_var("_BLOCK_SCALE")  ) 
@@ -116,7 +116,7 @@ def set_experiment_env():
     env_sto( "_WIDE_XY_ACCEPT" , 0.750*env_var("_BLOCK_SCALE")  )
 
 
-    env_sto( "_WIDE_COLLIDE"   , env_var("_BAYES_RAD_L2_M")  ) # These should be in agreement?
+    env_sto( "_WIDE_COLLIDE"   , env_var("_BAYES_RAD_L2_M")  ) # 2025-02-25: ?? WINNING PARAMS ??
 
     # env_sto( "_WIDE_COLLIDE"   , 0.450*env_var("_BLOCK_SCALE")  )
     # env_sto( "_WIDE_COLLIDE"   , 0.625*env_var("_BLOCK_SCALE")  )
@@ -124,7 +124,7 @@ def set_experiment_env():
     # env_sto( "_WIDE_COLLIDE"   , 0.950*env_var("_BLOCK_SCALE")  )
     # env_sto( "_WIDE_COLLIDE"   , 1.125*env_var("_BLOCK_SCALE")  ) # WHY WOULD I EVEN DO THAT?
 
-    env_sto( "_WIDE_PLACEMENT" , 3.000*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_PLACEMENT" , 3.000*env_var("_BLOCK_SCALE") ) # 2025-02-25: ?? WINNING PARAMS ??
 
 
     env_sto( "_WIDE_Z_ABOVE", 1.75*env_var("_BLOCK_SCALE") )
@@ -150,9 +150,10 @@ def set_experiment_env():
     env_sto( "_OBJ_TIMEOUT_S"  , 60.0*10.0 )
 
     env_sto( "_SCORE_FILTER_EXP", 0.85 )
+    env_sto( "_UPDATE_FRAC", 0.45 )
 
     # env_sto( "_NULL_EVIDENCE" , True )
-    env_sto( "_NULL_EVIDENCE" , False )
+    env_sto( "_NULL_EVIDENCE" , False ) # 2025-02-25: ?? WINNING PARAMS ??
 
     env_sto( "_DEF_NULL_SCORE", 1.00 )
 

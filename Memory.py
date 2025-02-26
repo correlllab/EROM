@@ -203,6 +203,91 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
 
     print( f"About to return {len(symbols)} symbols!" )
     return symbols
+
+
+def most_likely_objects( objList : list[GraspObj], method = "unique-non-null" ):
+    """ Get the `N` most likely combinations of object classes """
+    ### Combination Generator ###
+
+    def gen_combos( objs : list[GraspObj] ):
+        ## Init ##
+        comboList = [ [1.0,[],], ]
+        ## Generate all class combinations with joint probabilities ##
+        for bel in objs:
+            nuCombos = []
+            for combo_i in comboList:
+                for label_j, prob_j in bel.labels.items():
+                    prob_ij = combo_i[0] * prob_j
+
+                    objc_ij = GraspObj( label = label_j, pose  = bel.pose, 
+                                        prob  = prob_j , score = bel.score, labels = bel.labels )
+                    
+                    nuCombos.append( [prob_ij, combo_i[1]+[objc_ij,],] )
+            comboList = nuCombos
+        ## Sort all class combinations with decreasing probabilities ##
+        comboList.sort( key = (lambda x: x[0]), reverse = True )
+        return comboList
+
+    ### Filtering Methods ###
+
+    def p_unique_labels( objs : list[GraspObj] ):
+        """ Return true if there are as many classes as there are objects """
+        lbls = set([sym.label for sym in objs])
+        return len( lbls ) == len( objs )
+    
+    def p_unique_non_null_labels( objs : list[GraspObj] ):
+        """ Return true if there are as many classes as there are objects """
+        lbls = set([sym.label for sym in objs])
+        if env_var("_NULL_NAME") in lbls: 
+            return False
+        return len( lbls ) == len( objs )
+    
+    def clean_dupes_prob( objLst : list[GraspObj] ):
+        """ Return a version of `objLst` with duplicate objects removed """
+        dctMax: dict[str,GraspObj] = {}
+        for sym in objLst:
+            if not sym.label in dctMax:
+                dctMax[ sym.label ] = sym
+            elif sym.prob > dctMax[ sym.label ].prob:
+                dctMax[ sym.label ] = sym
+        return list( dctMax.values() )
+    
+    def clean_dupes_score( objLst : list[GraspObj] ):
+        """ Return a version of `objLst` with duplicate objects removed """
+        dctMax : dict[str,GraspObj] = {}
+        for sym in objLst:
+            if not sym.label in dctMax:
+                dctMax[ sym.label ] = sym
+            elif sym.score > dctMax[ sym.label ].score:
+                dctMax[ sym.label ] = sym
+        return list( dctMax.values() )
+
+    ### Apply the chosen Filtering Method to all possible combinations ###
+
+    totCombos  = gen_combos( objList )
+    rtnSymbols = list()
+
+    if (method == "unique"):
+        for combo in totCombos:
+            if p_unique_labels( combo[1] ):
+                rtnSymbols = combo[1]
+                break
+    elif (method == "unique-non-null"):
+        for combo in totCombos:
+            if p_unique_non_null_labels( combo[1] ):
+                rtnSymbols = combo[1]
+                break
+    elif (method == "clean-dupes"):
+        rtnSymbols = clean_dupes_prob( totCombos[0][1] )
+    elif (method == "clean-dupes-score"):
+        rtnSymbols = clean_dupes_score( totCombos[0][1] )
+    else:
+        raise ValueError( f"`ResponsiveTaskPlanner.most_likely_objects`: Filtering method \"{method}\" is NOT recognized!" )
+    
+    ### Return all non-null symbols ###
+    rtnLst = [sym for sym in rtnSymbols if sym.label != env_var("_NULL_NAME")]
+    print( f"\nDeterminized {len(rtnLst)} objects!\n" )
+    return rtnLst
         
 
 def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
@@ -570,10 +655,15 @@ class Memory:
     ##### Symbol Grounding #######################
 
 
-    def get_current_most_likely( self, strat = "bayes" ) -> list[GraspObj]:
+    def get_current_most_likely( self, strat = "combo" ) -> list[GraspObj]:
         """ Generate symbols """
         symbols = list()
-        if strat == "bayes":
+
+        if strat == "combo":
+
+            symbols = most_likely_objects( self.bMem.beliefs )
+
+        elif strat == "bayes":
 
             # # HACK: USE POINT COUNT AS A SCALE OF CONFIDENCE
             # self.bMem.scale_by_pcd_pop()
