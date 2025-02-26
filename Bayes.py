@@ -22,7 +22,7 @@ from aspire.symbols import ( euclidean_distance_between_symbols, extract_pose_as
 
 
 ### Local ###
-from utils import set_quality_score
+from utils import set_quality_score, entropy_factor
 
 
 
@@ -253,13 +253,46 @@ class BayesMemory:
         self.unvisit_beliefs()
 
 
-    def reconcile_conflicts( self ):
+    def reconcile_conflicts( self, maxRadius : float = 3.0*env_var("_BLOCK_SCALE") ):
         """ Decide between overlapping beliefs """
-        # Option 1: Delete Weaker
-        # Option 2: Merge as Evidence
+        # WARNING: WHERE DO THE CONFLICTS ENTER?
+
+        check  = set([])
+        nuBels = list()
+        N = len( self.beliefs )
+        for i in range( 0, N-1 ):
+            bel_i = self.beliefs[i]
+            cnflc = [bel_i,]
+            check.add( bel_i.index )
+            for j in range( i+1, N ):
+                bel_j = self.beliefs[j]
+                if (bel_j.index not in check) and euclidean_distance_between_symbols( bel_i, bel_j ) < maxRadius:
+                    cnflc.append( bel_j )
+                    check.add( bel_j.index )
+            # Option 0: Keep strongest
+            if 1:
+                cnflc.sort( key = lambda x: max(list(x.labels.values())) )
+                nuBels.append( cnflc[0] )
+            # Option 1: Delete Weaker
+            if 0:
+                cnflc.sort( key = lambda x: entropy_factor( x.labels ) )
+                nuBels.append( cnflc[0] )
+            # Option 2: Merge as Evidence
+            if 0:
+                addBel = cnflc[0]
+                if len( cnflc ) > 1:
+                    for evcBel in cnflc[1:]:
+                        self.accum_evidence_for_belief( evcBel, addBel )
+                nuBels.append( addBel )
+        for bel in self.beliefs:
+            if bel.index not in check:
+                nuBels.append( bel )
+        self.beliefs = nuBels
+        
 
 
-    def belief_update( self, evdncLst : list[GraspObj], camXform : np.ndarray, maxRadius = 3.0*env_var("_BLOCK_SCALE") ):
+
+    def belief_update( self, evdncLst : list[GraspObj], camXform : np.ndarray, maxRadius : float = 3.0*env_var("_BLOCK_SCALE") ):
         """ Gather and aggregate evidence """
 
         ## Integrate Beliefs ##
@@ -289,10 +322,7 @@ class BayesMemory:
 
         # WARNING: THIS PROBABLY INDICATES A PROBLEM
         ## Reconcile Overlapping ##
-        # bInput = self.beliefs[ 1: ]
-        # self.beliefs = self.beliefs[ :1 ]
-        # for objIn in bInput:
-        #     self.integrate_one_reading( objIn, camXform, maxRadius = maxRadius )
+        self.reconcile_conflicts( maxRadius )
 
         if env_var("_VERBOSE"):
             if (cNu or cIn):
