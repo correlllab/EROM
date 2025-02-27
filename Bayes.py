@@ -320,9 +320,9 @@ class BayesMemory:
         if env_var("_NULL_EVIDENCE"):
             self.decay_beliefs( camXform )
 
-        # WARNING: THIS PROBABLY INDICATES A PROBLEM
-        ## Reconcile Overlapping ##
-        self.reconcile_conflicts( maxRadius )
+        # # HACK: THIS PROBABLY INDICATES A PROBLEM
+        # ## Reconcile Overlapping ##
+        # self.reconcile_conflicts( maxRadius )
 
         if env_var("_VERBOSE"):
             if (cNu or cIn):

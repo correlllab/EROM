@@ -205,7 +205,7 @@ def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
     return symbols
 
 
-def most_likely_objects( objList : list[GraspObj], method = "unique-non-null" ):
+def most_likely_objects( objList : list[GraspObj], method = "sufficient" ):
     """ Get the `N` most likely combinations of object classes """
     ### Combination Generator ###
 
@@ -229,6 +229,11 @@ def most_likely_objects( objList : list[GraspObj], method = "unique-non-null" ):
         return comboList
 
     ### Filtering Methods ###
+
+    def p_enough_labels( objs : list[GraspObj] ):
+        """ Return true if there are as many classes as there are objects """
+        lbls = set([sym.label for sym in objs])
+        return len( lbls ) >= (len( objs[0].labels )-1)
 
     def p_unique_labels( objs : list[GraspObj] ):
         """ Return true if there are as many classes as there are objects """
@@ -267,7 +272,12 @@ def most_likely_objects( objList : list[GraspObj], method = "unique-non-null" ):
     totCombos  = gen_combos( objList )
     rtnSymbols = list()
 
-    if (method == "unique"):
+    if (method == "sufficient"):
+        for combo in totCombos:
+            if p_enough_labels( combo[1] ):
+                rtnSymbols = combo[1]
+                break
+    elif (method == "unique"):
         for combo in totCombos:
             if p_unique_labels( combo[1] ):
                 rtnSymbols = combo[1]
