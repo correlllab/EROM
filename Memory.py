@@ -683,6 +683,9 @@ class Memory:
 
         if strat == "combo":
 
+            # # HACK: USE POINT COUNT AS A SCALE OF CONFIDENCE
+            # self.bMem.scale_by_pcd_pop()
+
             # symbols = most_likely_objects( self.bMem.beliefs, "unique" )
             symbols = most_likely_objects( self.bMem.beliefs, "sufficient" )
 
