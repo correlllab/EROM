@@ -211,20 +211,36 @@ def most_likely_objects( objList : list[GraspObj], method = "sufficient" ):
 
     def gen_combos( objs : list[GraspObj] ):
         ## Init ##
-        comboList = [ [1.0,[],], ]
-        ## Generate all class combinations with joint probabilities ##
-        for bel in objs:
-            nuCombos = []
-            for combo_i in comboList:
-                for label_j, prob_j in bel.labels.items():
-                    prob_ij = combo_i[0] * prob_j
 
-                    objc_ij = GraspObj( label = label_j, pose  = bel.pose, 
-                                        prob  = prob_j , score = bel.score, labels = bel.labels )
-                    
-                    nuCombos.append( [prob_ij, combo_i[1]+[objc_ij,],] )
-            comboList = nuCombos
+        # comboList = [ [1.0,[],], ]
+        # comboList = deque([ [1.0,[],], ])
+        comboList = deque()
+
+        ## Generate all class combinations with joint probabilities ##
+        blkNam = env_var("_ACTUAL_NAMES") # Prevent repeated fetch
+        Nnames = len( blkNam )
+        Nobjct = len( objList )
+        Ncombo = Nnames ** Nobjct
+
+        if env_var("_VERBOSE"):
+            print( f"There are {Ncombo} combinations to inspect!" )
+
+        for i in range( Ncombo ):
+            prob_i = 1.0
+            num_j  = i
+            idx_j  = 0
+            symLst = [None for _ in range(Nobjct)]
+            for j, objct_j in enumerate( objList ):
+                num_j, idx_j = divmod( num_j, Nnames )
+                label_j = blkNam[ idx_j ]
+                prob_j  = objct_j.labels[ label_j ]
+                prob_i *= prob_j
+                symLst[j] = GraspObj( label = label_j, pose  = objct_j.pose, 
+                                      prob  = prob_j , score = objct_j.score, labels = objct_j.labels )
+            comboList.appendleft( [prob_i, symLst] )
+
         ## Sort all class combinations with decreasing probabilities ##
+        comboList = list( comboList )
         comboList.sort( key = (lambda x: x[0]), reverse = True )
         return comboList
 
@@ -632,11 +648,6 @@ class Memory:
     def locate_all( self, objLst : list[GraspObj] ):
         """ Locate one object at a time """
         self.camPlan.locate_all( objLst )
-
-
-    # def belief_update( self, xform = None ):
-    #     """ Integrate current scan into the current beliefs """
-    #     self.bMem.belief_update( self.scan, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
 
 
     def process_observations( self, obs, xform = None, Append = False ):

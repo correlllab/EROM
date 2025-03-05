@@ -163,7 +163,7 @@ class BayesMemory:
 
 
     def integrate_one_reading( self, objReading : GraspObj, camXform : np.ndarray = None, 
-                               maxRadius = 3.0*env_var("_BLOCK_SCALE"), suppressNew = False ):
+                               maxRadius = 3.0*env_var("_BLOCK_SCALE"), suppressNew = False ) -> bool:
         """ Fuse this belief with the current beliefs """
         relevant = False
         tsNow    = now()
@@ -173,9 +173,6 @@ class BayesMemory:
         belBest  = None
         for belief in self.beliefs:
             d = euclidean_distance_between_symbols( objReading, belief )
-
-            # if not self.p_symbol_in_cam_view( camXform, belief ):
-            #     print( f"\t\t{belief} not in cam view!, Distance: {d}" )
 
             if (d <= maxRadius) and (d < dMin) and ((camXform is None) or self.p_symbol_in_cam_view( camXform, belief )):
                 dMin     = d
@@ -200,6 +197,39 @@ class BayesMemory:
 
         # N. Return whether the reading was relevant to an existing belief
         return relevant
+
+
+    def integrate_one_to_many( self, objReading : GraspObj, camXform : np.ndarray = None, 
+                               maxRadius = 3.0*env_var("_BLOCK_SCALE"), suppressNew = False ) -> bool:
+        """ Fuse this belief with the current beliefs """
+        tsNow = now()
+
+        # 1. Determine if this belief provides evidence for an existing belief
+        belNear = list()
+        for belief in self.beliefs:
+            d = euclidean_distance_between_symbols( objReading, belief )
+            if (d <= maxRadius) and ((camXform is None) or self.p_symbol_in_cam_view( camXform, belief )):
+                belNear.append( belief )
+
+
+        for bel in belNear:
+            bel.visited = True
+            self.accum_evidence_for_belief( objReading, bel )
+
+            ## Update Score ##
+            bel.count += objReading.count
+            set_quality_score( bel )
+            bel.ts = tsNow
+
+        # 2. If this evidence does not support an existing belief, it is a new belief
+        if p_symbol_inside_workspace_bounds( objReading ) and (not suppressNew):
+            print( f"\tNO match for {objReading}, Append to beliefs!" )
+            nuBel = objReading.copy()
+            nuBel.LKG = False
+            self.beliefs.append( nuBel ) 
+
+        # N. Return whether the reading was relevant to an existing belief
+        return (len( belNear ) > 0)
     
 
     def integrate_null( self, belief : GraspObj, avgScore = None ):
@@ -256,18 +286,19 @@ class BayesMemory:
         """ Decide between overlapping beliefs """
         # WARNING: WHERE DO THE CONFLICTS ENTER?
 
-        check  = set([])
+        elimnt = set([])
+        added  = set([])
         nuBels = list()
         N = len( self.beliefs )
         for i in range( 0, N-1 ):
             bel_i = self.beliefs[i]
             cnflc = [bel_i,]
-            check.add( bel_i.index )
+            # elimnt.add( bel_i.index )
             for j in range( i+1, N ):
                 bel_j = self.beliefs[j]
-                if (bel_j.index not in check) and euclidean_distance_between_symbols( bel_i, bel_j ) < maxRadius:
+                if (bel_j.index not in elimnt) and euclidean_distance_between_symbols( bel_i, bel_j ) < maxRadius:
                     cnflc.append( bel_j )
-                    check.add( bel_j.index )
+                    # elimnt.add( bel_j.index )
             # Option 0: Keep strongest
             if 0:
                 cnflc.sort( key = lambda x: max(list(x.labels.values())) )
@@ -280,13 +311,25 @@ class BayesMemory:
             if 1:
                 cnflc.sort( key = lambda x: entropy_factor( x.labels ) )
                 addBel = cnflc[0]
-                if len( cnflc ) > 1:
-                    for evcBel in cnflc[1:]:
-                        self.accum_evidence_for_belief( evcBel, addBel )
-                nuBels.append( addBel )
-        for bel in self.beliefs:
-            if bel.index not in check:
-                nuBels.append( bel )
+                if (addBel.index not in elimnt) and (addBel.index not in added):
+                    if len( cnflc ) > 1:
+                        for evcBel in cnflc[1:]:
+                            elimnt.add( evcBel.index )
+                            self.accum_evidence_for_belief( evcBel, addBel )
+                    nuBels.append( addBel )
+                    added.add( addBel.index )
+        # We may have neglected the final belief if it did not participate in a conflict     
+        if len( self.beliefs ) and (self.beliefs[-1].index not in elimnt) and (self.beliefs[-1].index not in added):
+            nuBels.append( self.beliefs[-1] )
+        # Scoop up beliefs that did not participate in a conflict        
+        # elimnt.update( bel.index for bel in nuBels )
+        # for bel in self.beliefs:
+        #     if bel.index not in elimnt:
+        #         nuBels.append( bel )
+        
+        if env_var("_VERBOSE"):
+            print( f"\n\tMerged {N-len(nuBels)} beliefs!\n" )
+
         self.beliefs = nuBels
         
 
@@ -311,7 +354,8 @@ class BayesMemory:
         if bgn < len( evdncLst ):
             evdncLst = evdncLst[ bgn: ]
             for objEv in evdncLst:
-                if self.integrate_one_reading( objEv, camXform, maxRadius = maxRadius ):
+                # if self.integrate_one_reading( objEv, camXform, maxRadius = maxRadius ):
+                if self.integrate_one_to_many( objEv, camXform, maxRadius = maxRadius ):
                     cIn += 1
                 else:
                     cNu += 1
@@ -320,9 +364,10 @@ class BayesMemory:
         if env_var("_NULL_EVIDENCE"):
             self.decay_beliefs( camXform )
 
-        # HACK: THIS PROBABLY INDICATES A PROBLEM
-        ## Reconcile Overlapping ##
-        self.reconcile_conflicts( maxRadius )
+        if env_var("_REPAIR_BAYES"):
+            # HACK: THIS PROBABLY INDICATES A PROBLEM
+            ## Reconcile Overlapping ##
+            self.reconcile_conflicts( maxRadius )
 
         if env_var("_VERBOSE"):
             if (cNu or cIn):
@@ -334,8 +379,6 @@ class BayesMemory:
             for bel in self.beliefs:
                 print( f"\t{bel}" )
             print()
-        
-            
 
 
     ##### Belief Update ####################################################

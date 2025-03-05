@@ -77,12 +77,15 @@ def BASE_TARGET():
 def set_experiment_env():
     """ Params for this experiment """
 
+
+
      # 3D Printed Blocks
 
     _trgtGrn = BASE_TARGET()
     
     env_sto( "_BLOCK_VOLUME", env_var( "_BLOCK_SCALE" )**3 )
 
+    env_sto( "_VERBOSE"     , True )
     env_sto( "_USE_GRAPHICS", False )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
 
@@ -106,8 +109,8 @@ def set_experiment_env():
     # env_sto( "_BAYES_RAD_L2_M" , 0.800*env_var("_BLOCK_SCALE")  ) # 2025-02-25: ?? WINNING PARAMS ??
     # env_sto( "_BAYES_RAD_L2_M" , 0.750*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.700*env_var("_BLOCK_SCALE")  ) 
-    # env_sto( "_BAYES_RAD_L2_M" , 0.650*env_var("_BLOCK_SCALE")  ) 
-    env_sto( "_BAYES_RAD_L2_M" , 0.500*env_var("_BLOCK_SCALE")  ) 
+    env_sto( "_BAYES_RAD_L2_M" , 0.650*env_var("_BLOCK_SCALE")  ) 
+    # env_sto( "_BAYES_RAD_L2_M" , 0.500*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.350*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.300*env_var("_BLOCK_SCALE")  ) 
     # env_sto( "_BAYES_RAD_L2_M" , 0.250*env_var("_BLOCK_SCALE")  ) # 2025-02-24: ?? WINNING PARAMS ??
@@ -156,6 +159,10 @@ def set_experiment_env():
 
     # env_sto( "_NULL_EVIDENCE" , True )
     env_sto( "_NULL_EVIDENCE" , False ) # 2025-02-25: ?? WINNING PARAMS ??
+
+
+    env_sto( "_REPAIR_BAYES" , True ) 
+
 
     env_sto( "_DEF_NULL_SCORE", 1.00 )
 
@@ -645,6 +652,9 @@ class TaskPlanner:
 
             print( f"Phase 2, {self.status} ..." )
             self.phase_2_Conditions()
+
+            if env_var("_VERBOSE"):
+                print(f"Checking goals ...")
 
             if self.symPln.validate_goal_noisy( self.symPln.goal ):
                 self.memory.history.append( msg = f"Believe Success, Iteration {i}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
