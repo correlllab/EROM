@@ -304,11 +304,18 @@ class BayesMemory:
                 cnflc.sort( key = lambda x: max(list(x.labels.values())) )
                 nuBels.append( cnflc[0] )
             # Option 1: Delete Weaker
-            if 0:
-                cnflc.sort( key = lambda x: entropy_factor( x.labels ) )
-                nuBels.append( cnflc[0] )
-            # Option 2: Merge as Evidence
             if 1:
+                cnflc.sort( key = lambda x: entropy_factor( x.labels ) )
+                addBel = cnflc[0]
+                if (addBel.index not in elimnt) and (addBel.index not in added):
+                    if len( cnflc ) > 1:
+                        for evcBel in cnflc[1:]:
+                            elimnt.add( evcBel.index )
+                    nuBels.append( addBel )
+                    added.add( addBel.index )
+            # Option 2: Merge as Evidence
+            # WARNING: THIS IS PROBABLY DOUBLE-COUNTING EVIDENCE!
+            if 0:
                 cnflc.sort( key = lambda x: entropy_factor( x.labels ) )
                 addBel = cnflc[0]
                 if (addBel.index not in elimnt) and (addBel.index not in added):

@@ -234,14 +234,15 @@ def most_likely_objects( objList : list[GraspObj], method = "sufficient" ):
                 num_j, idx_j = divmod( num_j, Nnames )
                 label_j = blkNam[ idx_j ]
                 prob_j  = objct_j.labels[ label_j ]
-                prob_i *= prob_j
+                prob_i += -np.log( prob_j ) # Negative log likelihood
                 symLst[j] = GraspObj( label = label_j, pose  = objct_j.pose, 
                                       prob  = prob_j , score = objct_j.score, labels = objct_j.labels )
             comboList.appendleft( [prob_i, symLst] )
 
         ## Sort all class combinations with decreasing probabilities ##
         comboList = list( comboList )
-        comboList.sort( key = (lambda x: x[0]), reverse = True )
+        # comboList.sort( key = (lambda x: x[0]), reverse = True )
+        comboList.sort( key = (lambda x: x[0]), reverse = False ) # Negative log likelihood
         return comboList
 
     ### Filtering Methods ###
@@ -682,7 +683,8 @@ class Memory:
 
         if strat == "combo":
 
-            symbols = most_likely_objects( self.bMem.beliefs )
+            # symbols = most_likely_objects( self.bMem.beliefs, "unique" )
+            symbols = most_likely_objects( self.bMem.beliefs, "sufficient" )
 
         elif strat == "bayes":
 
