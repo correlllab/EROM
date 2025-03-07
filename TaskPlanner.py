@@ -201,6 +201,7 @@ class BTRunnerwPeriodicScan:
         self.shotCB  = shot_cb
         self.runner  = BT_Runner( rootBH, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
         self.tSleep  = sleepTime_s
+        
 
 
     def p_pause_OK( self ):
@@ -273,6 +274,9 @@ class TaskPlanner:
         if (not noBot):
             self.robot.start()
             self.perc.start_vision()
+
+        self.nPlnFl = 0
+        self.lmFail = 5
 
 
     def shutdown( self ):
@@ -676,6 +680,13 @@ class TaskPlanner:
 
             if self.p_failed():
                 self.memory.reset_memory()
+                self.nPlnFl += 1
+                print( f"PDLS planner has FAILED {self.nPlnFl} times!" )
+                if self.nPlnFl >= self.lmFail:
+                    print( f"HALT!: PDLS failure limit ({self.lmFail}) has been REACHED!\n>>> !END! <<<\n" )
+                    break
+            else:
+                self.nPlnFl = 0
 
             if self.status in (Status.SUCCESS, Status.FAILURE):
                 print( f"LOOP, {self.status} ..." )
