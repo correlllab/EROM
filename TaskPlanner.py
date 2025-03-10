@@ -156,7 +156,10 @@ def set_experiment_env():
     env_sto( "_OBJ_TIMEOUT_S"  , 60.0*10.0 )
 
     env_sto( "_SCORE_FILTER_EXP", 0.85 )
-    env_sto( "_UPDATE_FRAC", 0.45 )
+
+    env_sto( "_UPDATE_FRAC", 0.25 )
+    # env_sto( "_UPDATE_FRAC", 0.45 )
+    # env_sto( "_UPDATE_FRAC", 0.85 )
 
     # env_sto( "_NULL_EVIDENCE" , True )
     env_sto( "_NULL_EVIDENCE" , False ) # 2025-02-25: ?? WINNING PARAMS ??
