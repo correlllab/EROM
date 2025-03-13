@@ -22,12 +22,13 @@ import numpy as np
 from magpie_control.poses import vec_unit
 from magpie_perception import pcd
 from magpie_control import realsense_wrapper as real
-from magpie_control.realsense_wrapper import get_oPCD_aabb_volume
+from magpie_control.realsense_wrapper import get_oPCD_aabb_volume, MPCD
 from magpie_perception.label_owlv2 import LabelOWLv2
 
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto
 from aspire.symbols import CPCD
+from aspire.utils import normalize_dist
 
 
 ########## PERCEPTION SETTINGS #####################################################################
@@ -239,15 +240,15 @@ class Perception_OWLv2:
         return pose_vector.reshape( (16,) ).tolist()
     
 
-    def calculate_area( self, box ):
-        """Calculates the area of the bounding box."""
-        return abs(box[3] - box[1]) * abs(box[2] - box[0])
+    # def calculate_area( self, box ):
+    #     """Calculates the area of the bounding box."""
+    #     return abs(box[3] - box[1]) * abs(box[2] - box[0])
 
 
-    def filter_by_area( self, tolerance, box, total_area ):
-        """Filters the bounding box by area."""
-        area = self.calculate_area(box)
-        return abs(area / total_area) <= tolerance
+    # def filter_by_area( self, tolerance, box, total_area ):
+    #     """Filters the bounding box by area."""
+    #     area = self.calculate_area(box)
+    #     return abs(area / total_area) <= tolerance
 
 
     def bound( self, query, abbrevq ):
@@ -260,9 +261,6 @@ class Perception_OWLv2:
             _, rgbd_image = self.rsc.getPCD()
         image = np.array( rgbd_image.color )
         depth = np.array( rgbd_image.depth )
-    # depth = np.array( rgbd_image.depth )*0.76 # 2025-02-06: This was not a good idea
-
-        # print( f"Image shape: {image.shape}", flush=True, file=sys.stderr )
 
         self.label_vit.set_threshold( env_var("_OWL2_THRESH") )
 
@@ -271,12 +269,6 @@ class Perception_OWLv2:
         rtnHits = list()
         imgID   = str( uuid4() )
         for i in range( len( scores ) ):
-            # if (scores[i] >= env_var("_SEG_SCORE_THRESH")) and \
-            # self.filter_by_area( 
-            #     env_var("_SEG_MAX_FRAC"), 
-            #     self.label_vit.sorted_labeled_boxes_coords[i][0], 
-            #     image.shape[0]*image.shape[1] 
-            # ):
             if (scores[i] >= env_var("_SEG_SCORE_THRESH")):
                 coords  = self.label_vit.sorted_boxes[i]
                 indices = [int(c) for c in coords]
@@ -302,37 +294,50 @@ class Perception_OWLv2:
             'hits'  : rtnHits,
         }
     
+
+    def segment_cloud_w_SAM( self, img : np.ndarray, imgBBoxInt : list[list[int]], mpcd : MPCD,
+                             loCount = 100, hiCount = 50000,
+                             volEps = 7.5e-07, volThresh = 2.0 * env_var("_BLOCK_VOLUME") ):
+        if mpcd is None:
+            print( "`segment_cloud_w_SAM`: `mpcd` is None!" )
+            return None
+
+        sam_mask, _, _ = self.sam_predictor.predict( 
+            img, 
+            np.array( imgBBoxInt ) 
+        )
+        samCount = (sam_mask > 0.1).sum()
+        
+        if loCount < samCount < hiCount:
+            mask_i = sam_mask.copy()
+        else:
+            mask_i = bbox_to_mask( img.shape, imgBBoxInt )
+
+        smCount = np.sum( mask_i )
+
+        if (hiCount < smCount) or (smCount < loCount):
+            print( "MASK ERROR" )
+            return None
+
+        cpcd   = mpcd.get_masked_cpcd( mask_i, NB = _NB_CLUST )
+        pcdVol = get_oPCD_aabb_volume( cpcd )
+
+        if pcdVol > volThresh:
+            print( f"CPCD TOO BIG: {pcdVol} > {volThresh}" )
+            return None
+        if pcdVol < volEps:
+            print( f"CPCD TOO SMALL: {pcdVol} < {volEps}" )
+            return None
+    
     
     def segment( self, queries : list[dict] ) -> tuple[list[dict], list[dict]]: 
         """ Get poses from the camera """
-
-        def mask_ray( mask : np.ndarray, bbox : np.ndarray ):
-            """ Project a ray through the center of the mask """
-            rows   = mask.shape[0]
-            rwHf   = rows / 2
-            cols   = mask.shape[1]
-            clHf   = cols / 2
-            cntr2d = np.zeros( 2 )
-            count  = 0.0
-            Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
-            Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
-            for j in range( bbox[1], min(bbox[3]-1, rows) ):
-                for k in range( bbox[0], min(bbox[2]-1, cols) ):
-                    # print( j,k )
-                    frac_jk =  mask[j,k]
-                    cntr2d  += np.array( [(k-clHf)/clHf,(j-rwHf)/rwHf] ) * frac_jk
-                    count   += frac_jk
-            if count > 0.0:
-                cntr2d /= count
-            return vec_unit( [cntr2d[0]*Xlen, cntr2d[1]*Ylen, 1.0] )
-            
 
         rtnObjs  = list()
         metadata = {
             'input'  : dict(),
             'hits'   : list(),
         }
-        mpcd = None
 
         try:
 
@@ -351,103 +356,57 @@ class Perception_OWLv2:
                     'depth': result['depth'].copy(),
                     'rgbd' : result['rgbd'], 
                     't'    : now(),
+                    'mpcd' : mpcd,
                 }
                 metadata['hits'].extend( deepcopy( result['hits'] ) )
 
 
             ### Get CPCDs from the Masks ###
-            # rgbds = [result['rgbd'] for result in metadata]
-
+            rtnDict = dict()
             for hit_i in metadata['hits']:
-                img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
-
-                sam_mask, _, _ = self.sam_predictor.predict( 
-                    img_i, 
-                    np.array( hit_i['bboxi'] ) 
-                )
-                samCount = (sam_mask > 0.1).sum()
-                # print( f"SAM2 Mask Dims: {sam_mask.shape}, Mask Count: {samCount}, Image Dims: {img_i.shape}" )
-                
-                if 100 < samCount < 50000:
-                    mask_i = sam_mask.copy()
+                bboxi_i = hit_i['bboxi']
+                bbox_i  = hit_i['bbox']
+                match   = False
+                mtchKey = None
+                if len( rtnDict ):
+                    for rK, rV in rtnDict.items():
+                        bbox_j = rV['bbox']
+                        if bb_intersection_over_union( bbox_i, bbox_j ) > 0.5: # WARNING: ASSUMED PARAM!
+                            match   = True
+                            mtchKey = rK
+                            break
+                if match:
+                    rtnDict[ mtchKey ]['Probability'][ hit_i['abbrv'] ] += hit_i['score']
                 else:
-                    mask_i = bbox_to_mask( img_i.shape, hit_i['bboxi'] )
+                    img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
+                    cpcd = self.segment_cloud_w_SAM( 
+                        img_i, 
+                        bboxi_i, 
+                        metadata['input'][ hit_i['shotID'] ]['mpcd']
+                    )
+                    if (cpcd is not None) and len( np.asarray( cpcd.points ) ):
+                        print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {bboxi_i}!" )
 
-                # ray_i = mask_ray( mask_i, hit_i['bboxi'] )
+                        item = {
+                            ## Updated ##
+                            'Score'      : [hit_i['score'],],
+                            'Probability': defaultdict( give_0 ),
+                            'Count'      : 1,
+                            ## Frozen ##
+                            'bbox'       : hit_i['bbox'],
+                            'Pose'       : self.get_pcd_pose( cpcd ),
+                            'Time'       : now(),
+                            'CPCD'       : { 'points' : np.asarray( cpcd.points ).copy(),
+                                             'colors' : np.asarray( cpcd.colors ).copy(), },
+                            'shotID'     : hit_i['shotID'],
+                            'camRay'     : np.array([0,0,1,]),
+                        }
+                        item['Probability'][ hit_i['abbrv'] ] = hit_i['score']
+                        rtnDict[ uuid4() ] = item 
 
-                loCount =   500 #100  # 2025-02-24: ?? WINNING PARAMS ??
-                hiCount = 50000  # 2025-02-24: ?? WINNING PARAMS ??
-                smCount = np.sum( mask_i )
-
-                if (hiCount < smCount) or (smCount < loCount):
-                    print( "MASK ERROR" )
-                    continue
-
-                cpcd = None
-
-                if _USE_ALT:
-
-                    if mpcd is None:
-                        print( "`segment`: `mpcd` is None!" )
-                        continue
-
-                    cpcd    = mpcd.get_masked_cpcd( mask_i, NB = _NB_CLUST )
-                    pcdVol  = get_oPCD_aabb_volume( cpcd )
-
-                    vThresh = 2.0 * env_var("_BLOCK_VOLUME") # 2025-02-24: ?? WINNING PARAMS ??
-                    # vThresh = 3.0 * env_var("_BLOCK_VOLUME")
-                    # vThresh = 4.0 * env_var("_BLOCK_VOLUME")
-
-                    # epsilon = 2.5e-07
-                    # epsilon = 5.0e-07
-                    epsilon = 7.5e-07 # 2025-02-24: ?? WINNING PARAMS ??
-
-                    if pcdVol > vThresh:
-                        print( f"CPCD TOO BIG: {pcdVol} > {vThresh}" )
-                        continue
-                    if pcdVol < epsilon:
-                        print( f"CPCD TOO SMALL: {pcdVol} < {epsilon}" )
-                        continue
-
-                else:
-
-                    try:
-
-                        # print( type( metadata['input'][ hit_i['shotID'] ]['rgbd'] ) )
-
-                        # _, cpcd = pcd.get_masked_cpcd( rgbds[0], hit_i['mask'], self.rsc, NB = 5 )
-                        _, cpcd = pcd.get_masked_cpcd( 
-                            metadata['input'][ hit_i['shotID'] ]['rgbd'], 
-                            mask_i, 
-                            self.rsc, 
-                            NB = _NB_CLUST 
-                        )
-
-                    except Exception as e:
-                        print( f"Segmentation error: {e}", flush = True, file = sys.stderr )
-                        raise e
-
-                if len( np.asarray( cpcd.points ) ):
-
-                    print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {hit_i['bboxi']}!" )
-
-                    item = {
-                        ## Updated ##
-                        'Score'      : [hit_i['score'],],
-                        'Probability': defaultdict( give_0 ),
-                        'Count'      : 1,
-                        ## Frozen ##
-                        'bbox'       : hit_i['bbox'],
-                        'Pose'       : self.get_pcd_pose( cpcd ),
-                        'Time'       : now(),
-                        'CPCD'       : { 'points' : np.asarray( cpcd.points ).copy(),
-                                         'colors' : np.asarray( cpcd.colors ).copy(), },
-                        'shotID'     : hit_i['shotID'],
-                        # 'camRay'     : np.array([[0,0,0,],[1,1,1,]]),
-                        'camRay'     : np.array([0,0,1,]),
-                    }
-                    item['Probability'][ hit_i['abbrv'] ] = hit_i['score']
-                    rtnObjs.append( item )
+            for rK in rtnDict.keys():
+                rtnDict[ rK ]['Probability'] = normalize_dist( rtnDict[ rK ]['Probability'] )
+            rtnObjs = list( rtnDict.values() )
 
             # These don't pickle!
             for k in metadata['input'].keys():

@@ -18,13 +18,22 @@ Entropy Ranked Object Memory
     - `[Y]` Is my implementation of Maximum Likelyhood masking potential problems?, 2025-02-20: *No problems so far*, 
     - `[Y]` Is there a simpler Maximum Likelyhood implementation?, 2025-02-20: *Maybe*, but I don't care right now
 
+* `[>]` Baseline Experiments
+
 * `[>]` Run planner with Bayesian Updates on periodic scans
     - `[>]` Do NOT erase memory between steps!
     - `[>]` Consider the occlusion of supporting blocks!
         * **WARNING**: "Geometry.py" is a **YAGNI** threat!
-
-* `[ ]` Baseline Experiments
 * `[ ]` Shortcut Experiments
+
+## Memory Testing
+* `[>]` Inspect the segmentation logic
+    - `[>]` TEST the segmentation logic!
+    - `{?}` IF bad, THEN revert!
+* `[ ]` Adjust `env_var("_OWL2_THRESH")`
+* `[ ]` Adjust `env_var("_SEG_SCORE_THRESH")`
+* `[ ]` Adjust `env_var("_SEG_MAX_HITS")`
+
 
 ## Stretch Goals
 * `[ ]` Grasp Planning via RANSAC

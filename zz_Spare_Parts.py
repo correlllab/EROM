@@ -1,4 +1,4 @@
-
+import numpy as np
     
 def p_bb_intersect( boxA, boxB ):
     """ Return true if the 2D bounding boxes intersect """
@@ -35,3 +35,23 @@ def p_bbox_contains_other( boxA, boxB ):
         (boxA[0] <= boxB[0]) and (boxA[1] <= boxB[1]) and (boxA[2] >= boxB[2]) and (boxA[3] >= boxB[3]),
         (boxB[0] <= boxA[0]) and (boxB[1] <= boxA[1]) and (boxB[2] >= boxA[2]) and (boxB[3] >= boxA[3]),
     ]
+
+def mask_ray( mask : np.ndarray, bbox : np.ndarray ):
+    """ Project a ray through the center of the mask """
+    rows   = mask.shape[0]
+    rwHf   = rows / 2
+    cols   = mask.shape[1]
+    clHf   = cols / 2
+    cntr2d = np.zeros( 2 )
+    count  = 0.0
+    Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
+    Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
+    for j in range( bbox[1], min(bbox[3]-1, rows) ):
+        for k in range( bbox[0], min(bbox[2]-1, cols) ):
+            # print( j,k )
+            frac_jk =  mask[j,k]
+            cntr2d  += np.array( [(k-clHf)/clHf,(j-rwHf)/rwHf] ) * frac_jk
+            count   += frac_jk
+    if count > 0.0:
+        cntr2d /= count
+    return vec_unit( [cntr2d[0]*Xlen, cntr2d[1]*Ylen, 1.0] )
