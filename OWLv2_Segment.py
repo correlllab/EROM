@@ -239,15 +239,15 @@ class Perception_OWLv2:
         return pose_vector.reshape( (16,) ).tolist()
     
 
-    def calculate_area( self, box ):
-        """Calculates the area of the bounding box."""
-        return abs(box[3] - box[1]) * abs(box[2] - box[0])
+    # def calculate_area( self, box ):
+    #     """Calculates the area of the bounding box."""
+    #     return abs(box[3] - box[1]) * abs(box[2] - box[0])
 
 
-    def filter_by_area( self, tolerance, box, total_area ):
-        """Filters the bounding box by area."""
-        area = self.calculate_area(box)
-        return abs(area / total_area) <= tolerance
+    # def filter_by_area( self, tolerance, box, total_area ):
+    #     """Filters the bounding box by area."""
+    #     area = self.calculate_area(box)
+    #     return abs(area / total_area) <= tolerance
 
 
     def bound( self, query, abbrevq ):
@@ -260,9 +260,6 @@ class Perception_OWLv2:
             _, rgbd_image = self.rsc.getPCD()
         image = np.array( rgbd_image.color )
         depth = np.array( rgbd_image.depth )
-    # depth = np.array( rgbd_image.depth )*0.76 # 2025-02-06: This was not a good idea
-
-        # print( f"Image shape: {image.shape}", flush=True, file=sys.stderr )
 
         self.label_vit.set_threshold( env_var("_OWL2_THRESH") )
 
@@ -271,12 +268,6 @@ class Perception_OWLv2:
         rtnHits = list()
         imgID   = str( uuid4() )
         for i in range( len( scores ) ):
-            # if (scores[i] >= env_var("_SEG_SCORE_THRESH")) and \
-            # self.filter_by_area( 
-            #     env_var("_SEG_MAX_FRAC"), 
-            #     self.label_vit.sorted_labeled_boxes_coords[i][0], 
-            #     image.shape[0]*image.shape[1] 
-            # ):
             if (scores[i] >= env_var("_SEG_SCORE_THRESH")):
                 coords  = self.label_vit.sorted_boxes[i]
                 indices = [int(c) for c in coords]
@@ -305,27 +296,6 @@ class Perception_OWLv2:
     
     def segment( self, queries : list[dict] ) -> tuple[list[dict], list[dict]]: 
         """ Get poses from the camera """
-
-        def mask_ray( mask : np.ndarray, bbox : np.ndarray ):
-            """ Project a ray through the center of the mask """
-            rows   = mask.shape[0]
-            rwHf   = rows / 2
-            cols   = mask.shape[1]
-            clHf   = cols / 2
-            cntr2d = np.zeros( 2 )
-            count  = 0.0
-            Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
-            Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
-            for j in range( bbox[1], min(bbox[3]-1, rows) ):
-                for k in range( bbox[0], min(bbox[2]-1, cols) ):
-                    # print( j,k )
-                    frac_jk =  mask[j,k]
-                    cntr2d  += np.array( [(k-clHf)/clHf,(j-rwHf)/rwHf] ) * frac_jk
-                    count   += frac_jk
-            if count > 0.0:
-                cntr2d /= count
-            return vec_unit( [cntr2d[0]*Xlen, cntr2d[1]*Ylen, 1.0] )
-            
 
         rtnObjs  = list()
         metadata = {
