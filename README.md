@@ -27,7 +27,9 @@ Entropy Ranked Object Memory
 * `[ ]` Shortcut Experiments
 
 ## Memory Testing
-* `[ ]` Inspect the segmentation logic
+* `[>]` Inspect the segmentation logic
+    - `[>]` TEST the segmentation logic!
+    - `{?}` IF bad, THEN revert!
 * `[ ]` Adjust `env_var("_OWL2_THRESH")`
 * `[ ]` Adjust `env_var("_SEG_SCORE_THRESH")`
 * `[ ]` Adjust `env_var("_SEG_MAX_HITS")`
