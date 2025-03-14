@@ -61,9 +61,7 @@ def set_perc_env():
     env_sto( "_OWL2_PATH"    , "google/owlv2-base-patch16-ensemble" ) 
 
     env_sto( "_SEG_MAX_HITS"    , 50     ) 
-    env_sto( "_SEG_MAX_FRAC"    ,  0.05  ) 
     env_sto( "_SEG_SCORE_THRESH",  0.100 ) # 0.025 # 0.075 # 0.100
-    env_sto( "_SEG_IOU_THRESH"  ,  0.750 )
 
 
 
@@ -297,10 +295,12 @@ class Perception_OWLv2:
 
     def segment_cloud_w_SAM( self, img : np.ndarray, imgBBoxInt : list[list[int]], mpcd : MPCD,
                              loCount = 100, hiCount = 50000,
-                             volEps = 7.5e-07, volThresh = 2.0 * env_var("_BLOCK_VOLUME") ):
-        if mpcd is None:
+                             volEps = 7.5e-07, volThresh = None ):
+        if (mpcd is None) or (not len( mpcd )):
             print( "`segment_cloud_w_SAM`: `mpcd` is None!" )
             return None
+        if volThresh is None:
+            volThresh = 2.0 * env_var("_BLOCK_VOLUME")
 
         sam_mask, _, _ = self.sam_predictor.predict( 
             img, 
@@ -319,14 +319,18 @@ class Perception_OWLv2:
             print( "MASK ERROR" )
             return None
 
-        cpcd   = mpcd.get_masked_cpcd( mask_i, NB = _NB_CLUST )
-        pcdVol = get_oPCD_aabb_volume( cpcd )
+        cpcd = mpcd.get_masked_cpcd( mask_i, NB = _NB_CLUST )
+        if len( cpcd.points ):
+            pcdVol = get_oPCD_aabb_volume( cpcd )
 
-        if pcdVol > volThresh:
-            print( f"CPCD TOO BIG: {pcdVol} > {volThresh}" )
-            return None
-        if pcdVol < volEps:
-            print( f"CPCD TOO SMALL: {pcdVol} < {volEps}" )
+            if pcdVol > volThresh:
+                print( f"CPCD TOO BIG: {pcdVol} > {volThresh}" )
+                return None
+            if pcdVol < volEps:
+                print( f"CPCD TOO SMALL: {pcdVol} < {volEps}" )
+                return None
+            return cpcd
+        else:
             return None
     
     
@@ -411,6 +415,7 @@ class Perception_OWLv2:
             # These don't pickle!
             for k in metadata['input'].keys():
                 del metadata['input'][k]['rgbd']
+                del metadata['input'][k]['mpcd']
                 
             return rtnObjs, metadata
 

@@ -73,6 +73,9 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
             # # HACK: SNAP THE Z-COMPONENT DURING SCAN
             # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
 
+            # HACK: PUSH THE BLOCK POSE INTO THE HAND
+            objPose[2,3] += env_var("_GRASP_NUDGE_M")
+
         else:
             raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
         
@@ -417,8 +420,8 @@ class SensoryPlanner:
     def plan_3d_shots( self, objects : list[GraspObj], defaultPose : np.ndarray ):
         """ A Series of shots  """
         return [
-            self.plan_3d_shot_centroid( objects, [  1.25, -0.25, 1.0, ], self.dShot, defaultPose ),
-            self.plan_3d_shot_centroid( objects, [  1.25,  0.25, 1.0, ], self.dShot, defaultPose ),
+            self.plan_3d_shot_centroid( objects, [  0.75, -0.25, 1.0, ], self.dShot, defaultPose ),
+            self.plan_3d_shot_centroid( objects, [  1.00,  0.25, 1.0, ], self.dShot, defaultPose ),
             self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
             # self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
         ]

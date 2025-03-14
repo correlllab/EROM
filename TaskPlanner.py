@@ -77,7 +77,9 @@ def BASE_TARGET():
 def set_experiment_env():
     """ Params for this experiment """
 
-
+    env_sto( "_OWL2_THRESH"  , 0.0025 ) # 0.005
+    env_sto( "_SEG_MAX_HITS"    , 50     ) 
+    env_sto( "_SEG_SCORE_THRESH",  0.100 ) # 0.025 # 0.075 # 0.100
 
      # 3D Printed Blocks
 
@@ -175,6 +177,8 @@ def set_experiment_env():
     # env_sto( "_NULL_THRESH"   , 0.65 )
     # env_sto( "_NULL_THRESH"   , 0.75 ) # 2025-02-24: ?? WINNING PARAMS ??
     # env_sto( "_NULL_THRESH"   , 0.95 )
+
+    env_sto( "_GRASP_NUDGE_M", -0.005 )
     
 
 
@@ -621,7 +625,7 @@ class TaskPlanner:
             
             self.status = Status.RUNNING
 
-            print( f"### Iteration {i+1} ###" )
+            print( f"\n\n### Iteration {i+1} ###" )
             
             i += 1
 
