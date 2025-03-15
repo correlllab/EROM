@@ -29,10 +29,18 @@ from Bayes import BayesMemory
 
 
 ##### Constants #####
+# _REVERSE_QUERIES = {
+#     "bluBlock": {'query': "a photo of a blue block"  , 'abbrv': "blu", },
+#     "ylwBlock": {'query': "a photo of a yellow block", 'abbrv': "ylw", },
+#     "grnBlock": {'query': "a photo of a green block" , 'abbrv': "grn", },
+#     "redBlock": {'query': "a photo of a red block" , 'abbrv': "red", },
+# }
+
 _REVERSE_QUERIES = {
-    "bluBlock": {'query': "a photo of a blue block"  , 'abbrv': "blu", },
-    "ylwBlock": {'query': "a photo of a yellow block", 'abbrv': "ylw", },
-    "grnBlock": {'query': "a photo of a green block" , 'abbrv': "grn", },
+    "bluBlock": {'query': "a photo of a small block", 'abbrv': "blu", },
+    "ylwBlock": {'query': "a photo of a small block", 'abbrv': "ylw", },
+    "grnBlock": {'query': "a photo of a small block", 'abbrv': "grn", },
+    "redBlock": {'query': "a photo of a small block", 'abbrv': "red", },
 }
 
 
@@ -376,8 +384,8 @@ class SensoryPlanner:
         self.robot     = robot
         self.perc      = perc
         self.ZTableCam = -0.081666 - 0.017
-        self.dShot     = 1.5*env_var( "_MIN_CAM_PCD_DIST_M" )
-        self.dLoc      = 1.1*env_var( "_MIN_CAM_PCD_DIST_M" )
+        self.dShot     = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
+        self.dLoc      = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
 
 
     def tcp_from_cam_pose( self, camPose : np.ndarray ):
@@ -440,18 +448,24 @@ class SensoryPlanner:
             while not len( res['hits'] ):
                 res = self.perc.bound( query, abbrevq )
 
-            if 0:
-                dLim = 2*env_var("_BLOCK_SCALE")
+            if 1:
+                dMin = 1e9
                 for hit in res['hits']:
                     offset_i  = image_offset( res['image'], hit['bboxi'], self.dLoc )
                     dist_i    = np.linalg.norm( offset_i[:2] )
-                    if dist_i < dLim:
+                    if dist_i < dMin:
                         offset = offset_i
-                        break
+                        dMin   = dist_i
             else:
                 offset = image_offset( res['image'], res['hits'][0]['bboxi'], self.dLoc )
 
-            if np.linalg.norm( offset[:2] ) <= 0.5*env_var("_PLACE_XY_ACCEPT"):
+            xyDist = np.linalg.norm( offset[:2] )
+
+            if xyDist > 1.5*env_var("_BLOCK_SCALE"):
+                break
+            if xyDist <= 0.5*env_var("_PLACE_XY_ACCEPT"):
+            # if xyDist <= 0.4*env_var("_PLACE_XY_ACCEPT"):
+            # if xyDist <= 0.3*env_var("_PLACE_XY_ACCEPT"):
                 break
 
             curPose = self.robot.get_tcp_pose()
@@ -476,7 +490,7 @@ class SensoryPlanner:
                     posn_j = extract_pose_as_homog( obj_j )[0:3,3].reshape(3)
                     vec_ij = vec_unit( posn_j - posn_i )
                     if vec_ij[2] > 0.0:
-                        if np.arctan2( np.linalg.norm( vec_ij[0:2] ), vec_ij[2] ) < np.pi/4.0:
+                        if np.arctan2( np.linalg.norm( vec_ij[0:2] ), vec_ij[2] ) < np.pi/3.0:
                             try:
                                 locLst.remove( obj_i )
                             except ValueError:
