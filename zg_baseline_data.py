@@ -10,7 +10,9 @@ from aspire.BlocksTask import set_blocks_env
 from TaskPlanner import set_experiment_env
 from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_geo_list_window, cpcd_geo )
 
-path = "data/Baseline_2025-03-11"
+# path = "data/Baseline_2025-03-11"
+path = "data/Baseline_2025-03-13"
+
 pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
 for pkl in pkls:
     print( pkl )
@@ -45,7 +47,7 @@ def get_symbol_parents( objLst : list[GraspObj] ):
 
 ########## ANALYSIS ################################################################################
 
-_SUCCESS_RATE = False
+_SUCCESS_RATE = True
 
 ##### Success Rate ########################################################
 if _SUCCESS_RATE:
@@ -59,19 +61,34 @@ if _SUCCESS_RATE:
             with open( pkl, 'rb' ) as f:
                 N   += 1
                 data = pickle.load( f )
-                msg  = data[-1]['msg']
                 tRun = data[-1]['t'] - data[0]['t']
-                print( msg )
-                if "Status.FAILURE" in msg:
+                end  =  False
+                for i in range(1,11):
+                    msg  = data[-i]['msg']
+                    print( msg )
+                    if "Status.FAILURE" in msg:
+                        F += 1
+                        print( "FAILURE" )
+                        MTF += tRun
+                        end = True
+                        break
+                    elif "Status.SUCCESS" in msg:
+                        S += 1
+                        print( "SUCCESS" )
+                        MTS += tRun
+                        end = True
+                        break
+                if not end:
                     F += 1
                     print( "FAILURE" )
                     MTF += tRun
-                elif "Status.SUCCESS" in msg:
-                    S += 1
-                    print( "SUCCESS" )
-                    MTS += tRun
-        MTS /= S
-        MTF /= F
+                    end = True
+                    break
+
+        if S > 0:
+            MTS /= S
+        if F > 0:
+            MTF /= F
         print( f"\n{N} episodes, Success Rate: {S*1.0/N}, Failure Rate: {F*1.0/N}, Sanity Check == 0.0: {1.0-S*1.0/N-F*1.0/N}" )
         print( f"Mean Time to Success: {divmod( MTS, 60.0 )}, Mean Time to Failure: {divmod( MTF, 60.0 )}" )
 
@@ -84,8 +101,8 @@ totMem  = list()
 camPose = np.eye(4)
 
 _FETCH_CAM = False
-_DRAW_SYMB = True
-_DRAW_PCDS = True
+_DRAW_SYMB = False
+_DRAW_PCDS = False
 
 dPth = pkls[-2]
 
