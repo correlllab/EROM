@@ -17,13 +17,6 @@ pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f
 for pkl in pkls:
     print( pkl )
 
-dPth = pkls[0]
-
-# print( f"About to open {dPth} ..." )
-
-data = list()
-with open( dPth, 'rb' ) as f:
-    data = pickle.load( f )
 
 
 ##### Environment && Constants ############################################
@@ -56,10 +49,14 @@ if _SUCCESS_RATE:
         F   = 0
         MTS = 0.0
         MTF = 0.0
+
+        print( f"\nThere are {len(pkls)} files to analyze:\n" )
+
         for pkl in pkls:
             print( f"About to open {pkl} ..." )
             with open( pkl, 'rb' ) as f:
-                N   += 1
+                N += 1
+                print( f"Count: {N}" )
                 data = pickle.load( f )
                 tRun = data[-1]['t'] - data[0]['t']
                 end  =  False
@@ -82,8 +79,7 @@ if _SUCCESS_RATE:
                     F += 1
                     print( "FAILURE" )
                     MTF += tRun
-                    end = True
-                    break
+                print()
 
         if S > 0:
             MTS /= S
@@ -104,38 +100,40 @@ _FETCH_CAM = False
 _DRAW_SYMB = False
 _DRAW_PCDS = False
 
-dPth = pkls[-2]
+if (_DRAW_SYMB or _DRAW_PCDS):
 
-print( f"About to open {dPth} ..." )
+    dPth = pkls[-2]
 
-data = list()
-with open( dPth, 'rb' ) as f:
-    data = pickle.load( f )
+    print( f"About to open {dPth} ..." )
 
-for i, datum in enumerate( data ):
+    data = list()
+    with open( dPth, 'rb' ) as f:
+        data = pickle.load( f )
 
-    if ((_FETCH_CAM or _DRAW_PCDS) and (datum['msg'] == 'camera')):
-        camPose = datum['data'].copy()
-        # print( datum['data'].keys() )
+    for i, datum in enumerate( data ):
 
-    if _DRAW_PCDS and (datum['msg'] == 'memory'):
-        readings = datum['data']['scan']
-        totGeo   = deque()
-        for rdg in readings:
-            if len( rdg.cpcd ) > 20:
-                totGeo.extend( cpcd_geo( rdg ) )
-                totGeo.extend( scan_geo( rdg ) )
+        if ((_FETCH_CAM or _DRAW_PCDS) and (datum['msg'] == 'camera')):
+            camPose = datum['data'].copy()
+            # print( datum['data'].keys() )
 
-        # print( type( totGeo ) )
-        vispy_geo_list_window( list( totGeo ) )
+        if _DRAW_PCDS and (datum['msg'] == 'memory'):
+            readings = datum['data']['scan']
+            totGeo   = deque()
+            for rdg in readings:
+                if len( rdg.cpcd ) > 20:
+                    totGeo.extend( cpcd_geo( rdg ) )
+                    totGeo.extend( scan_geo( rdg ) )
 
-
-        
-    if _DRAW_SYMB and (datum['msg'] == 'symbols'):
-        # render_memory_list( syms = datum['data']['scan'] )
-        render_memory_list( syms = datum['data'] )
+            # print( type( totGeo ) )
+            vispy_geo_list_window( list( totGeo ) )
 
 
+            
+        if _DRAW_SYMB and (datum['msg'] == 'symbols'):
+            # render_memory_list( syms = datum['data']['scan'] )
+            render_memory_list( syms = datum['data'] )
 
 
+
+print( "\n\n" )
 os.system( 'kill %d' % os.getpid() ) 
