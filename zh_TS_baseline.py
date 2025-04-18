@@ -4,7 +4,7 @@ from collections import deque
 
 import numpy as np
 
-from aspire.symbols import GraspObj
+from aspire.symbols import GraspObj, euclidean_distance_between_symbols
 from aspire.BlocksTask import set_blocks_env
 
 from TaskPlanner import set_experiment_env
@@ -30,6 +30,12 @@ set_render_env()
 ########## ANALYSIS ################################################################################
 _TS_DETERM = True
 
+"""
+* `[ ]` What if a reading overlaps with more than one reading: Which should it contribute to?
+* `[ ]` Does the merge process make sense?
+
+"""
+
 pklPath = pkls[0]
 
 if _TS_DETERM:
@@ -41,12 +47,48 @@ if _TS_DETERM:
             tMsg  = datum['msg']
             tData = datum['data']
             print( f"{datum['t']} : {tMsg}" )
+
+
             if tMsg == "ObsMeta":
-                print( type( tData ) ) # `dict`
+                # print( list( tData.keys() ) ) # `dict`
+
+                inpt = tData['input']
+                print( f"input: {list(inpt.keys())}" ) # `dict`
+                for k, v in inpt.items(): # ['query', 'abbrv', 'image', 'depth', 't']
+                    print( f"\t{list(v.keys())}" )
+                    
+                hits = tData['hits']
+                print( f"hits: {type(hits)}" ) # `list`
+                print( f"\t{list(hits[0].keys())}" ) # ['bbox', 'bboxi', 'score', 'label', 'image', 'query', 'abbrv', 'shotID']
+
                 print()
+
+
             elif tMsg == "memory":
-                print( type( tData ) ) # `dict`
+                # print( list( tData.keys() ) ) # `dict`
+
+                scan = tData['scan']
+                print( f"scan: {type(scan)}" ) # `list`
+                print( f"\t{scan[0]}" ) # `GraspObj`
+                Mdst = np.zeros( (len(scan),len(scan),) )
+                for i, obj_i in enumerate( scan ):
+                    for j, obj_j in enumerate( scan ):
+                        if i != j:
+                            Mdst[i,j] = euclidean_distance_between_symbols( obj_i, obj_j )
+                
+                blfs = tData['beliefs']
+                print( f"beliefs: {type(blfs)}" ) # `list`
+                print( f"\t{blfs[0]}" ) # `GraspObj`
+                Ndst = np.zeros( (len(blfs),len(scan),) )
+                for i, obj_i in enumerate( blfs ):
+                    for j, obj_j in enumerate( scan ):
+                        Ndst[i,j] = euclidean_distance_between_symbols( obj_i, obj_j )
+
+                print( Ndst )
+                
                 print()
+
+
             elif tMsg == "symbols":
                 print( type( tData ) ) # `list``
                 print()
