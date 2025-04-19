@@ -33,8 +33,23 @@ _TS_DETERM = True
 _TS_DETAIL = True
 
 """
-* `[ ]` What if a reading overlaps with more than one reading: Which should it contribute to?
+* `[Y]` What if a reading overlaps with more than one reading: Which should it contribute to?
+    - A reading is already attributed to the belief that it is closest to
+    - There isn't anything preventing more than one reading to contributing to the same belief
+    - A single reading cannot contribute to multiple beliefs unless `integrate_one_to_many` is used
+
 * `[ ]` Does the merge process make sense?
+    - `[ ]` What does it mean if a belief got an update before it was eliminated?
+    - `[ ]` Can an update make a belief more likely to be eliminated?
+    - `[ ]` What would happen if you did not do an update between scans?
+
+* `[ ]` What am I supposed to do when there are more beliefs than symbols?
+    - `[ ]` Is there a way to consider overlapping symbols in the determination?
+
+* `[ ]` Visualize
+    - `[ ]` Which readings contribute to what beliefs?
+    - `[ ]` Which beliefs got eliminated?
+    - `[ ]` What were the distribution of the beliefs that got chosen?
 
 """
 
@@ -65,7 +80,6 @@ if _TS_DETERM:
 
 
                 if tMsg == "ObsMeta":
-                    # print( list( tData.keys() ) ) # `dict`
 
                     inpt = tData['input']
                     if _TS_DETAIL:
@@ -108,7 +122,6 @@ if _TS_DETERM:
                         print( Mcls )
                         print()
                         # print( Ncls ) # This is always 1's!
-                        # print()
 
 
                 elif tMsg == "symbols":
