@@ -77,7 +77,8 @@ if _TS_DETERM:
     for pklDex, pklPath in enumerate( pkls ):
     # for pklDex, pklPath in enumerate( pkls[3:4] ):
 
-        bMem   = Memory() # We are going to troubleshoot how belief updates should go on the robot
+        # We are going to troubleshoot how belief updates should go on the robot
+        bMem   = Memory( None, None, suppressRecord = True ) 
         Nrun  += 1
         totRun = 0.0 
         totMty = 0.0
@@ -86,21 +87,33 @@ if _TS_DETERM:
 
         with open( pklPath, 'rb' ) as f:
             
-            data   = pickle.load( f )
+            data    = pickle.load( f )
             totRun += (data[-1]['t'] - data[0]['t'])
-            tLst   = data[0]['t']
+            tLst    = data[0]['t']
+            camPose = None
 
             for datum in data:
                 tMsg  = datum['msg']
                 tData = datum['data']
                 if _TS_DETAIL:
-                    print( f"\n{datum['t']} : {tMsg}" )
+                    print( f"\n{datum['t']} : {tMsg}, {list(tData.keys()) if isinstance(tData,dict) else None}" )
 
 
                 if "Action Failure" in tMsg:
                     actFl += 1
 
                 if tMsg == "ObsMeta":
+
+                    for k, v in tData.items():
+                        print( f"{k}: ", end = "" )
+                        if isinstance( v, dict ):
+                            print( list( v.keys() ) )
+                        elif isinstance( v, list ):
+                            item = v[0]
+                            if isinstance( item, dict ):
+                                print( list( item.keys() ) )
+                        else:
+                            print()
 
                     inpt = tData['input']
                     if _TS_DETAIL:
@@ -114,18 +127,21 @@ if _TS_DETERM:
                         print( f"\t{list(hits[0].keys())}" ) # ['bbox', 'bboxi', 'score', 'label', 'image', 'query', 'abbrv', 'shotID']
                         print()
 
+                elif tMsg == 'camera':
+                    camPose = datum['data'].copy()
+
 
                 elif tMsg == "memory":
 
                     scan = tData['scan']
                     print( list( tData.keys() ) )
-                    os.system( 'kill %d' % os.getpid() ) 
+                    # os.system( 'kill %d' % os.getpid() ) 
 
-                    # bMem.process_observations( 
-                    #     obsrv,
-                    #     camPose,
-                    #     Append
-                    # ) 
+                    bMem.process_observations( 
+                        scan,
+                        camPose,
+                        False
+                    ) 
 
                     if _TS_DETAIL:
                         print( f"scan: {type(scan)}" ) # `list`
@@ -164,6 +180,9 @@ if _TS_DETERM:
                         print( f"There are {Nsym} symbols!" )
                     else:
                         totMty += elapsed
+
+                    # Reset memory every time we form a plan
+                    bMem.reset_memory()
 
                     print()
 

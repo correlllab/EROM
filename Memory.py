@@ -613,9 +613,13 @@ class Memory:
 
     ##### Begin / End ############################
 
-    def __init__( self, robot, perc ):
+    def __init__( self, robot, perc, suppressRecord = False ):
         """ Set up for logging and tracking """
-        self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
+        self.record  = not bool( suppressRecord )
+        if self.record:
+            self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
+        else:
+            self.history = None
         self.camPlan = SensoryPlanner( robot, perc )
         self.reset_memory()
 
@@ -623,7 +627,13 @@ class Memory:
     def shutdown( self ):
         """ Save the memory """
         # WARNING: LARGE FILE! > 1Gb
-        self.history.dump_to_file( openNext = False )
+        if self.record:
+            self.history.dump_to_file( openNext = False )
+
+
+    def __del__( self ):
+        """ Write record on shutdown """
+        self.shutdown()
 
 
     ##### Perception #############################
@@ -657,13 +667,14 @@ class Memory:
         # self.bMem.belief_update( self.scan, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
         self.bMem.belief_update( gObs, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
 
-        self.history.append( 
-            datum = {
-                "scan"   : deep_copy_memory_list( self.scan ),
-                "beliefs": deep_copy_memory_list( self.bMem.beliefs ),
-            },
-            msg = "memory" 
-        )
+        if self.record:
+            self.history.append( 
+                datum = {
+                    "scan"   : deep_copy_memory_list( self.scan ),
+                    "beliefs": deep_copy_memory_list( self.bMem.beliefs ),
+                },
+                msg = "memory" 
+            )
     
 
     ##### Symbol Grounding #######################
@@ -692,10 +703,11 @@ class Memory:
         else:
             raise ValueError( f"The update strategy {str(strat).upper()} is NOT recognized!" )
 
-        self.history.append( 
-            datum = deep_copy_memory_list( symbols ),
-            msg   = "symbols" 
-        )
+        if self.record:
+            self.history.append( 
+                datum = deep_copy_memory_list( symbols ),
+                msg   = "symbols" 
+            )
 
         # # HACK: SNAP SYMBOL Z
         # for sym in symbols:
