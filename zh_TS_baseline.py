@@ -33,12 +33,13 @@ _TS_DETERM = True
 _TS_DETAIL = True
 
 """
-- [ ] ISSUE: The robot keeps missing the block!
+- [>] ISSUE: The robot keeps missing the block!
     - [Y] How many stack actions end in failure?: 5 per run, NOT counting classification mistakes!
     - [>] Soln 1: One-shot sight-in, Based on the **closest** generic block
         - [>] Test Result: 
-    - [ ] Soln 2: Do not asjust poses of blocks placed by the robot
-        - [ ] Test Result: 
+    - [P] Soln 2: Do not asjust poses of blocks placed by the robot
+        - NEED TO THINK OF A WAY TO IMPLEMENT THIS THAT DOES NOT BREAK KL-DIVERGENCE TRACKING
+        - [P] Test Result: 
 
 * [Y] What if a reading overlaps with more than one reading: Which should it contribute to?
     - A reading is already attributed to the belief that it is closest to

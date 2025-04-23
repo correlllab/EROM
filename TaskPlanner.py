@@ -519,6 +519,15 @@ class TaskPlanner:
         else:
             rtnShot = False
         return rtnShot
+    
+
+    def lock_successful_placement( self, btPlan : Plan, symbols : list[GraspObj] ):
+        """ Don't allow the Bayes update to nudge the block """
+        # FIXME: THINK OF A WAY TO DO THIS THAT DOES NOT BREAK YOUR MODEL
+        lastAct : GroundedAction = btPlan.children[-1]
+        label, pose, support = lastAct.args
+        print( f"About to lock: {label} @ pose\n{pose} stacked on {support}" )
+
 
 
     def phase_4_Execute_Action( self ):
