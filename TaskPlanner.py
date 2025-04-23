@@ -524,6 +524,8 @@ class TaskPlanner:
     def phase_4_Execute_Action( self ):
         """ Attempt to execute the first action in the symbolic plan """
 
+        self.memory.history.append( msg = f"BT BEGIN: {now()}" )
+
         if _RESPONSIVE_MODE:
 
             btr = BTRunnerwPeriodicScan( 
@@ -566,8 +568,9 @@ class TaskPlanner:
                 
                 if (btr.status == Status.FAILURE):
                     self.status = Status.FAILURE
-                    self.memory.history.append( msg = f"Action Failure: {btr.msg}" )
+                    self.memory.history.append( msg = f"Action Failure: {btr.msg}, {now()}" )
                 else:
+                    # self.memory.history.append( msg = f"Running ... {currTip}, {str(btr.status)}" )
                     self.status = Status.RUNNING
 
                 btr.per_sleep()
@@ -579,6 +582,7 @@ class TaskPlanner:
                     "Event": "The robot's plan was not executed correctly.",
                 } )
             elif (btr.status == Status.SUCCESS):
+                self.memory.history.append( msg = f"Action Success: {btr.msg}, {now()}" )
                 self.memory.history.append( msg = "Annotation", datum = {
                     "Event": "The robot's plan was executed correctly.",
                 } )

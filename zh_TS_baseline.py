@@ -33,23 +33,30 @@ _TS_DETERM = True
 _TS_DETAIL = True
 
 """
-* `[Y]` What if a reading overlaps with more than one reading: Which should it contribute to?
+- [ ] ISSUE: The robot keeps missing the block!
+    - [Y] How many stack actions end in failure?: 5 per run, NOT counting classification mistakes!
+    - [>] Soln 1: One-shot sight-in, Based on the **closest** generic block
+        - [>] Test Result: 
+    - [ ] Soln 2: Do not asjust poses of blocks placed by the robot
+        - [ ] Test Result: 
+
+* [Y] What if a reading overlaps with more than one reading: Which should it contribute to?
     - A reading is already attributed to the belief that it is closest to
     - There isn't anything preventing more than one reading to contributing to the same belief
     - A single reading cannot contribute to multiple beliefs unless `integrate_one_to_many` is used
 
-* `[ ]` Does the merge process make sense?
-    - `[ ]` What does it mean if a belief got an update before it was eliminated?
-    - `[ ]` Can an update make a belief more likely to be eliminated?
-    - `[ ]` What would happen if you did not do an update between scans?
+* [ ] Does the merge process make sense?
+    - [ ] What does it mean if a belief got an update before it was eliminated?
+    - [ ] Can an update make a belief more likely to be eliminated?
+    - [ ] What would happen if you did not do an update between scans?
 
-* `[ ]` What am I supposed to do when there are more beliefs than symbols?
-    - `[ ]` Is there a way to consider overlapping symbols in the determination?
+* [ ] What am I supposed to do when there are more beliefs than symbols?
+    - [ ] Is there a way to consider overlapping symbols in the determination?
 
-* `[ ]` Visualize
-    - `[ ]` Which readings contribute to what beliefs?
-    - `[ ]` Which beliefs got eliminated?
-    - `[ ]` What were the distribution of the beliefs that got chosen?
+* [ ] Visualize
+    - [ ] Which readings contribute to what beliefs?
+    - [ ] Which beliefs got eliminated?
+    - [ ] What were the distribution of the beliefs that got chosen?
 
 """
 
@@ -57,10 +64,13 @@ if _TS_DETERM:
 
     mxMty = 0.0
     mxIdx = -1
+    actFl = 0
+    Nrun  = 0
 
-    # for pklDex, pklPath in enumerate( pkls ):
-    for pklDex, pklPath in enumerate( pkls[3:4] ):
+    for pklDex, pklPath in enumerate( pkls ):
+    # for pklDex, pklPath in enumerate( pkls[3:4] ):
 
+        Nrun  += 1
         totRun = 0.0 
         totMty = 0.0
 
@@ -78,6 +88,9 @@ if _TS_DETERM:
                 if _TS_DETAIL:
                     print( f"\n{datum['t']} : {tMsg}" )
 
+
+                if "Action Failure" in tMsg:
+                    actFl += 1
 
                 if tMsg == "ObsMeta":
 
@@ -137,6 +150,10 @@ if _TS_DETERM:
 
                     print()
 
+                elif tMsg == "Annotation":
+                    print( f"{tData}\n" )
+
+
         if totMty > mxMty:
             mxMty = totMty
             mxIdx = pklDex
@@ -144,7 +161,8 @@ if _TS_DETERM:
         mins = int( mins )
         print( f"\nSolver spent {totMty/totRun:.4f} of {mins}:{secs:.1f} without determinized symbols!" )  
     
-    print( f"\nWorst run spent {mxMty} seconds without symbols!, Index: {mxIdx}" )
+    print( f"\nWorst run spent {mxMty} seconds without symbols!, Index: {mxIdx}" ) # Spends up to 1/3 of time without symbols!
+    print( f"\nAverage Failed Actions per Run: {1.0*actFl/Nrun}" ) # Average Failed Actions per Run: 4.538
 
 # Solver spent 0.2068 of 353:12.0 without determinized symbols!
 

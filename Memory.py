@@ -442,42 +442,26 @@ class SensoryPlanner:
         query   = _REVERSE_QUERIES[ obj.label ]['query']
         abbrevq = _REVERSE_QUERIES[ obj.label ]['abbrv']
         
-        while( True ):
-
+        res = self.perc.bound( query, abbrevq )
+        while not len( res['hits'] ):
             res = self.perc.bound( query, abbrevq )
-            while not len( res['hits'] ):
-                res = self.perc.bound( query, abbrevq )
 
-            if 1:
-                dMin = 1e9
-                for hit in res['hits']:
-                    offset_i  = image_offset( res['image'], hit['bboxi'], self.dLoc )
-                    dist_i    = np.linalg.norm( offset_i[:2] )
-                    if dist_i < dMin:
-                        offset = offset_i
-                        dMin   = dist_i
-            else:
-                offset = image_offset( res['image'], res['hits'][0]['bboxi'], self.dLoc )
+        # 2025-04-22: One-Shot Version
+        dMin = 1e9
+        for hit in res['hits']:
+            offset_i  = image_offset( res['image'], hit['bboxi'], self.dLoc )
+            dist_i    = np.linalg.norm( offset_i[:2] )
+            if dist_i < dMin:
+                offset = offset_i
+                dMin   = dist_i
+        xyDist = np.linalg.norm( offset[:2] )
+        if xyDist > 1.5*env_var("_BLOCK_SCALE"):
+            return None
 
-            xyDist = np.linalg.norm( offset[:2] )
-
-            if xyDist > 1.5*env_var("_BLOCK_SCALE"):
-                break
-            if xyDist <= 0.5*env_var("_PLACE_XY_ACCEPT"):
-            # if xyDist <= 0.4*env_var("_PLACE_XY_ACCEPT"):
-            # if xyDist <= 0.3*env_var("_PLACE_XY_ACCEPT"):
-                break
-
-            curPose = self.robot.get_tcp_pose()
-            camPose = self.robot.get_cam_pose()
-
-            tcpOfst = np.dot( camPose[0:3,0:3], offset ).reshape(3)
-            print( tcpOfst )
-            
-            movPose = curPose.copy()
-            movPose[0:2,3] += tcpOfst[0:2]
-            obj.pose.pose[0:2,3] += tcpOfst[0:2]
-            self.robot.moveL( movPose, asynch = False )
+        camPose = self.robot.get_cam_pose()
+        tcpOfst = np.dot( camPose[0:3,0:3], offset ).reshape(3)
+        print( tcpOfst )
+        obj.pose.pose[0:2,3] += tcpOfst[0:2]
 
 
     def locate_all( self, objLst : list[GraspObj] ):
