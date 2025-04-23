@@ -1,4 +1,64 @@
 import numpy as np
+
+    def closest_symbol_to_pose( self, pose, margin = None ) -> ThinSymbol:
+        """ Fetch the closest symbol to the pose within `margin`, otherwise return None """
+        if margin is None:
+            margin = 2.0 * env_var("_BLOCK_SCALE")
+        pose = extract_pose_as_homog( pose )
+        dMin = 1e9
+        sMin = None
+        for v in self.symH.values():
+            d = translation_diff( pose, v.pose )
+            if d < dMin:
+                dMin = d
+                sMin = v
+        if dMin <= margin:
+            return sMin
+        else:
+            return None
+
+
+    def move_symbol_from_to_pose( self, srcPose, dstPose ):
+        """ Find the symbol at `srcPose` and move it to `dstPose`, Return thin symbols if it was moved, else return None """
+        dstPose  = extract_pose_as_homog( dstPose )
+        self.bMem.update_belief_pose( extract_pose_as_homog( srcPose ), dstPose )
+        needMove = self.closest_symbol_to_pose( srcPose )
+        if (needMove is not None):
+            needMove.pose = dstPose.copy()
+            return needMove
+        else:
+            return None
+        
+
+    def fail_symbol( self, srcPose ):
+        """ Stop believing in the thing we tried to move """
+        needFail = self.closest_symbol_to_pose( srcPose )
+        del self.symH[ needFail.id ]
+        self.bMem.del_beliefs_close_to_pose( srcPose )
+
+
+    def update_symbol_history( self, symLst : list[GraspObj] ):
+        """ Match new symbols to current and calculate confidence changes """
+        for sym in symLst:
+            tSm = self.closest_symbol_to_pose( sym )
+            if tSm is None:
+                nuS = ThinSymbol( label = sym.label, pose = sym.pose )
+                nuS.append_dist( sym.labels )
+                self.symH[ nuS.id ] = nuS
+            else:
+                tSm.append_dist( sym.labels )
+
+
+    def check_KL_for_symbol_at_pose( self, pose, expectedLabel : str, poseMargin : float = None, N_falling : int = 3 ):
+        """ Return `check_KL_criteria` for the symbol nearest this pose """
+        chkSym = self.closest_symbol_to_pose( pose, margin = poseMargin )
+        print( f"About to check {expectedLabel} @ {pose}, found {chkSym}" )
+        if chkSym is not None:
+            res = chkSym.check_KL_criteria( N_falling, expectedLabel )
+            print( f"Result?: {res}" )
+            return 
+        else:
+            return False
     
 def p_bb_intersect( boxA, boxB ):
     """ Return true if the 2D bounding boxes intersect """

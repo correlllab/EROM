@@ -493,7 +493,8 @@ class TaskPlanner:
         objName, objPose = self.fetch_src_label_and_pose()
         if objName is None:
             return False
-        return self.memory.check_KL_for_symbol_at_pose( objPose, objName )
+        # return self.memory.check_KL_for_symbol_at_pose( objPose, objName )
+        return self.memory.klTr.check_KL_criteria( objName )
     
 
     def p_OK_to_take_shot( self ):

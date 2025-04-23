@@ -40,6 +40,9 @@ _TS_DETAIL = True
     - [P] Soln 2: Do not asjust poses of blocks placed by the robot
         - NEED TO THINK OF A WAY TO IMPLEMENT THIS THAT DOES NOT BREAK KL-DIVERGENCE TRACKING
         - [P] Test Result: 
+    - [ ] Soln 3: Use the overhead camera
+        - <+> An extra view without the wait
+        - <-> Not setup for that, Get advice from Will
 
 * [Y] What if a reading overlaps with more than one reading: Which should it contribute to?
     - A reading is already attributed to the belief that it is closest to

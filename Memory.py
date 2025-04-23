@@ -486,40 +486,77 @@ class SensoryPlanner:
 
 ########## OBJECT MEMORY ###########################################################################
 
-##### BAD, YAGNI ##########################################################
+##### KL Diverfgence ######################################################
 
-class ThinSymbol:
-    """ Barest Symbol """
-    # HACK: IS THIS A BAD THING? YAGNI?
+def gen_id():
+    """ Get a unique ID as a string """
+    return str( uuid4() )
+
+
+class KLD_Tracker:
+    """ Track KL-Divergence as the task evolves """
+    def __init__( self ):
+        self.history = deque()
+
+
+    def get_symbol_dict( self, sym : GraspObj ):
+        """ Render the symbol as a `dict` with relevant info """
+        distLast = get_uniform_prior_over_labels( list( sym.labels.keys() ) )
+        if len( self.history ):
+            for entry in self.history[-1]:
+                if entry['label'] == sym.label:
+                    distLast = entry['labels']
+                    break
+        
+        return {
+            't'    : now(),
+            'id'   : gen_id(),
+            'label': sym.label,
+            'dist' : deepcopy( sym.labels ),
+            'pose' : extract_pose_as_homog( sym ),
+            'KLD'  : KL_div_info_gain_dct( distLast, sym.labels ),
+            'visit': False,
+        }
     
-    def __init__( self, label = "", pose = None ):
-        self.id    = uuid4()
-        self.label = label
-        self.pose  = np.eye(4) if (pose is None) else extract_pose_as_homog( pose )
-        self.distH = list() # Distribution history
-        self.KLDvH = list() # KL-Divergence history
-        self.visit = False
+
+    def record_symbols( self, symbols : list[GraspObj] ):
+        """ Create a record of all the symbols at this time """
+        frame = list()
+        for sym in symbols:
+            frame.append( self.get_symbol_dict( sym ) )
+        self.history.append( frame )
 
 
-    def append_dist( self, labelDist : dict ):
-        self.distH.append( deepcopy( labelDist ) )
-        if len( self.distH ) > 1:
-            lstDst = self.distH[-2]
-        else:
-            lstDst = get_uniform_prior_over_labels( list( labelDist.keys() ) )
-        self.KLDvH.append( KL_div_info_gain_dct( lstDst, labelDist ) )
+    def get_label_KL_history( self, qLabel ):
+        """ Get the KL-Divergence across all timesteps in the episode so far """
+        klHist = list()
+        for frame in self.history:
+            for sym in frame:
+                if sym['label'] == qLabel:
+                    klHist.append( sym['KLD'] )
+                    break
+        return klHist
+    
 
+    def get_entry( self, qIndex, qLabel ):
+        """ Get the symbol record at `qIndex` and `qLabel`, or return `None` """
+        for entry in self.history[ qIndex ]:
+            if entry['label'] == qLabel:
+                return deepcopy( entry )
+        return None
+        
 
-    def check_KL_criteria( self, N_falling : int, expectedLabel : str ):
+    def check_KL_criteria( self, N_falling : int, qLabel : str ):
         """ Return `False` if evidence is gathering for a contrary indication, Otherwise return `True` """
-        if len( self.KLDvH ) < N_falling:
+        klHist = self.get_label_KL_history( qLabel )
+        if len( self.history ) < N_falling:
             return True
         for i in range( -N_falling, -1 ):
-            if (self.KLDvH[i] < self.KLDvH[i+1]):
+            if (klHist[i] < klHist[i+1]):
                 return True
-        labelDist = zip_dict_sorted_by_decreasing_value( self.distH[-1] )
-        print( labelDist[0][0], "-vs-", expectedLabel )
-        if labelDist[0][0] != expectedLabel:
+        labelDist = zip_dict_sorted_by_decreasing_value( self.get_entry( -1, qLabel )['dist'] )
+        print( labelDist[0][0], "-vs-", qLabel )
+        if labelDist[0][0] != qLabel:
             return False
         else:
             return True
@@ -535,100 +572,48 @@ class Memory:
 
     def reset_memory( self ):
         """ Erase memory components """
-        self.scan : list[GraspObj]   = list()
-        self.mult : bool             = False
-        self.bMem : BayesMemory      = BayesMemory()
-        self.symH : Dict[uuid4,ThinSymbol] = dict()
-
-
-    def closest_symbol_to_pose( self, pose, margin = None ) -> ThinSymbol:
-        """ Fetch the closest symbol to the pose within `margin`, otherwise return None """
-        if margin is None:
-            margin = 2.0 * env_var("_BLOCK_SCALE")
-        pose = extract_pose_as_homog( pose )
-        dMin = 1e9
-        sMin = None
-        for v in self.symH.values():
-            d = translation_diff( pose, v.pose )
-            if d < dMin:
-                dMin = d
-                sMin = v
-        if dMin <= margin:
-            return sMin
-        else:
-            return None
-
-
-    def move_symbol_from_to_pose( self, srcPose, dstPose ):
-        """ Find the symbol at `srcPose` and move it to `dstPose`, Return thin symbols if it was moved, else return None """
-        dstPose  = extract_pose_as_homog( dstPose )
-        self.bMem.update_belief_pose( extract_pose_as_homog( srcPose ), dstPose )
-        needMove = self.closest_symbol_to_pose( srcPose )
-        if (needMove is not None):
-            needMove.pose = dstPose.copy()
-            return needMove
-        else:
-            return None
-        
-
-    def fail_symbol( self, srcPose ):
-        """ Stop believing in the thing we tried to move """
-        needFail = self.closest_symbol_to_pose( srcPose )
-        del self.symH[ needFail.id ]
-        self.bMem.del_beliefs_close_to_pose( srcPose )
-
-
-    def update_symbol_history( self, symLst : list[GraspObj] ):
-        """ Match new symbols to current and calculate confidence changes """
-        for sym in symLst:
-            tSm = self.closest_symbol_to_pose( sym )
-            if tSm is None:
-                nuS = ThinSymbol( label = sym.label, pose = sym.pose )
-                nuS.append_dist( sym.labels )
-                self.symH[ nuS.id ] = nuS
-            else:
-                tSm.append_dist( sym.labels )
-
-
-    def check_KL_for_symbol_at_pose( self, pose, expectedLabel : str, poseMargin : float = None, N_falling : int = 3 ):
-        """ Return `check_KL_criteria` for the symbol nearest this pose """
-        chkSym = self.closest_symbol_to_pose( pose, margin = poseMargin )
-        print( f"About to check {expectedLabel} @ {pose}, found {chkSym}" )
-        if chkSym is not None:
-            res = chkSym.check_KL_criteria( N_falling, expectedLabel )
-            print( f"Result?: {res}" )
-            return 
-        else:
-            return False
+        self.scan : list[GraspObj] = list()
+        self.mult : bool           = False
+        self.bMem : BayesMemory    = BayesMemory()
+        self.klTr : KLD_Tracker    = KLD_Tracker()
         
         
     def plot_KL_history_for_all_obj( self ):
         """ Simple plot of the KL divergence for each symbol """
-        for k, v in self.symH.items():
-            print( f"Item {k}: Dist = {v.distH[-1]}\nKL History: {v.KLDvH}\n" )
-            plt.plot( v.KLDvH, label = v.label )
+        labels = [entry['label'] for entry in self.klTr.history[0]]
+        klHist = dict()
+        for lbl in labels:
+            klHist[ lbl ] = self.klTr.get_label_KL_history( lbl )
+            print( f"Item {lbl}: Dist = {self.klTr.get_entry( -1, lbl )['dist']}\nKL History: {klHist[ lbl ]}\n" )
+        print()
 
-        print( f"About to draw graph of {len(self.symH)} symbols ..." )
+        print( f"About to draw graph of {len( labels )} symbols ..." )
         # Adding the legend
         plt.legend()
 
         # Adding title and labels
-        plt.title('Multiple Line Plot')
+        plt.title('KL Divergence -vs- Time for Required Objects')
         plt.xlabel('Time')
         plt.ylabel('KL Divergence')
 
-        print( f"About to render graph of {len(self.symH)} symbols ..." )
         # Display / Render
-        # plt.show()
-        plt.savefig( f"data/KL-Plot_{now()}.pdf" )
+        if 0:
+            plt.show()
+        else:
+            plt.savefig( f"data/KL-Plot_{now()}.pdf" )
 
         print( "Graph COMPLETE!" )
-                
+
+
+    def update_symbol_history( self, symLst ):
+        """ Write symbols and their KL-Div to history for tracking """
+        self.klTr.record_symbols( symLst )
 
 
     ##### Begin / End ############################
 
     def __init__( self, robot, perc ):
+        """ Set up for logging and tracking """
         self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
         self.camPlan = SensoryPlanner( robot, perc )
         self.reset_memory()
@@ -636,6 +621,7 @@ class Memory:
 
     def shutdown( self ):
         """ Save the memory """
+        # WARNING: LARGE FILE! > 1Gb
         self.history.dump_to_file( openNext = False )
 
 
