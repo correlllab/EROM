@@ -576,6 +576,7 @@ class Memory:
         self.mult : bool           = False
         self.bMem : BayesMemory    = BayesMemory()
         self.klTr : KLD_Tracker    = KLD_Tracker()
+        print( "`Memory` initialized ..." )
         
         
     def plot_KL_history_for_all_obj( self ):
@@ -640,7 +641,11 @@ class Memory:
 
     def process_observations( self, obs, xform = None, Append = False ):
         """ Integrate one noisy scan into the current beliefs """
-        gObs = observation_to_readings( obs, xform )
+        if isinstance( obs[0], GraspObj ):
+            gObs = obs[:]
+        else:
+            gObs = observation_to_readings( obs, xform )
+            
         if (Append and self.mult):
             self.scan.extend( gObs )
         else:

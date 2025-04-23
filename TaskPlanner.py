@@ -715,8 +715,6 @@ class TaskPlanner:
                 print( f"LOOP, {self.status} ..." )
                 continue
 
-            
-                
 
             ##### Phase 4 ########################
 

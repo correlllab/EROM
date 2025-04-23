@@ -11,6 +11,8 @@ from aspire.BlocksTask import set_blocks_env
 from TaskPlanner import set_experiment_env
 from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_geo_list_window, cpcd_geo )
 
+from Memory import Memory
+
 # path = "data/Baseline_2025-03-11"
 path = "data/Baseline_2025-03-13"
 
@@ -29,8 +31,9 @@ set_render_env()
 
 
 ########## ANALYSIS ################################################################################
-_TS_DETERM = True
-_TS_DETAIL = True
+_TS_DETERM    = True
+_TS_DETAIL    = True
+_MEM_GRAPHICS = True
 
 """
 - [>] ISSUE: The robot keeps missing the block!
@@ -74,6 +77,7 @@ if _TS_DETERM:
     for pklDex, pklPath in enumerate( pkls ):
     # for pklDex, pklPath in enumerate( pkls[3:4] ):
 
+        bMem   = Memory() # We are going to troubleshoot how belief updates should go on the robot
         Nrun  += 1
         totRun = 0.0 
         totMty = 0.0
@@ -114,6 +118,15 @@ if _TS_DETERM:
                 elif tMsg == "memory":
 
                     scan = tData['scan']
+                    print( list( tData.keys() ) )
+                    os.system( 'kill %d' % os.getpid() ) 
+
+                    # bMem.process_observations( 
+                    #     obsrv,
+                    #     camPose,
+                    #     Append
+                    # ) 
+
                     if _TS_DETAIL:
                         print( f"scan: {type(scan)}" ) # `list`
                         print( f"\t{scan[0]}" ) # `GraspObj`
@@ -132,7 +145,7 @@ if _TS_DETERM:
                     for i, obj_i in enumerate( blfs ):
                         for j, obj_j in enumerate( scan ):
                             Ndst[i,j] = euclidean_distance_between_symbols( obj_i, obj_j )
-                    Ncls = np.where( Ndst < env_var("_BAYES_RAD_L2_M"), 1, Ndst)
+                    Ncls = np.where( Ndst < env_var("_BAYES_RAD_L2_M"), 1, Ndst )
 
                     if _TS_DETAIL:
                         print( f"\nThere are {len(blfs)} beliefs!\n" )
