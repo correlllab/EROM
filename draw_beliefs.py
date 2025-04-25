@@ -65,7 +65,6 @@ def vispy_geo_list_window( geoLst, robotPose = None ):
         nonlocal geoLst
         rbtAxs  = scene.visuals.XYZAxis()
         # VISPY IS COLUMN-MAJOR
-        # vizXfrm = transforms.linear.MatrixTransform( matrix = pose.transpose() )
         rot = np.eye(4)
         rot[0:3,0:3] = pose[0:3,0:3]
         vizXfrm = transforms.linear.MatrixTransform( matrix = rot.transpose() )
@@ -82,11 +81,9 @@ def vispy_geo_list_window( geoLst, robotPose = None ):
             for pose in robotPose:
                 add_pose( pose )
 
-
     for geo in geoLst:
         view.add( geo )
     
-
     canvas.app.run()
 
 
@@ -120,8 +117,6 @@ def cross_info( posn, size, color ):
         raise ValueError( f"Bad value!: {pY}" )
     if not isinstance( pZ, float ):
         raise ValueError( f"Bad value!: {pZ}" )
-    # print( posn.shape )
-    # print( pX, pY, pZ )
     verts = np.asarray([
         [ pX-hs, pY,    pZ    ], # 0
         [ pX+hs, pY,    pZ    ], # 1
@@ -129,16 +124,12 @@ def cross_info( posn, size, color ):
         [ pX,    pY+hs, pZ    ], # 3
         [ pX,    pY,    pZ-hs ], # 4
         [ pX,    pY,    pZ+hs ], # 5
-    # ], dtype="float")
     ], dtype="object")
-    # print( verts )
-    # ndces = np.array([
     ndces = np.asarray([
         [0,1,],
         [2,3,],
         [4,5,]
     ], dtype="object")
-    # ndces = np.array([0,1,2,3,4,5,])
     return {
         'verts': verts.copy(),
         'ndces': ndces.copy(),
@@ -188,7 +179,7 @@ def wireframe_box_geo( xScl, yScl, zScl, color = None ):
 
 
 def wireframe_box_neg( xScl, yScl, zScl, color = None ):
-    """ Draw a wireframe cuboid """
+    """ Draw a crossed-out cuboid """
     if color is None:
         color = [0,0,0,1]
     xHf = xScl/2.0
@@ -454,26 +445,27 @@ def scan_geo( sym : GraspObj ):
         return rtnGeo
     else:
         return [wf1,] 
+    
 
-
-def symbol_neg( sym : GraspObj ):
+def neg_geo( sym : GraspObj ):
+    if isinstance( sym, dict ):
+        sym = GraspObj.from_dict( sym )
     objXfrm = extract_pose_as_homog( sym, noRot = True )
-    wf1 = wireframe_box_geo( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
-                             color = Color( "black" ) )
+    wf1 = wireframe_box_neg( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
+                             color = Color( "red" ) )
     wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    wf2 = wireframe_box_geo( env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, env_var("_BLOCK_SCALE")*1.125, 
-                             color = Color( "black" ) )
-    wf2.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    scl  = env_var("_BLOCK_SCALE") * sym.prob
-    bClr = env_var("_CLR_TABLE")[ sym.label[:3] ]
-    bClr.append( env_var("_BLOCK_ALPHA") )
-    blc  = scene.visuals.Box( scl, scl, scl,  
-                              color = bClr, edge_color="black" )
-    blc.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    return [wf1, wf2, blc,] 
+    return [wf1,] 
 
 
-
+def neg_list_geo( objs : list[GraspObj], noTable = True ):
+    """ Get geo for a list of symbols """
+    if noTable:
+        rtnGeo = list()
+    else:
+        rtnGeo = [table_geo(),]
+    for obj in objs:
+        rtnGeo.extend( neg_geo( obj ) )
+    return rtnGeo
 
 
 def symbol_list_geo( objs : list[GraspObj], noTable = True ):
@@ -500,7 +492,7 @@ def scan_list_geo( objs : list[GraspObj], noTable = True ):
 
 ########## RENDER MEMORY ###########################################################################
 
-def render_memory_list( objs : list[GraspObj] = None, syms = None, robotPose = None ):
+def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = None, robotPose = None ):
     """ Render the memory """
     if objs is not None:
         objLst       = reading_list_geo( objs )
@@ -510,13 +502,15 @@ def render_memory_list( objs : list[GraspObj] = None, syms = None, robotPose = N
         missingTable = True
     if syms is not None:
         objLst.extend( symbol_list_geo( syms, noTable = (not missingTable) ) )
+    if removed is not None:
+        objLst.extend( neg_list_geo( removed ) )
     vispy_geo_list_window( objLst, robotPose )
 
 
-def render_scan_list( objs : list[GraspObj] ):
+def render_scan_list( objs : list[GraspObj], robotPose = None ):
     """ Render the memory """
     objLst = scan_list_geo( objs, noTable = False )
-    vispy_geo_list_window( objLst )
+    vispy_geo_list_window( objLst, robotPose )
 
 
 

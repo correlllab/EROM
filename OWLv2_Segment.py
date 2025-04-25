@@ -372,16 +372,26 @@ class Perception_OWLv2:
                 bbox_i  = hit_i['bbox']
                 match   = False
                 mtchKey = None
+                overlap = 0.0
+
                 if len( rtnDict ):
+                    print( f"BBox Intersection: ", end="", flush=True )
                     for rK, rV in rtnDict.items():
-                        bbox_j = rV['bbox']
-                        if bb_intersection_over_union( bbox_i, bbox_j ) > 0.5: # WARNING: ASSUMED PARAM!
+                        bbox_j  = rV['bbox']
+                        intrsct = bb_intersection_over_union( bbox_i, bbox_j )
+                        print( f"{intrsct}, ", end="", flush=True )
+                        overlap = max( overlap, intrsct )
+                        if intrsct > 0.5: # WARNING: ASSUMED PARAM!
                             match   = True
                             mtchKey = rK
                             break
+                    print()
                 if match:
                     rtnDict[ mtchKey ]['Probability'][ hit_i['abbrv'] ] += hit_i['score']
+                    print( f"Merge hit {mtchKey}, Overlap: {overlap}, Dist: {rtnDict[ mtchKey ]['Probability']}" )
                 else:
+                    print( f"No merge for max overlap {overlap} of bbox {bboxi_i}" )
+
                     img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
                     cpcd = self.segment_cloud_w_SAM( 
                         img_i, 

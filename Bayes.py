@@ -125,6 +125,7 @@ class BayesMemory:
     ##### Sensor Placement ################################################
 
     def p_symbol_in_cam_view( self, camXform : np.ndarray, symbol : GraspObj ):
+        """ Can the symbol be seen from the given perspective? """
         bounds = get_D405_FOV_frustum( camXform )
         qPosn  = extract_pose_as_homog( symbol )[0:3,3]
         blcRad = np.sqrt( 3.0 * (env_var("_BLOCK_SCALE")/2.0)**2 )
@@ -137,6 +138,7 @@ class BayesMemory:
         """ Use Bayesian multiclass update on `belief`, destructive """
 
         def pose_update( objUpdate : GraspObj, reading : GraspObj ):
+            """ Update pose with an exponential filter """
             updtFrac = env_var("_UPDATE_FRAC")
             belPosn  = posn_from_xform( extract_pose_as_homog( objUpdate.pose ) )
             objPosn  = posn_from_xform( extract_pose_as_homog( reading.pose   ) )
@@ -158,6 +160,8 @@ class BayesMemory:
             nuLabels[ key ] = pstrr[i]
         belief.labels = nuLabels
         belief.cpcd.merge( evidence.cpcd )
+        belief.add_source( evidence )
+
         ## Update Pose ##
         pose_update( belief, evidence )
 
@@ -289,20 +293,27 @@ class BayesMemory:
         elimnt = set([])
         added  = set([])
         nuBels = list()
-        N = len( self.beliefs )
+        N      = len( self.beliefs )
+        rtnBad = list()
+
+        # For each belief
         for i in range( 0, N-1 ):
+
+            ## Compute Conflicts ##
             bel_i = self.beliefs[i]
             cnflc = [bel_i,]
-            # elimnt.add( bel_i.index )
             for j in range( i+1, N ):
                 bel_j = self.beliefs[j]
                 if (bel_j.index not in elimnt) and euclidean_distance_between_symbols( bel_i, bel_j ) < maxRadius:
                     cnflc.append( bel_j )
-                    # elimnt.add( bel_j.index )
+
             # Option 0: Keep strongest
             if 0:
                 cnflc.sort( key = lambda x: max(list(x.labels.values())) )
                 nuBels.append( cnflc[0] )
+                for bel in cnflc[1:]:
+                    rtnBad.append( bel.get_dict() )
+
             # Option 1: Delete Weaker
             if 1:
                 # cnflc.sort( key = lambda x: entropy_factor( x.labels ) )
@@ -312,40 +323,39 @@ class BayesMemory:
                     if len( cnflc ) > 1:
                         for evcBel in cnflc[1:]:
                             elimnt.add( evcBel.index )
+                            rtnBad.append( evcBel.get_dict() )
                     nuBels.append( addBel )
                     added.add( addBel.index )
+
             # Option 2: Merge as Evidence
             # WARNING: THIS IS PROBABLY DOUBLE-COUNTING EVIDENCE!
             if 0:
-                # cnflc.sort( key = lambda x: entropy_factor( x.labels ) )
                 cnflc.sort( key = lambda x: max(list(x.labels.values())) )
                 addBel = cnflc[0]
                 if (addBel.index not in elimnt) and (addBel.index not in added):
                     if len( cnflc ) > 1:
                         for evcBel in cnflc[1:]:
                             elimnt.add( evcBel.index )
+                            rtnBad.append( evcBel.get_dict() )
                             self.accum_evidence_for_belief( evcBel, addBel )
                     nuBels.append( addBel )
                     added.add( addBel.index )
+
         # We may have neglected the final belief if it did not participate in a conflict     
         if len( self.beliefs ) and (self.beliefs[-1].index not in elimnt) and (self.beliefs[-1].index not in added):
             nuBels.append( self.beliefs[-1] )
-        # Scoop up beliefs that did not participate in a conflict        
-        # elimnt.update( bel.index for bel in nuBels )
-        # for bel in self.beliefs:
-        #     if bel.index not in elimnt:
-        #         nuBels.append( bel )
         
         if env_var("_VERBOSE"):
             print( f"\n\tMerged {N-len(nuBels)} beliefs!\n" )
 
         self.beliefs = nuBels
-        
 
+        return rtnBad
 
 
     def belief_update( self, evdncLst : list[GraspObj], camXform : np.ndarray, maxRadius : float = 3.0*env_var("_BLOCK_SCALE") ):
         """ Gather and aggregate evidence """
+        rtnBad = list()
 
         ## Integrate Beliefs ##
         cNu = 0
@@ -376,7 +386,7 @@ class BayesMemory:
         if env_var("_REPAIR_BAYES"):
             # HACK: THIS PROBABLY INDICATES A PROBLEM
             ## Reconcile Overlapping ##
-            self.reconcile_conflicts( maxRadius )
+            rtnBad = self.reconcile_conflicts( maxRadius )
 
         if env_var("_VERBOSE"):
             if (cNu or cIn):
@@ -388,6 +398,8 @@ class BayesMemory:
             for bel in self.beliefs:
                 print( f"\t{bel}" )
             print()
+
+        return rtnBad
 
 
     ##### Belief Update ####################################################

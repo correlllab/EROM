@@ -247,7 +247,8 @@ def most_likely_objects( objList : list[GraspObj], method = "sufficient" ):
                 prob_j  = objct_j.labels[ label_j ]
                 prob_i += -np.log( prob_j ) # Negative log likelihood
                 symLst[j] = GraspObj( label = label_j, pose  = objct_j.pose, 
-                                      prob  = prob_j , score = objct_j.score, labels = objct_j.labels )
+                                      prob  = prob_j , score = objct_j.score, labels = objct_j.labels,
+                                      parent = objct_j )
             comboList.appendleft( [prob_i, symLst] )
 
         ## Sort all class combinations with decreasing probabilities ##
@@ -663,9 +664,7 @@ class Memory:
             if Append:
                 self.mult = True
 
-        # self.bMem.belief_update( self.scan, xform )
-        # self.bMem.belief_update( self.scan, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
-        self.bMem.belief_update( gObs, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
+        rtnBad = self.bMem.belief_update( gObs, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
 
         if self.record:
             self.history.append( 
@@ -675,6 +674,8 @@ class Memory:
                 },
                 msg = "memory" 
             )
+        
+        return rtnBad
     
 
     ##### Symbol Grounding #######################

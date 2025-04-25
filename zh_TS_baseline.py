@@ -9,7 +9,7 @@ from aspire.symbols import GraspObj, euclidean_distance_between_symbols
 from aspire.BlocksTask import set_blocks_env
 
 from TaskPlanner import set_experiment_env
-from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_geo_list_window, cpcd_geo )
+from draw_beliefs import ( set_render_env, render_scan_list, render_memory_list )
 
 from Memory import Memory
 
@@ -36,11 +36,15 @@ _TS_DETAIL    = True
 _MEM_GRAPHICS = True
 
 """
+- [>] ISSUE: Scan readings overlap a great deal, but these should have been merged during the Segmentation Phase!
+    - [>] Log if segmentations are actually merged! (This can only be done in an experiment)
+    - [ ] If they are not being merged, do they get properly integrated into the belief update?
+
 - [>] ISSUE: The robot keeps missing the block!
     - [Y] How many stack actions end in failure?: 5 per run, NOT counting classification mistakes!
     - [>] Soln 1: One-shot sight-in, Based on the **closest** generic block
         - [>] Test Result: 
-    - [P] Soln 2: Do not asjust poses of blocks placed by the robot
+    - [P] Soln 2: Do not adjust poses of blocks placed by the robot
         - NEED TO THINK OF A WAY TO IMPLEMENT THIS THAT DOES NOT BREAK KL-DIVERGENCE TRACKING
         - [P] Test Result: 
     - [ ] Soln 3: Use the overhead camera
@@ -51,6 +55,15 @@ _MEM_GRAPHICS = True
     - A reading is already attributed to the belief that it is closest to
     - There isn't anything preventing more than one reading to contributing to the same belief
     - A single reading cannot contribute to multiple beliefs unless `integrate_one_to_many` is used
+    
+* [>] Does the belief update process make sense?
+    - [Y] Check that massive AABB volume changes do not occur, 2025-04-25: Might be okay?
+        `CPCD.merge()`: Volume changed by a factor of 1.00000
+        `CPCD.merge()`: Volume changed by a factor of 1.00000
+        `CPCD.merge()`: Volume changed by a factor of 1.33580
+        `CPCD.merge()`: Volume changed by a factor of 2.34455
+    - [>] Log the inputs of Bayes updates so you can see what is nudging them
+    - [>] Log the readings that get eliminated && Visualize them
 
 * [ ] Does the merge process make sense?
     - [ ] What does it mean if a belief got an update before it was eliminated?
@@ -74,131 +87,142 @@ if _TS_DETERM:
     actFl = 0
     Nrun  = 0
 
+    
+
     for pklDex, pklPath in enumerate( pkls ):
     # for pklDex, pklPath in enumerate( pkls[3:4] ):
 
-        # We are going to troubleshoot how belief updates should go on the robot
-        bMem   = Memory( None, None, suppressRecord = True ) 
-        Nrun  += 1
-        totRun = 0.0 
-        totMty = 0.0
+        try:
 
-        print( f"Loading {pklPath} ...\n" )
+            # We are going to troubleshoot how belief updates should go on the robot
+            bMem   = Memory( None, None, suppressRecord = True ) 
+            Nrun  += 1
+            totRun = 0.0 
+            totMty = 0.0
 
-        with open( pklPath, 'rb' ) as f:
-            
-            data    = pickle.load( f )
-            totRun += (data[-1]['t'] - data[0]['t'])
-            tLst    = data[0]['t']
-            camPose = None
+            print( f"Loading {pklPath} ...\n" )
 
-            for datum in data:
-                tMsg  = datum['msg']
-                tData = datum['data']
-                if _TS_DETAIL:
-                    print( f"\n{datum['t']} : {tMsg}, {list(tData.keys()) if isinstance(tData,dict) else None}" )
+            with open( pklPath, 'rb' ) as f:
+                
+                data    = pickle.load( f )
+                totRun += (data[-1]['t'] - data[0]['t'])
+                tLst    = data[0]['t']
+                camPose = None
+
+                for datum in data:
+                    tMsg  = datum['msg']
+                    tData = datum['data']
+                    if _TS_DETAIL:
+                        print( f"\n{datum['t']} : {tMsg}, {list(tData.keys()) if isinstance(tData,dict) else None}" )
 
 
-                if "Action Failure" in tMsg:
-                    actFl += 1
+                    if "Action Failure" in tMsg:
+                        actFl += 1
 
-                if tMsg == "ObsMeta":
+                    if tMsg == "ObsMeta":
 
-                    for k, v in tData.items():
-                        print( f"{k}: ", end = "" )
-                        if isinstance( v, dict ):
-                            print( list( v.keys() ) )
-                        elif isinstance( v, list ):
-                            item = v[0]
-                            if isinstance( item, dict ):
-                                print( list( item.keys() ) )
-                        else:
+                        for k, v in tData.items():
+                            print( f"{k}: ", end = "" )
+                            if isinstance( v, dict ):
+                                print( list( v.keys() ) )
+                            elif isinstance( v, list ):
+                                item = v[0]
+                                if isinstance( item, dict ):
+                                    print( list( item.keys() ) )
+                            else:
+                                print()
+
+                        inpt = tData['input']
+                        if _TS_DETAIL:
+                            print( f"input: {list(inpt.keys())}" ) # `dict`
+                            for k, v in inpt.items(): # ['query', 'abbrv', 'image', 'depth', 't']
+                                print( f"\t{list(v.keys())}" )
+                            
+                        hits = tData['hits']
+                        if _TS_DETAIL:
+                            print( f"hits: {type(hits)}" ) # `list`
+                            print( f"\t{list(hits[0].keys())}" ) # ['bbox', 'bboxi', 'score', 'label', 'image', 'query', 'abbrv', 'shotID']
                             print()
 
-                    inpt = tData['input']
-                    if _TS_DETAIL:
-                        print( f"input: {list(inpt.keys())}" ) # `dict`
-                        for k, v in inpt.items(): # ['query', 'abbrv', 'image', 'depth', 't']
-                            print( f"\t{list(v.keys())}" )
+                    elif tMsg == 'camera':
+                        camPose = datum['data'].copy()
+
+
+                    elif tMsg == "memory":
+
+                        scan = tData['scan']
+                        print( list( tData.keys() ) )
                         
-                    hits = tData['hits']
-                    if _TS_DETAIL:
-                        print( f"hits: {type(hits)}" ) # `list`
-                        print( f"\t{list(hits[0].keys())}" ) # ['bbox', 'bboxi', 'score', 'label', 'image', 'query', 'abbrv', 'shotID']
+                        if _MEM_GRAPHICS:
+                            render_scan_list( scan, camPose )
+
+                        removed = bMem.process_observations( 
+                            scan,
+                            camPose,
+                            False
+                        ) 
+
+                        if _MEM_GRAPHICS:
+                            render_memory_list( bMem.bMem.beliefs, removed = removed )
+
+                        if _TS_DETAIL:
+                            print( f"scan: {type(scan)}" ) # `list`
+                            print( f"\t{scan[0]}" ) # `GraspObj`
+                        Mdst = np.zeros( (len(scan),len(scan),) )
+                        for i, obj_i in enumerate( scan ):
+                            for j, obj_j in enumerate( scan ):
+                                if i != j:
+                                    Mdst[i,j] = euclidean_distance_between_symbols( obj_i, obj_j )
+                        Mcls = np.where( Mdst < env_var("_BAYES_RAD_L2_M"), 1, 0)
+                        
+                        blfs = tData['beliefs']
+                        if _TS_DETAIL:
+                            print( f"beliefs: {type(blfs)}" ) # `list`
+                            print( f"\t{blfs[0]}" ) # `GraspObj`
+                        Ndst = np.zeros( (len(blfs),len(scan),), dtype = int )
+                        for i, obj_i in enumerate( blfs ):
+                            for j, obj_j in enumerate( scan ):
+                                Ndst[i,j] = euclidean_distance_between_symbols( obj_i, obj_j )
+                        Ncls = np.where( Ndst < env_var("_BAYES_RAD_L2_M"), 1, Ndst )
+
+                        if _TS_DETAIL:
+                            print( f"\nThere are {len(blfs)} beliefs!\n" )
+                            print( Mcls )
+                            print()
+
+
+                    elif tMsg == "symbols":
+
+                        elapsed = datum['t'] - tLst
+                        tLst    = datum['t']
+                        Nsym    = len( tData )
+
+                        if Nsym:
+                            print( f"There are {Nsym} symbols!" )
+                        else:
+                            totMty += elapsed
+
+                        # Reset memory every time we form a plan
+                        bMem.reset_memory()
+
                         print()
 
-                elif tMsg == 'camera':
-                    camPose = datum['data'].copy()
+                    elif tMsg == "Annotation":
+                        print( f"{tData}\n" )
 
+            if totMty > mxMty:
+                mxMty = totMty
+                mxIdx = pklDex
+            mins, secs = divmod( totRun, 60.0 )
+            mins = int( mins )
+            print( f"\nSolver spent {totMty/totRun:.4f} of {mins}:{secs:.1f} without determinized symbols!" )  
 
-                elif tMsg == "memory":
-
-                    scan = tData['scan']
-                    print( list( tData.keys() ) )
-                    # os.system( 'kill %d' % os.getpid() ) 
-
-                    bMem.process_observations( 
-                        scan,
-                        camPose,
-                        False
-                    ) 
-
-                    if _TS_DETAIL:
-                        print( f"scan: {type(scan)}" ) # `list`
-                        print( f"\t{scan[0]}" ) # `GraspObj`
-                    Mdst = np.zeros( (len(scan),len(scan),) )
-                    for i, obj_i in enumerate( scan ):
-                        for j, obj_j in enumerate( scan ):
-                            if i != j:
-                                Mdst[i,j] = euclidean_distance_between_symbols( obj_i, obj_j )
-                    Mcls = np.where( Mdst < env_var("_BAYES_RAD_L2_M"), 1, 0)
-                    
-                    blfs = tData['beliefs']
-                    if _TS_DETAIL:
-                        print( f"beliefs: {type(blfs)}" ) # `list`
-                        print( f"\t{blfs[0]}" ) # `GraspObj`
-                    Ndst = np.zeros( (len(blfs),len(scan),), dtype = int )
-                    for i, obj_i in enumerate( blfs ):
-                        for j, obj_j in enumerate( scan ):
-                            Ndst[i,j] = euclidean_distance_between_symbols( obj_i, obj_j )
-                    Ncls = np.where( Ndst < env_var("_BAYES_RAD_L2_M"), 1, Ndst )
-
-                    if _TS_DETAIL:
-                        print( f"\nThere are {len(blfs)} beliefs!\n" )
-                        print( Mcls )
-                        print()
-                        # print( Ncls ) # This is always 1's!
-
-
-                elif tMsg == "symbols":
-
-                    elapsed = datum['t'] - tLst
-                    tLst    = datum['t']
-                    Nsym    = len( tData )
-
-                    if Nsym:
-                        print( f"There are {Nsym} symbols!" )
-                    else:
-                        totMty += elapsed
-
-                    # Reset memory every time we form a plan
-                    bMem.reset_memory()
-
-                    print()
-
-                elif tMsg == "Annotation":
-                    print( f"{tData}\n" )
-
-
-        if totMty > mxMty:
-            mxMty = totMty
-            mxIdx = pklDex
-        mins, secs = divmod( totRun, 60.0 )
-        mins = int( mins )
-        print( f"\nSolver spent {totMty/totRun:.4f} of {mins}:{secs:.1f} without determinized symbols!" )  
-    
+        except KeyboardInterrupt:
+            break
+        
     print( f"\nWorst run spent {mxMty} seconds without symbols!, Index: {mxIdx}" ) # Spends up to 1/3 of time without symbols!
     print( f"\nAverage Failed Actions per Run: {1.0*actFl/Nrun}" ) # Average Failed Actions per Run: 4.538
+        
 
 # Solver spent 0.2068 of 353:12.0 without determinized symbols!
 
