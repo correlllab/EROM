@@ -360,24 +360,14 @@ class BayesMemory:
         ## Integrate Beliefs ##
         cNu = 0
         cIn = 0
-        bgn = 0
         self.unvisit_beliefs()
-        
-        if not len( self.beliefs ):
-            for i, objEv in enumerate( evdncLst ):
-                if p_symbol_inside_workspace_bounds( objEv ):
-                    self.beliefs.append( objEv )
-                    bgn = i+1
-                    break
 
-        if bgn < len( evdncLst ):
-            evdncLst = evdncLst[ bgn: ]
-            for objEv in evdncLst:
-                # if self.integrate_one_reading( objEv, camXform, maxRadius = maxRadius ):
-                if self.integrate_one_to_many( objEv, camXform, maxRadius = maxRadius ):
-                    cIn += 1
-                else:
-                    cNu += 1
+        for objEv in evdncLst:
+            if self.integrate_one_reading( objEv, camXform, maxRadius = maxRadius ):
+            # if self.integrate_one_to_many( objEv, camXform, maxRadius = maxRadius ):
+                cIn += 1
+            else:
+                cNu += 1
 
         ## Decay Irrelevant Beliefs ##
         if env_var("_NULL_EVIDENCE"):
@@ -391,7 +381,7 @@ class BayesMemory:
         if env_var("_VERBOSE"):
             if (cNu or cIn):
                 print( f"\t{cNu} new object beliefs this iteration!" )
-                print( f"\t{cIn} object beliefs updated!" )
+                print( f"\t{cIn} object belief updates!" )
             else:
                 print( f"\tNO belief update!" )
             print( f"Total Beliefs: {len(self.beliefs)}" )
