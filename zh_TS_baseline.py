@@ -57,11 +57,14 @@ _MEM_GRAPHICS = True
     - A single reading cannot contribute to multiple beliefs unless `integrate_one_to_many` is used
     
 * [>] Does the belief update process make sense?
-    - [Y] Check that massive AABB volume changes do not occur, 2025-04-25: Might be okay?
+    - [Y] Check that massive AABB volume changes do not occur, 2025-04-25: Seems okay!
+        `CPCD.merge()`: Volume changed by a factor of 1.11455
+        `CPCD.merge()`: Volume changed by a factor of 1.05742
         `CPCD.merge()`: Volume changed by a factor of 1.00000
         `CPCD.merge()`: Volume changed by a factor of 1.00000
-        `CPCD.merge()`: Volume changed by a factor of 1.33580
-        `CPCD.merge()`: Volume changed by a factor of 2.34455
+        `CPCD.merge()`: Volume changed by a factor of 1.00000
+        `CPCD.merge()`: Volume changed by a factor of 1.00000
+
     - [>] Log the inputs of Bayes updates so you can see what is nudging them
     - [>] Log the readings that get eliminated && Visualize them
 
