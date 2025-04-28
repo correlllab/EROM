@@ -270,7 +270,7 @@ class TaskPlanner:
         # self.perc    = Perception_OWLViT
         self.perc = Perception_OWLv2()
 
-        self.robot : UR5_Interface = UR5_Interface() if (not noBot) else None
+        self.robot : UR5_Interface = UR5_Interface( provide_gripper = True ) if (not noBot) else None
 
         self.memory = Memory( self.robot, self.perc ) 
 
@@ -372,7 +372,7 @@ class TaskPlanner:
         """ Get the necessary initial state, Check for goals already met """
         self.symPln.symbols = self.memory.get_current_most_likely()
 
-        self.memory.locate_all( self.symPln.symbols )
+        # self.memory.locate_all( self.symPln.symbols )
 
         if len( self.symPln.symbols ):
             self.status = Status.RUNNING

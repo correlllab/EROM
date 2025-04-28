@@ -652,10 +652,11 @@ class Memory:
 
     def process_observations( self, obs, xform = None, Append = False ):
         """ Integrate one noisy scan into the current beliefs """
-        if isinstance( obs[0], GraspObj ):
-            gObs = obs[:]
-        else:
-            gObs = observation_to_readings( obs, xform )
+        if len( obs ):
+            if isinstance( obs[0], GraspObj ):
+                gObs = obs[:]
+            else:
+                gObs = observation_to_readings( obs, xform )
             
         if (Append and self.mult):
             self.scan.extend( gObs )
