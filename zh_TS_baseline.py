@@ -68,10 +68,13 @@ _MEM_GRAPHICS = True
     - [>] Log the inputs of Bayes updates so you can see what is nudging them
     - [>] Log the readings that get eliminated && Visualize them
 
-* [ ] Does the merge process make sense?
-    - [ ] What does it mean if a belief got an update before it was eliminated?
-    - [ ] Can an update make a belief more likely to be eliminated?
-    - [ ] What would happen if you did not do an update between scans?
+* [Y] Does the merge process make sense?, 2025-04-28: NO it did NOT!, This was a compound problem
+    - Mask overlaps were insufficient on the segmentation side to create a distribution per pose
+    - As a result, there were many overlaps in the initial scan
+    - Planner had previously promoted the entire initial scan to beliefs, including overlaps
+    - [P] What does it mean if a belief got an update before it was eliminated?
+    - [P] Can an update make a belief more likely to be eliminated?
+    - [P] What would happen if you did not do an update between scans?
 
 * [ ] What am I supposed to do when there are more beliefs than symbols?
     - [ ] Is there a way to consider overlapping symbols in the determination?
