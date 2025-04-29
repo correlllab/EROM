@@ -14,7 +14,8 @@ from draw_beliefs import ( set_render_env, render_scan_list, render_memory_list 
 from Memory import Memory
 
 # path = "data/Baseline_2025-03-11"
-path = "data/Baseline_2025-03-13"
+path = "data/Baseline_2025-03-13" 
+# path = "data/Baseline_2025-04-28" 
 
 pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
 for pkl in pkls:
@@ -33,7 +34,7 @@ set_render_env()
 ########## ANALYSIS ################################################################################
 _TS_DETERM    = True
 _TS_DETAIL    = True
-_MEM_GRAPHICS = True
+_MEM_GRAPHICS = False
 
 """
 - [>] ISSUE: Scan readings overlap a great deal, but these should have been merged during the Segmentation Phase!
@@ -92,7 +93,7 @@ if _TS_DETERM:
     mxIdx = -1
     actFl = 0
     Nrun  = 0
-
+    epRun = 0.0
     
 
     for pklDex, pklPath in enumerate( pkls ):
@@ -112,6 +113,7 @@ if _TS_DETERM:
                 
                 data    = pickle.load( f )
                 totRun += (data[-1]['t'] - data[0]['t'])
+                epRun  += totRun
                 tLst    = data[0]['t']
                 camPose = None
 
@@ -226,6 +228,8 @@ if _TS_DETERM:
         except KeyboardInterrupt:
             break
         
+    epMin, epSec = divmod( epRun/Nrun, 60.0 )
+    print( f"\nAverage Running Time: {int(epMin)}:{int(epSec)}, Success Rate: \n" )
     print( f"\nWorst run spent {mxMty} seconds without symbols!, Index: {mxIdx}" ) # Spends up to 1/3 of time without symbols!
     print( f"\nAverage Failed Actions per Run: {1.0*actFl/Nrun}" ) # Average Failed Actions per Run: 4.538
         
