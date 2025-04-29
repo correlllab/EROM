@@ -430,7 +430,7 @@ class SensoryPlanner:
         """ A Series of shots  """
         return [
             self.plan_3d_shot_centroid( objects, [  0.75, -0.25, 1.0, ], self.dShot, defaultPose ),
-            self.plan_3d_shot_centroid( objects, [  1.00,  0.25, 1.0, ], self.dShot, defaultPose ),
+            # self.plan_3d_shot_centroid( objects, [  1.00,  0.25, 1.0, ], self.dShot, defaultPose ),
             self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
             # self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
         ]

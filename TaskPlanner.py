@@ -81,6 +81,8 @@ def set_experiment_env():
     env_sto( "_SEG_MAX_HITS"    , 50     ) 
     env_sto( "_SEG_SCORE_THRESH",  0.100 ) # 0.025 # 0.075 # 0.100
 
+    env_sto( "_Z_SAFE", 0.400 )
+
      # 3D Printed Blocks
 
     _trgtGrn = BASE_TARGET()
@@ -138,8 +140,9 @@ def set_experiment_env():
 
     env_sto( "_WIDE_Z_ABOVE", 1.75*env_var("_BLOCK_SCALE") )
 
-    env_sto( "_ROBOT_FREE_SPEED", 0.125 ) 
-    env_sto( "_ROBOT_HOLD_SPEED", 0.125 )
+    env_sto( "_ROBOT_FREE_SPEED", 0.125 * 2.0 ) 
+    env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 1.5 )
+
     env_sto( "_ACCEPT_POSN_ERR" , 0.60*env_var( "_BLOCK_SCALE" ) ) # 0.75 # 0.90
     
     env_sto( "_GOAL" ,

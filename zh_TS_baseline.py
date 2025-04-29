@@ -14,8 +14,8 @@ from draw_beliefs import ( set_render_env, render_scan_list, render_memory_list 
 from Memory import Memory
 
 # path = "data/Baseline_2025-03-11"
-path = "data/Baseline_2025-03-13" 
-# path = "data/Baseline_2025-04-28" 
+# path = "data/Baseline_2025-03-13" 
+path = "data/Baseline_2025-04-28" 
 
 pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
 for pkl in pkls:
@@ -93,7 +93,7 @@ if _TS_DETERM:
     mxIdx = -1
     actFl = 0
     Nrun  = 0
-    epRun = 0.0
+    epRun = list()
     
 
     for pklDex, pklPath in enumerate( pkls ):
@@ -113,7 +113,7 @@ if _TS_DETERM:
                 
                 data    = pickle.load( f )
                 totRun += (data[-1]['t'] - data[0]['t'])
-                epRun  += totRun
+                epRun.append( totRun )
                 tLst    = data[0]['t']
                 camPose = None
 
@@ -228,13 +228,14 @@ if _TS_DETERM:
         except KeyboardInterrupt:
             break
         
-    epMin, epSec = divmod( epRun/Nrun, 60.0 )
-    print( f"\nAverage Running Time: {int(epMin)}:{int(epSec)}, Success Rate: \n" )
+    epMin, epSec = [int(item) for item in divmod( sum(epRun)/Nrun, 60.0 )]
+    mdMin, mdSec = [int(item) for item in divmod( np.median( epRun ), 60.0 )]
+    print( f"\nAverage Running Time: {epMin}:{epSec}, Median Running Time: {mdMin}:{mdSec}\n" )
     print( f"\nWorst run spent {mxMty} seconds without symbols!, Index: {mxIdx}" ) # Spends up to 1/3 of time without symbols!
     print( f"\nAverage Failed Actions per Run: {1.0*actFl/Nrun}" ) # Average Failed Actions per Run: 4.538
         
 
-# Solver spent 0.2068 of 353:12.0 without determinized symbols!
+# 2025-04-29, Tue - Average Running Time: 12:17, Median Running Time: 9:25
 
 ########## CLEAN-UP ################################################################################
 print( "\n\n" )

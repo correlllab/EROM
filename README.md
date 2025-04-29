@@ -19,22 +19,33 @@ Entropy Ranked Object Memory
     - `[Y]` Is there a simpler Maximum Likelyhood implementation?, 2025-02-20: *Maybe*, but I don't care right now
 
 * `[>]` Baseline Experiments
+    - `[>]` Get stacking the blocks down to 4 minutes or less
+        * `[>]` Remove one or more camera views, Removed 1, Needs TESTING
+        * `[>]` Increase robot speed, Increased, Needs TESTING
+        * `[P]` Shorten robot motions, 2025-04-29: "_Z_SAFE" already seems pretty near the stacked tower of 3 
+    - `[ ]` Collect data on 100 experiments!
 
-* `[>]` Run planner with Bayesian Updates on periodic scans
-    - `[>]` Do NOT erase memory between steps!
-    - `[>]` Consider the occlusion of supporting blocks!
-        * **WARNING**: "Geometry.py" is a **YAGNI** threat!
+## Responsive System
+
+* `[ ]` Run planner with Bayesian Updates on periodic scans
+    - `[ ]` Do NOT erase memory between steps!
+    - `[ ]` Make sure that moved blocks are reflected in the beliefs!
+    
+
 * `[ ]` Shortcut Experiments
 
 ## Memory Testing
-* `[>]` Inspect the segmentation logic
-    - `[>]` TEST the segmentation logic!
-    - `{?}` IF bad, THEN revert!
-* `[ ]` Adjust `env_var("_OWL2_THRESH")`
-* `[ ]` Adjust `env_var("_SEG_SCORE_THRESH")`
-* `[ ]` Adjust `env_var("_SEG_MAX_HITS")`
+* `[>]` Inspect the segmentation logic, 2025-04-29: Works very well!, even tho it still emits overlapping readings
+    - `[Y]` TEST the segmentation logic!, 2025-04-29: Works very well!, even tho it still emits overlapping readings
+    - `{N}` IF bad, THEN revert!, 2025-04-29: Not needed
+* `[P]` Adjust `env_var("_OWL2_THRESH")`
+* `[P]` Adjust `env_var("_SEG_SCORE_THRESH")`
+* `[P]` Adjust `env_var("_SEG_MAX_HITS")`
 
 
 ## Stretch Goals
 * `[ ]` Grasp Planning via RANSAC
 * `[ ]` Camera planning WRT occlusion
+- `[?]` Consider the occlusion of supporting blocks!
+    * Why did I ask for this?
+    * **WARNING**: "Geometry.py" is a **YAGNI** threat!
