@@ -652,6 +652,7 @@ class Memory:
 
     def process_observations( self, obs, xform = None, Append = False ):
         """ Integrate one noisy scan into the current beliefs """
+        gObs = list()
         if len( obs ):
             if isinstance( obs[0], GraspObj ):
                 gObs = obs[:]
