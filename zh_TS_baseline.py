@@ -15,7 +15,8 @@ from Memory import Memory
 
 # path = "data/Baseline_2025-03-11"
 # path = "data/Baseline_2025-03-13" 
-path = "data/Baseline_2025-04-28" 
+# path = "data/Baseline_2025-04-28" 
+path = "data/Baseline_2025-04-29" 
 
 pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
 for pkl in pkls:
@@ -230,7 +231,10 @@ if _TS_DETERM:
         
     epMin, epSec = [int(item) for item in divmod( sum(epRun)/Nrun, 60.0 )]
     mdMin, mdSec = [int(item) for item in divmod( np.median( epRun ), 60.0 )]
+    mnMin, mnSec = [int(item) for item in divmod( min( epRun ), 60.0 )]
+    mxMin, mxSec = [int(item) for item in divmod( max( epRun ), 60.0 )]
     print( f"\nAverage Running Time: {epMin}:{epSec}, Median Running Time: {mdMin}:{mdSec}\n" )
+    print( f"\nMinimum Running Time: {mnMin}:{mnSec}, Maximum Running Time: {mxMin}:{mxSec}\n" )
     print( f"\nWorst run spent {mxMty} seconds without symbols!, Index: {mxIdx}" ) # Spends up to 1/3 of time without symbols!
     print( f"\nAverage Failed Actions per Run: {1.0*actFl/Nrun}" ) # Average Failed Actions per Run: 4.538
         
