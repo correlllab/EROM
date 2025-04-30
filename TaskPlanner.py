@@ -140,8 +140,9 @@ def set_experiment_env():
 
     env_sto( "_WIDE_Z_ABOVE", 1.75*env_var("_BLOCK_SCALE") )
 
-    env_sto( "_ROBOT_FREE_SPEED", 0.125 * 2.0 ) 
-    env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 1.5 )
+    env_sto( "_ROBOT_FREE_SPEED", 0.125 * 3.5 ) 
+    env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 2.0 )
+    env_sto( "_ROBOT_LIN_ACCEL" , 0.500 * 1.5 )
 
     env_sto( "_ACCEPT_POSN_ERR" , 0.60*env_var( "_BLOCK_SCALE" ) ) # 0.75 # 0.90
     
@@ -401,26 +402,29 @@ class TaskPlanner:
     def narrate_plan( self ):
         """ Describe the state in English sentences """
         rtnDesc  = list()
-        pdlsPlan = self.blcMod.planner.currPlan[:]
-        for action in pdlsPlan:
-            actName  = action.name
-            actArgs  = action.args
-            if actName == "move_free":
-                rtnDesc.append( f"The robot arm will move." )
-            elif actName in ("pick", "unstack",):
-                # ?label ?pose ?prevSupport
-                label, pose, prevSupport = actArgs
-                rtnDesc.append( f"The robot arm will pick up the {_BLOCK_DESC[ label ]} from the {_BLOCK_DESC[ prevSupport ]}." )
-            elif actName == "move_holding":
-                # ?poseBgn ?poseEnd ?label
-                poseBgn, poseEnd, label = actArgs
-                rtnDesc.append( f"The robot arm will move the {_BLOCK_DESC[ label ]}." )
-            elif actName in ("place", "stack",):
-                # ?label ?pose ?support
-                label, pose, support = actArgs
-                rtnDesc.append( f"The robot arm will place the {_BLOCK_DESC[ label ]} on the {_BLOCK_DESC[ support ]}." )
-            else:
-                print( f"There is no annotation for action: {action}" )
+        if self.symPln.status is not Status.FAILURE:
+            pdlsPlan = self.blcMod.planner.currPlan[:]
+            for action in pdlsPlan:
+                actName  = action.name
+                actArgs  = action.args
+                if actName == "move_free":
+                    rtnDesc.append( f"The robot arm will move." )
+                elif actName in ("pick", "unstack",):
+                    # ?label ?pose ?prevSupport
+                    label, pose, prevSupport = actArgs
+                    rtnDesc.append( f"The robot arm will pick up the {_BLOCK_DESC[ label ]} from the {_BLOCK_DESC[ prevSupport ]}." )
+                elif actName == "move_holding":
+                    # ?poseBgn ?poseEnd ?label
+                    poseBgn, poseEnd, label = actArgs
+                    rtnDesc.append( f"The robot arm will move the {_BLOCK_DESC[ label ]}." )
+                elif actName in ("place", "stack",):
+                    # ?label ?pose ?support
+                    label, pose, support = actArgs
+                    rtnDesc.append( f"The robot arm will place the {_BLOCK_DESC[ label ]} on the {_BLOCK_DESC[ support ]}." )
+                else:
+                    print( f"There is no annotation for action: {action}" )
+        else:
+            rtnDesc.append( f"The robot arm will attempt to separate blocks that caused the planner to FAIL." )
         return rtnDesc
     
 
@@ -437,7 +441,11 @@ class TaskPlanner:
         )
 
         if (self.symPln.status == Status.FAILURE):
-            self.status = Status.FAILURE
+
+            # self.status = Status.FAILURE
+            self.status = Status.RUNNING
+            self.blcMod.HACK_space_repair_plan( self.robot )
+
             self.memory.history.append( msg = "Planning Failure" )
             print( f"Planning Failure!" )
             self.memory.history.append( msg = "Annotation", datum = {
@@ -605,9 +613,14 @@ class TaskPlanner:
                 } )
 
 
-    def phase_5_Return_Home( self, goPose ):
+    def phase_5_Return_Home( self, goPose = None ):
         """ Get ready for next iteration while updating beliefs """
-        self.robot.moveL( _SAFE, asynch = False )
+        if goPose is None:
+            goPose = _SAFE
+        self.robot.moveL( goPose, 
+                          linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                          linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                          asynch = False )
         
 
     ##### Task Planner Main Loop ##########################################
@@ -671,8 +684,14 @@ class TaskPlanner:
             #         vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
 
             for bgnPose in bgnPoses:
-                self.robot.moveL( _SAFE, asynch = False )
-                self.robot.moveL( bgnPose, asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
+                self.robot.moveL( _SAFE, 
+                                  linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                                  linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                                  asynch = False )
+                self.robot.moveL( bgnPose, 
+                                  linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                                  linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                                  asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
                 self.phase_1_Perceive( Append = True, suppressDeterm = True )
 
             if env_var("_USE_GRAPHICS"):
