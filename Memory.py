@@ -5,7 +5,7 @@
 ### Standard ###
 import time
 now = time.time
-from collections import deque
+from collections import deque, Counter
 from typing import Dict, Deque
 from math import log
 from uuid import uuid4
@@ -259,6 +259,19 @@ def most_likely_objects( objList : list[GraspObj], method = "sufficient" ):
 
     ### Filtering Methods ###
 
+    def p_match_label_quantity( objs : list[GraspObj], reqs : list[tuple] ):
+        """ Return True if there are at least as many objects of the required type as required """
+        reqd = Counter( [item[1] for item in reqs if (item[0] == 'GraspObj')] )
+        oDct = Counter( [item.label for item in objs] )
+        for k, v in reqd.items():
+            if k in oDct:
+                if oDct[k] < v:
+                    return False
+            else:
+                return False
+        return True
+        
+
     def p_enough_labels( objs : list[GraspObj] ):
         """ Return true if there are as many classes as there are objects """
         lbls = set([sym.label for sym in objs])
@@ -301,7 +314,12 @@ def most_likely_objects( objList : list[GraspObj], method = "sufficient" ):
     totCombos  = gen_combos( objList )
     rtnSymbols = list()
 
-    if (method == "sufficient"):
+    if isinstance( method, list ):
+        for combo in totCombos:
+            if p_match_label_quantity( combo[1], method ):
+                rtnSymbols = combo[1]
+                break
+    elif (method == "sufficient"):
         for combo in totCombos:
             if p_enough_labels( combo[1] ):
                 rtnSymbols = combo[1]

@@ -146,15 +146,21 @@ def set_experiment_env():
 
     env_sto( "_ACCEPT_POSN_ERR" , 0.60*env_var( "_BLOCK_SCALE" ) ) # 0.75 # 0.90
     
-    env_sto( "_GOAL" ,
+    env_sto( "_GOAL_GRB" ,
         ( 'and',
             ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
-
-            # ('Supported', 'ylwBlock', 'grnBlock'), 
-            # ('Supported', 'bluBlock', 'ylwBlock'), 
             ('Supported', 'redBlock', 'grnBlock'), 
             ('Supported', 'bluBlock', 'redBlock'), 
 
+            ('HandEmpty',),
+        )
+    )
+
+    env_sto( "_GOAL_RRR" ,
+        ( 'and',
+            ('GraspObj', 'redBlock' , _trgtGrn  ), # ; Tower
+            ('Supported', 'redBlock', 'redBlock'), 
+            ('Supported', 'redBlock', 'redBlock'), 
             ('HandEmpty',),
         )
     )
