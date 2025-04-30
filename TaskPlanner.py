@@ -81,7 +81,7 @@ def set_experiment_env():
     env_sto( "_SEG_MAX_HITS"    , 50     ) 
     env_sto( "_SEG_SCORE_THRESH",  0.100 ) # 0.025 # 0.075 # 0.100
 
-    env_sto( "_Z_SAFE", 0.400 )
+    env_sto( "_Z_SAFE", 0.350 )
 
      # 3D Printed Blocks
 
@@ -400,7 +400,7 @@ class TaskPlanner:
     ##### Phase 3 ################################
 
     def narrate_plan( self ):
-        """ Describe the state in English sentences """
+        """ Describe the plan in English sentences """
         rtnDesc  = list()
         if self.symPln.status is not Status.FAILURE:
             pdlsPlan = self.blcMod.planner.currPlan[:]

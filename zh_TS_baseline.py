@@ -15,7 +15,8 @@ from Memory import Memory
 
 # path = "data/Baseline_2025-03-11"
 # path = "data/Baseline_2025-03-13" 
-path = "data/Baseline_2025-04-28" 
+# path = "data/Baseline_2025-04-28" 
+path = "data/Baseline_2025-04-29" 
 
 pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
 for pkl in pkls:
@@ -175,7 +176,7 @@ if _TS_DETERM:
 
                         if _TS_DETAIL:
                             print( f"scan: {type(scan)}" ) # `list`
-                            print( f"\t{scan[0]}" ) # `GraspObj`
+                            # print( f"\t{scan[0]}" ) # `GraspObj`
                         Mdst = np.zeros( (len(scan),len(scan),) )
                         for i, obj_i in enumerate( scan ):
                             for j, obj_j in enumerate( scan ):
@@ -186,7 +187,7 @@ if _TS_DETERM:
                         blfs = tData['beliefs']
                         if _TS_DETAIL:
                             print( f"beliefs: {type(blfs)}" ) # `list`
-                            print( f"\t{blfs[0]}" ) # `GraspObj`
+                            # print( f"\t{blfs[0]}" ) # `GraspObj`
                         Ndst = np.zeros( (len(blfs),len(scan),), dtype = int )
                         for i, obj_i in enumerate( blfs ):
                             for j, obj_j in enumerate( scan ):

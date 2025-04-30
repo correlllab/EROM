@@ -126,9 +126,10 @@ class SAM2:
     def __init__( self ):
         self.sam_predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-large")
 
-    def predict(self, img, bbox):
+    def predict( self, img, bbox, useCache = False ):
         # Suppress warnings during the prediction step
-        self.sam_predictor.set_image( img )
+        if not useCache:
+            self.sam_predictor.set_image( img )
         sam_mask = None
         sam_scores = None
         sam_logits = None
@@ -296,7 +297,7 @@ class Perception_OWLv2:
 
     def segment_cloud_w_SAM( self, img : np.ndarray, imgBBoxInt : list[list[int]], mpcd : MPCD,
                              loCount = 100, hiCount = 50000,
-                             volEps = 7.5e-07, volThresh = None ):
+                             volEps = 7.5e-07, volThresh = None, useCache = False ):
         if (mpcd is None) or (not len( mpcd )):
             print( "`segment_cloud_w_SAM`: `mpcd` is None!" )
             return None
@@ -305,7 +306,8 @@ class Perception_OWLv2:
 
         sam_mask, _, _ = self.sam_predictor.predict( 
             img, 
-            np.array( imgBBoxInt ) 
+            np.array( imgBBoxInt ),
+            useCache
         )
         samCount = (sam_mask > 0.1).sum()
         
@@ -369,12 +371,16 @@ class Perception_OWLv2:
 
             ### Get CPCDs from the Masks ###
             rtnDict = dict()
-            for hit_i in metadata['hits']:
+            lastID  = None
+
+            for i, hit_i in enumerate( metadata['hits'] ):
                 bboxi_i = hit_i['bboxi']
                 bbox_i  = hit_i['bbox']
                 match   = False
                 mtchKey = None
                 overlap = 0.0
+                repeat  = hit_i['shotID'] == lastID
+                lastID  = hit_i['shotID']
 
                 if len( rtnDict ):
                     print( f"BBox Intersection: ", end="", flush=True )
@@ -394,11 +400,14 @@ class Perception_OWLv2:
                 else:
                     print( f"No merge for max overlap {overlap} of bbox {bboxi_i}" )
 
-                    img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
+                    # img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
+                    img_i = metadata['input'][ hit_i['shotID'] ]['image']
+
                     cpcd = self.segment_cloud_w_SAM( 
                         img_i, 
                         bboxi_i, 
-                        metadata['input'][ hit_i['shotID'] ]['mpcd']
+                        metadata['input'][ hit_i['shotID'] ]['mpcd'],
+                        useCache = repeat
                     )
                     if (cpcd is not None) and len( np.asarray( cpcd.points ) ):
                         print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {bboxi_i}!" )
