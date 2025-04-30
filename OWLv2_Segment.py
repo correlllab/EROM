@@ -126,9 +126,10 @@ class SAM2:
     def __init__( self ):
         self.sam_predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-large")
 
-    def predict(self, img, bbox):
+    def predict( self, img, bbox, useCache = False ):
         # Suppress warnings during the prediction step
-        self.sam_predictor.set_image( img )
+        if not useCache:
+            self.sam_predictor.set_image( img )
         sam_mask = None
         sam_scores = None
         sam_logits = None
@@ -156,6 +157,9 @@ class Perception_OWLv2:
     def __init__( self ):
         self.rsc : real.RealSense   = None
         self.label_vit : LabelOWLv2 = None 
+        self.image : np.ndarray = None
+        self.depth : np.ndarray = None
+        self.cloud : MPCD       = None
         set_perc_env()
 
 
@@ -178,6 +182,7 @@ class Perception_OWLv2:
                 cpu_override    = env_var("_OWL2_CPU") 
             )
             print(f"{self.label_vit.model.device=}")
+            self.label_vit.set_threshold( env_var("_OWL2_THRESH") )
 
             if _VERBOSE:
                 print( f"VLM STARTED", flush=True, file=sys.stderr )
@@ -249,20 +254,17 @@ class Perception_OWLv2:
     #     return abs(area / total_area) <= tolerance
 
 
-    def bound( self, query, abbrevq ):
+    def bound( self, query, abbrevq, useCache = False ):
         """Bounds the given query with the OWLViT model."""
-        mpcd = None
-        if _USE_ALT:
-            mpcd       = self.rsc.getPCD_alt()
-            rgbd_image = mpcd.rgbd
+        if not useCache:
+            self.cloud = self.rsc.getPCD_alt()
+            rgbd_image = self.cloud.rgbd
+            self.image = np.array( rgbd_image.color )
+            self.depth = np.array( rgbd_image.depth )
         else:
-            _, rgbd_image = self.rsc.getPCD()
-        image = np.array( rgbd_image.color )
-        depth = np.array( rgbd_image.depth )
+            rgbd_image = self.cloud.rgbd
 
-        self.label_vit.set_threshold( env_var("_OWL2_THRESH") )
-
-        _, _, scores, labels = self.label_vit.label( image, query, abbrevq, topk = True, plot = False )
+        _, _, scores, labels = self.label_vit.label( self.image, query, abbrevq, topk = True, plot = False )
 
         rtnHits = list()
         imgID   = str( uuid4() )
@@ -275,7 +277,7 @@ class Perception_OWLv2:
                     'bboxi'  : indices,
                     'score'  : scores[i],
                     'label'  : labels[i],
-                    'image'  : image[indices[1]:indices[3], indices[0]:indices[2]].copy(),
+                    'image'  : self.image[indices[1]:indices[3], indices[0]:indices[2]].copy(),
                     'query'  : query,
                     'abbrv'  : abbrevq,
                     'shotID' : imgID,
@@ -286,16 +288,16 @@ class Perception_OWLv2:
         return {
             'id'    : imgID,
             'rgbd'  : rgbd_image,
-            'image' : image,
-            'depth' : depth,
-            'mpcd'  : mpcd,
+            'image' : self.image.copy(),
+            'depth' : self.depth.copy(),
+            'mpcd'  : self.cloud,
             'hits'  : rtnHits,
         }
     
 
     def segment_cloud_w_SAM( self, img : np.ndarray, imgBBoxInt : list[list[int]], mpcd : MPCD,
                              loCount = 100, hiCount = 50000,
-                             volEps = 7.5e-07, volThresh = None ):
+                             volEps = 7.5e-07, volThresh = None, useCache = False ):
         if (mpcd is None) or (not len( mpcd )):
             print( "`segment_cloud_w_SAM`: `mpcd` is None!" )
             return None
@@ -304,7 +306,8 @@ class Perception_OWLv2:
 
         sam_mask, _, _ = self.sam_predictor.predict( 
             img, 
-            np.array( imgBBoxInt ) 
+            np.array( imgBBoxInt ),
+            useCache
         )
         samCount = (sam_mask > 0.1).sum()
         
@@ -347,11 +350,11 @@ class Perception_OWLv2:
 
             ### Query the VLM ###
 
-            for q in queries:
+            for i, q in enumerate( queries ):
 
                 query  = q['query']
                 abbrv  = q['abbrv']
-                result = self.bound( query, abbrv )
+                result = self.bound( query, abbrv, useCache = (i>0) )
                 mpcd   = result['mpcd'] if ('mpcd' in result) else None
 
                 metadata['input'][ result['id'] ] = {
@@ -362,17 +365,22 @@ class Perception_OWLv2:
                     't'    : now(),
                     'mpcd' : mpcd,
                 }
-                metadata['hits'].extend( deepcopy( result['hits'] ) )
+                # metadata['hits'].extend( deepcopy( result['hits'] ) )
+                metadata['hits'].extend( result['hits'] )
 
 
             ### Get CPCDs from the Masks ###
             rtnDict = dict()
-            for hit_i in metadata['hits']:
+            lastID  = None
+
+            for i, hit_i in enumerate( metadata['hits'] ):
                 bboxi_i = hit_i['bboxi']
                 bbox_i  = hit_i['bbox']
                 match   = False
                 mtchKey = None
                 overlap = 0.0
+                repeat  = hit_i['shotID'] == lastID
+                lastID  = hit_i['shotID']
 
                 if len( rtnDict ):
                     print( f"BBox Intersection: ", end="", flush=True )
@@ -392,11 +400,14 @@ class Perception_OWLv2:
                 else:
                     print( f"No merge for max overlap {overlap} of bbox {bboxi_i}" )
 
-                    img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
+                    # img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
+                    img_i = metadata['input'][ hit_i['shotID'] ]['image']
+
                     cpcd = self.segment_cloud_w_SAM( 
                         img_i, 
                         bboxi_i, 
-                        metadata['input'][ hit_i['shotID'] ]['mpcd']
+                        metadata['input'][ hit_i['shotID'] ]['mpcd'],
+                        useCache = repeat
                     )
                     if (cpcd is not None) and len( np.asarray( cpcd.points ) ):
                         print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {bboxi_i}!" )
