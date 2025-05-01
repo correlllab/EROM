@@ -41,8 +41,8 @@ from aspire.SymPlanner import SymPlanner
 from BT import ReactivePlanParser
 from OWLv2_Segment import Perception_OWLv2, _QUERIES
 
-from Memory import Memory
-from draw_beliefs import render_memory_list, render_scan_list, vispy_geo_list_window, table_geo
+from Memory import Memory, PoseCheater
+from draw_beliefs import render_memory_list, render_scan_list
 
 
 ##### Globals #############################################################
@@ -191,6 +191,8 @@ def set_experiment_env():
     # env_sto( "_NULL_THRESH"   , 0.95 )
 
     env_sto( "_GRASP_NUDGE_M", -0.005 )
+
+    env_sto( "_USE_POSE_CHEAT", True )
     
 
 
@@ -282,7 +284,8 @@ class TaskPlanner:
 
         self.robot : UR5_Interface = UR5_Interface( provide_gripper = True ) if (not noBot) else None
 
-        self.memory = Memory( self.robot, self.perc ) 
+        self.memory  = Memory( self.robot, self.perc ) 
+        self.cheater = PoseCheater()
 
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
@@ -339,6 +342,13 @@ class TaskPlanner:
     ##### Task Planning Phases ############################################
 
 
+    ##### Phase 0 ################################
+
+    def phase_0_Setup( self, symbols ):
+        """ Push init symbols """
+        self.cheater.log_symbols( symbols )
+
+
     ##### Phase 1 ################################
 
     def phase_1_Perceive( self, Append = False, suppressDeterm = False ):
@@ -381,6 +391,8 @@ class TaskPlanner:
     def phase_2_Conditions( self ):
         """ Get the necessary initial state, Check for goals already met """
         self.symPln.symbols = self.memory.get_current_most_likely()
+        if env_var("_USE_POSE_CHEAT"):
+            self.cheater.repair_symbol_poses( self.symPln.symbols )
 
         # self.memory.locate_all( self.symPln.symbols )
 
@@ -607,6 +619,8 @@ class TaskPlanner:
                     "Event": "The robot's plan was not executed correctly.",
                 } )
             elif (btr.status == Status.SUCCESS):
+                if env_var("_USE_POSE_CHEAT"):
+                    self.cheater.log_successful_action( self.blcMod.planner.nxtAct )
                 self.memory.history.append( msg = f"Action Success: {btr.msg}, {now()}" )
                 self.memory.history.append( msg = "Annotation", datum = {
                     "Event": "The robot's plan was executed correctly.",

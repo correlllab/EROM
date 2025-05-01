@@ -508,9 +508,9 @@ class SensoryPlanner:
 class PoseCheater:
     """ Fudge the `Memory` such that things are where they should be """
 
-    def __init__( self, basePose = None ):
+    def __init__( self, basePose = None, startSymbols = None ):
         """ Setup local memory """
-        self.symbols = deque()
+        self.symbols = deque( [startSymbols,] ) if isinstance( startSymbols, list ) else deque()
         self.base    = extract_pose_as_homog( basePose ) if (basePose is not None) else np.eye(4)
 
 
@@ -539,6 +539,22 @@ class PoseCheater:
         sCls.pose = ObjPose( poseEnd )
         self.symbols.append( lastFrame[:] )
 
+
+    def repair_symbol_poses( self, symLst, maxDiff = None ):
+        """ Adjust the positions of symbols to their last """
+        if maxDiff is None:
+            maxDiff = 0.75*env_var("_BLOCK_SCALE")
+        lastFrame = self.symbols[-1]
+        dMin = [1e9 for _ in range( len( symLst ) )]
+        pMin = [None for _ in range( len( symLst ) )]
+        for i, rSym in enumerate( symLst ):
+            for j, lSym in enumerate( lastFrame ):
+                d_ij = euclidean_distance_between_symbols( rSym, lSym )
+                if (d_ij < dMin[i]) and (d_ij <= maxDiff):
+                    dMin[i] = d_ij
+                    pMin[i] = lSym.pose
+            if dMin[i] <= maxDiff:
+                symLst[i].pose = pMin[i]
 
 
 
