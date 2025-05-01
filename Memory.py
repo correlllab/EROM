@@ -21,9 +21,9 @@ from magpie_control.ur5 import UR5_Interface
 from aspire.env_config import env_var
 from aspire.utils import match_name, normalize_dist
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols )
+from aspire.actions.pdls_behaviors import GroundedAction, Plan
 
-from utils import ( LogPickler, zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, 
-                    snap_z_to_nearest_block_unit_above_zero )
+from utils import ( LogPickler, zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, )
 from OWLv2_Segment import Perception_OWLv2
 from Bayes import BayesMemory
 
@@ -503,6 +503,45 @@ class SensoryPlanner:
 
 
 
+########## POSE CHEATER ############################################################################
+
+class PoseCheater:
+    """ Fudge the `Memory` such that things are where they should be """
+
+    def __init__( self, basePose = None ):
+        """ Setup local memory """
+        self.symbols = deque()
+        self.base    = extract_pose_as_homog( basePose ) if (basePose is not None) else np.eye(4)
+
+
+    def log_symbols( self, symLst ):
+        """ Store the most recent symbols """
+        self.symbols.append( deep_copy_memory_list( symLst ) )
+
+
+    def log_successful_action( self, pdlsPlan ):
+        """ Move the symbol to where the robot moved it """
+        lastFrame = deep_copy_memory_list( self.symbols[-1] )
+        for action in pdlsPlan:
+            actName  = action.name
+            actArgs  = action.args
+            if actName == "move_holding":
+                # ?poseBgn ?poseEnd ?label
+                poseBgn, poseEnd, label = actArgs
+                break
+        dMin = 1e9
+        sCls = None
+        for sym in lastFrame:
+            d = euclidean_distance_between_symbols( sym, poseBgn )
+            if d < dMin:
+                dMin = d
+                sCls = sym
+        sCls.pose = ObjPose( poseEnd )
+        self.symbols.append( lastFrame[:] )
+
+
+
+
 ########## OBJECT MEMORY ###########################################################################
 
 ##### KL Diverfgence ######################################################
@@ -738,9 +777,3 @@ class Memory:
 
         return symbols
         
-
-
-    
-    
-    
-    
