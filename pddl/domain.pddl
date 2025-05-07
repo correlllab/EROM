@@ -24,7 +24,6 @@
     (HandEmpty)
     (Holding ?label)
     (AtPose ?pose)
-
   )
 
   ;;;;;;;;;; ACTIONS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -44,21 +43,22 @@
   )
   
   (:action pick
-    :parameters (?label ?pose ?prevSupport ?idUp ?idDn)
+    ;:parameters (?label ?pose ?prevSupport ?idUp ?idDn)
+    :parameters (?label ?pose ?prevSupport ?idUp)
     :precondition (and
       ;; Domain ;;
       (Graspable ?label)
       (Waypoint ?pose)
       (Base ?prevSupport)
       (Identifier ?idUp)
-      (Identifier ?idDn)
+      ;(Identifier ?idDn)
       ;; Identity ;;
-      (not (= ?idUp ?idDn))
+      ;(not (= ?idUp ?idDn))
       ;; Object State ;;
-      (GraspObj ?label ?pose)
-      (Supported ?label ?prevSupport ?idUp ?idDn)
+      (GraspObj ?label ?pose ?idUp)
+      ;(Supported ?label ?prevSupport ?idUp ?idDn)
       (PoseAbove ?pose ?prevSupport)
-      (not (Blocked ?label))
+      (not (Blocked ?idUp))
       ;; Robot State ;;
       (HandEmpty)
     )
@@ -67,7 +67,7 @@
       (Holding ?label)
       (not (HandEmpty))
       ;; Object State ;;
-      (not (Supported ?label ?prevSupport ?idUp ?idDn))
+      ;(not (Supported ?label ?prevSupport ?idUp ?idDn))
     )
   )
   
@@ -83,7 +83,7 @@
       ;; Identity ;;
       (not (= ?idUp ?idDn))
       ;; Object State ;;
-      (GraspObj ?label ?pose)
+      (GraspObj ?label ?pose ?idUp)
       (Supported ?label ?prevSupport ?idUp ?idDn)
       (PoseAbove ?pose ?prevSupport)
       (not (Blocked ?idUp))
@@ -128,19 +128,19 @@
   )
   
   (:action place
-      :parameters (?label ?pose ?support ?idUp ?idDn)
+      :parameters (?label ?pose ?support ?idUp)
       :precondition (and 
                       ;; Domain ;;
                       (Graspable ?label)
                       (Waypoint ?pose)
                       (Base ?support)
                       (Identifier ?idUp)
-                      (Identifier ?idDn)
+                      ;(Identifier ?idDn)
                       ;; Identity ;;
                       (not (= ?idUp ?idDn))
                       ;; Object State ;;
                       (GraspObj ?label ?pose ?idUp) 
-                      (PoseAbove ?pose ?support ?idDn)
+                      (PoseAbove ?pose ?support)
                       ;; Robot State ;;
                       (Holding ?label)
                       )
@@ -148,7 +148,7 @@
                 ;; Robot State ;;
                 (HandEmpty)
                 (not (Holding ?label))
-                (Supported ?label ?support ?idUp ?idDn)
+                ; (Supported ?label ?support ?idUp 0)
               )
   )
   
@@ -165,7 +165,7 @@
                       (not (= ?idUp ?idDn))
                       ;; Object State ;;
                       (GraspObj ?labelUp ?poseUp ?idUp) 
-                      (not (Blocked ?labelDn))
+                      (not (Blocked ?idDn))
                       ;; Requirements ;;
                       (PoseAbove ?poseUp ?labelDn)
                       ;; Robot State ;;
@@ -174,7 +174,7 @@
       :effect (and 
                 ;; Object State ;;
                 (Supported ?labelUp ?labelDn ?idUp ?idDn)
-                (Blocked ?labelDn)
+                (Blocked ?idDn)
                 ;; Robot State ;;
                 (HandEmpty)
                 (not (Holding ?labelUp))
