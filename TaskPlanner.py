@@ -254,18 +254,31 @@ class TaskPlanner:
 
     def phase_2_Conditions( self ):
         """ Get the necessary initial state, Check for goals already met """
-        self.symPln.symbols = self.memory.get_current_most_likely()
+        # self.symPln.symbols = self.memory.get_current_most_likely()
+        self.symPln.symbols = self.memory.get_current_most_likely( self.symPln.get_goal_objects() )
+
         if env_var("_USE_POSE_CHEAT"):
+            print( f"\n>>>! POSE CHEAT !<<<\n" )
+            print( f"\nBefore cheat..." )
+            for obj in self.symPln.symbols:
+                print( f"\t{obj}" )
             self.symPln.symbols = self.cheater.repair_symbol_poses( self.symPln.symbols )
+        else:
+            print( f"No cheating allowed!", end = '    ' )
+
+        if env_var("_VERBOSE"):
+            if env_var("_USE_POSE_CHEAT"):
+                print( f"\nAfter cheat..." )
+            else:
+                print( f"\nStarting Objects:" )
+            for obj in self.symPln.symbols:
+                print( f"\t{obj}" )
 
         # self.memory.locate_all( self.symPln.symbols )
 
         if len( self.symPln.symbols ):
             self.status = Status.RUNNING
-            if env_var("_VERBOSE"):
-                print( f"\nStarting Objects:" )
-                for obj in self.symPln.symbols:
-                    print( f"\t{obj}" )
+           
         else:
             self.status = Status.FAILURE
             if env_var("_VERBOSE"):
@@ -326,7 +339,9 @@ class TaskPlanner:
 
             # self.status = Status.FAILURE
             self.status = Status.RUNNING
-            self.blcMod.HACK_space_repair_plan( self.robot )
+
+            if env_var("_USE_SPACE_HACK"):
+                self.blcMod.HACK_space_repair_plan( self.robot )
 
             self.memory.history.append( msg = "Planning Failure" )
             print( f"Planning Failure!" )
@@ -483,8 +498,12 @@ class TaskPlanner:
                     "Event": "The robot's plan was not executed correctly.",
                 } )
             elif (btr.status == Status.SUCCESS):
+                _, srcPose = self.fetch_src_label_and_pose()
+                _, dstPose = self.fetch_dst_label_and_pose()
+
                 if env_var("_USE_POSE_CHEAT"):
-                    self.cheater.log_successful_action( self.blcMod.planner.nxtAct )
+                    self.cheater.log_successful_action( srcPose, dstPose )
+
                 self.memory.history.append( msg = f"Action Success: {btr.msg}, {now()}" )
                 self.memory.history.append( msg = "Annotation", datum = {
                     "Event": "The robot's plan was executed correctly.",
