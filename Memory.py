@@ -545,16 +545,31 @@ class PoseCheater:
         if maxDiff is None:
             maxDiff = 0.75*env_var("_BLOCK_SCALE")
         lastFrame = self.symbols[-1]
-        dMin = [1e9 for _ in range( len( symLst ) )]
-        pMin = [None for _ in range( len( symLst ) )]
+        dMin  = [1e9 for _ in range( len( symLst ) )]
+        pMin  = [None for _ in range( len( symLst ) )]
+        match = [False for _ in range( len( symLst ) )]
+        found = [False for _ in range( len( lastFrame ) )]
         for i, rSym in enumerate( symLst ):
             for j, lSym in enumerate( lastFrame ):
                 d_ij = euclidean_distance_between_symbols( rSym, lSym )
                 if (d_ij < dMin[i]) and (d_ij <= maxDiff):
                     dMin[i] = d_ij
                     pMin[i] = lSym.pose
+                    found[j] = i
+                    match[i] = j
             if dMin[i] <= maxDiff:
                 symLst[i].pose = pMin[i]
+        rtnSym = list()
+        # Drop symbols that did not get repaired
+        for i, rSym in enumerate( symLst ):
+            if i in found:
+                rtnSym.append( rSym )
+        # Add symbols that did not get matched
+        for j, lSym in enumerate( lastFrame ):
+            if j not in match:
+                rtnSym.append( lSym )
+        return rtnSym
+        
 
 
 

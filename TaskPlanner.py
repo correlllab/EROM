@@ -213,13 +213,6 @@ class TaskPlanner:
     ##### Task Planning Phases ############################################
 
 
-    ##### Phase 0 ################################
-
-    def phase_0_Setup( self, symbols ):
-        """ Push init symbols """
-        self.cheater.log_symbols( symbols )
-
-
     ##### Phase 1 ################################
 
     def phase_1_Perceive( self, Append = False, suppressDeterm = False ):
@@ -263,7 +256,7 @@ class TaskPlanner:
         """ Get the necessary initial state, Check for goals already met """
         self.symPln.symbols = self.memory.get_current_most_likely()
         if env_var("_USE_POSE_CHEAT"):
-            self.cheater.repair_symbol_poses( self.symPln.symbols )
+            self.symPln.symbols = self.cheater.repair_symbol_poses( self.symPln.symbols )
 
         # self.memory.locate_all( self.symPln.symbols )
 
@@ -538,7 +531,10 @@ class TaskPlanner:
 
         self.reset_state() 
         
-        self.symPln.set_goal( env_var("_GOAL") )
+        # self.symPln.set_goal( env_var("_GOAL_GRB") )
+        self.symPln.set_goal( env_var("_GOAL_RRR") )
+
+        self.cheater.log_symbols( [env_var(f"_KNOWN_BLOCK_{i}") for i in range(3)] )
 
         self.memory.history.append( msg = "Task Start" )
 
@@ -681,7 +677,7 @@ def experiment_prep( beginPlanPose = None ):
 
 ########## MAIN ####################################################################################
 
-_TROUBLESHOOT   = 1
+_TROUBLESHOOT   = 0
 
 
 
