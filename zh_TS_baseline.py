@@ -98,7 +98,6 @@ if _TS_DETERM:
     
 
     for pklDex, pklPath in enumerate( pkls ):
-    # for pklDex, pklPath in enumerate( pkls[3:4] ):
 
         try:
 
