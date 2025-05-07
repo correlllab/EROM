@@ -1,19 +1,19 @@
 {
   "main": {
-    "id": "a583cac5986efb51",
+    "id": "b1d141df353ba575",
     "type": "split",
     "children": [
       {
-        "id": "2d97699107ca28cf",
+        "id": "a498b23e0e3baa30",
         "type": "tabs",
         "children": [
           {
-            "id": "ddfebcd0248076d5",
+            "id": "18694657bc33699d",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "2025-05-07.md",
+                "file": "za_Notes/2025-05-07.md",
                 "mode": "source",
                 "source": false
               },
@@ -27,15 +27,15 @@
     "direction": "vertical"
   },
   "left": {
-    "id": "69a69c334ff5d001",
+    "id": "7b028ca4f866bf5c",
     "type": "split",
     "children": [
       {
-        "id": "9801aabe925637b2",
+        "id": "32ba28a76d9f2f9a",
         "type": "tabs",
         "children": [
           {
-            "id": "89e33cf21168d761",
+            "id": "e97e7a592fb5cdbc",
             "type": "leaf",
             "state": {
               "type": "file-explorer",
@@ -48,7 +48,7 @@
             }
           },
           {
-            "id": "82b7c03bb8371631",
+            "id": "622f728a11150fe3",
             "type": "leaf",
             "state": {
               "type": "search",
@@ -65,7 +65,7 @@
             }
           },
           {
-            "id": "70de2c8d429f0f79",
+            "id": "3aeb08508e13bf69",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
@@ -81,20 +81,19 @@
     "width": 300
   },
   "right": {
-    "id": "582014a1effb57b9",
+    "id": "484c16ad71612269",
     "type": "split",
     "children": [
       {
-        "id": "71340eb6c842a105",
+        "id": "2d888ea4e1855dc3",
         "type": "tabs",
         "children": [
           {
-            "id": "e584f5826d0f673a",
+            "id": "386b66932476bb95",
             "type": "leaf",
             "state": {
               "type": "backlink",
               "state": {
-                "file": "2025-05-07.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,25 +103,24 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for 2025-05-07"
+              "title": "Backlinks"
             }
           },
           {
-            "id": "1be1e70b6bf92468",
+            "id": "fa0c8251f742debc",
             "type": "leaf",
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "2025-05-07.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from 2025-05-07"
+              "title": "Outgoing links"
             }
           },
           {
-            "id": "cfe5449015de4efe",
+            "id": "fcc07fc38083fcb4",
             "type": "leaf",
             "state": {
               "type": "tag",
@@ -137,18 +135,17 @@
             }
           },
           {
-            "id": "abe2ad2e5cdeca57",
+            "id": "97d14f733231a5f3",
             "type": "leaf",
             "state": {
               "type": "outline",
               "state": {
-                "file": "2025-05-07.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of 2025-05-07"
+              "title": "Outline"
             }
           }
         ]
@@ -168,20 +165,9 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "ddfebcd0248076d5",
+  "active": "18694657bc33699d",
   "lastOpenFiles": [
-    "data/EROM-Memories_05-07-2025_14-40-12.pkl",
-    "data/EROM-Memories_05-07-2025_14-31-14.pkl",
-    "data/EROM-Memories_05-07-2025_14-29-28.pkl",
-    "data/EROM-Memories_05-07-2025_14-27-52.pkl",
-    "data/EROM-Memories_05-07-2025_14-27-14.pkl",
-    "data/EROM-Memories_05-07-2025_14-13-17.pkl",
-    "data/EROM-Memories_05-07-2025_13-57-58.pkl",
-    "data/EROM-Memories_05-07-2025_13-42-01.pkl",
-    "data/EROM-Memories_05-07-2025_13-38-42.pkl",
-    "data/EROM-Memories_05-07-2025_13-36-48.pkl",
-    "data/EROM-Memories_05-07-2025_13-34-41.pkl",
-    "za_Notes/2025-05-07.md",
-    "2025-05-07.md"
+    "2025-05-07.md",
+    "za_Notes/2025-05-07.md"
   ]
 }

@@ -433,9 +433,12 @@ class PoseCheater:
         if maxDiff is None:
             maxDiff = 0.75*env_var("_BLOCK_SCALE")
         lastFrame : list[GraspObj] = self.symbols[-1]
+        if not len( lastFrame ):
+            return  symLst
         dMin  = [1e9 for _ in range( len( symLst ) )]
         pMin  = [None for _ in range( len( symLst ) )]
         lMin  = [None for _ in range( len( symLst ) )]
+        iMin  = [None for _ in range( len( symLst ) )]
         match = [False for _ in range( len( symLst ) )]
         found = [False for _ in range( len( lastFrame ) )]
         for i, rSym in enumerate( symLst ):
@@ -445,11 +448,13 @@ class PoseCheater:
                     dMin[i] = d_ij
                     pMin[i] = lSym.pose
                     lMin[i] = lSym.label
+                    iMin[i] = lSym.ident
                     found[j] = i
                     match[i] = j
             if dMin[i] <= maxDiff:
                 symLst[i].pose  = pMin[i]
                 symLst[i].label = lMin[i]
+                symLst[i].ident = iMin[i]
         rtnSym = list()
         # Drop symbols that did not get repaired
         for i, rSym in enumerate( symLst ):
