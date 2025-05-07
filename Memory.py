@@ -9,6 +9,7 @@ from collections import deque, Counter
 from typing import Dict, Deque
 from math import log
 from uuid import uuid4
+from copy import deepcopy
 
 ### Special ###
 import numpy as np
@@ -110,113 +111,7 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
     return rtnBel
 
 
-def strongest_symbols_from_readings( objLst : list[GraspObj], N : int ):
-    """ Randomly pick `N` readings to serve as symbols """
-    if len( objLst ) < N:
-        return list()
-    
-    picked = dict()
-
-    for obj in objLst:
-        print( obj.score )
-        obj.score = np.mean( obj.score )
-        labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
-        
-        for lbl_i, prb_i in labelDist:
-            if (lbl_i not in picked) or (prb_i > picked[ lbl_i ].prob):
-                nu = obj.copy_child()
-                nu.label = lbl_i
-                nu.prob  = prb_i
-                picked[ lbl_i ] = nu
-                break
-        
-    return list( picked.values() )
-
-
-from pprint import pprint
-from copy import deepcopy
-
-
-def most_likely_non_conflict( objLst : list[GraspObj] ) -> list[GraspObj]:
-    """ Choose the most likely in each class that does not conflict with an even more likely label of a different class """
-
-    print( f"There are {len(objLst)} to evaluate!" )
-
-    def p_conflict( objs : list[GraspObj] ):
-        """ Are any of the objects in conflict? """
-        N = len( objs )
-        C = [False for _ in range(N)]
-        R = False
-        for i in range( N-1 ):
-            obj_i = objs[i]
-            for j in range( i+1, N ):
-                obj_j = objs[j]
-                if (obj_i.label != env_var("_NULL_NAME")) and (obj_j.label != env_var("_NULL_NAME")):
-                    if euclidean_distance_between_symbols( obj_i, obj_j ) < env_var( "_WIDE_COLLIDE" ):
-                        R = True
-                        C[i] = True
-                        C[j] = True
-        cObjs = [objs[i] for i in range(N) if C[i]]
-        cObjs.sort( key = lambda x: x.prob, reverse = True )
-        print( f"Conflicts:" )
-        pprint( cObjs )
-        return R, [obj.label for obj in cObjs]
-
-    
-    ranked : Dict[str, Deque[GraspObj]] = dict()
-    for obj in objLst:
-        
-        labelDist = zip_dict_sorted_by_decreasing_value( obj.labels )
-        for lbl_i, prb_i in labelDist:
-            if (lbl_i not in ranked):
-                ranked[ lbl_i ] = deque()
-            obj_i = obj.copy_child()
-            obj_i.label = lbl_i
-            obj_i.prob  = prb_i
-            ranked[ lbl_i ].append( obj_i )
-
-    for k, v in ranked.items():
-        nuV = list(v)
-        nuV.sort( key = lambda x: x.prob, reverse = True )
-        ranked[k] = deque( nuV )
-
-    print( "Label Ranking" )
-    pprint( ranked )
-
-    picked : Dict[str, GraspObj] = dict()
-    for k, vQ in ranked.items():
-        picked[ k ] = vQ.popleft()
-    overlap, conflicts = p_conflict( list( picked.values() ) )
-    
-    while( overlap ):
-        fault = False
-        pNxMx = 0.0
-        lblMx = None
-        for label_i in conflicts:
-            if len( ranked[ label_i ] ):
-                pNext_i = ranked[ label_i ][0].prob
-                if pNext_i > pNxMx:
-                    pNxMx = pNext_i
-                    lblMx = label_i
-        if lblMx is not None:
-            if len( ranked[ lblMx ] ):
-                picked[ lblMx ] = ranked[ lblMx ].popleft()
-            else:
-                fault = True # HACK: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT
-                print( "deque empty!: I HAVEN'T ACTUALLY GIVEN THIS CASE ANY THOUGHT" )
-        else:
-            fault = True
-        if fault:
-            break
-        overlap, conflicts = p_conflict( list( picked.values() ) )
-
-    symbols = [sym for sym in list( picked.values() ) if sym.label != env_var("_NULL_NAME")]
-
-    print( f"About to return {len(symbols)} symbols!" )
-    return symbols
-
-
-def most_likely_objects( objList : list[GraspObj], method = "sufficient" ):
+def most_likely_objects( objList : list[GraspObj], method : str | list = "sufficient" ):
     """ Get the `N` most likely combinations of object classes """
     ### Combination Generator ###
 
@@ -519,18 +414,11 @@ class PoseCheater:
         self.symbols.append( deep_copy_memory_list( symLst ) )
 
 
-    def log_successful_action( self, pdlsPlan ):
+    def log_successful_action( self, poseBgn, poseEnd ):
         """ Move the symbol to where the robot moved it """
         lastFrame = deep_copy_memory_list( self.symbols[-1] )
-        for action in pdlsPlan:
-            actName  = action.name
-            actArgs  = action.args
-            if actName == "move_holding":
-                # ?poseBgn ?poseEnd ?label
-                poseBgn, poseEnd, label = actArgs
-                break
         dMin = 1e9
-        sCls = None
+        sCls : ObjPose = None
         for sym in lastFrame:
             d = euclidean_distance_between_symbols( sym, poseBgn )
             if d < dMin:
@@ -540,21 +428,39 @@ class PoseCheater:
         self.symbols.append( lastFrame[:] )
 
 
-    def repair_symbol_poses( self, symLst, maxDiff = None ):
+    def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ):
         """ Adjust the positions of symbols to their last """
         if maxDiff is None:
             maxDiff = 0.75*env_var("_BLOCK_SCALE")
-        lastFrame = self.symbols[-1]
-        dMin = [1e9 for _ in range( len( symLst ) )]
-        pMin = [None for _ in range( len( symLst ) )]
+        lastFrame : list[GraspObj] = self.symbols[-1]
+        dMin  = [1e9 for _ in range( len( symLst ) )]
+        pMin  = [None for _ in range( len( symLst ) )]
+        lMin  = [None for _ in range( len( symLst ) )]
+        match = [False for _ in range( len( symLst ) )]
+        found = [False for _ in range( len( lastFrame ) )]
         for i, rSym in enumerate( symLst ):
             for j, lSym in enumerate( lastFrame ):
                 d_ij = euclidean_distance_between_symbols( rSym, lSym )
                 if (d_ij < dMin[i]) and (d_ij <= maxDiff):
                     dMin[i] = d_ij
                     pMin[i] = lSym.pose
+                    lMin[i] = lSym.label
+                    found[j] = i
+                    match[i] = j
             if dMin[i] <= maxDiff:
-                symLst[i].pose = pMin[i]
+                symLst[i].pose  = pMin[i]
+                symLst[i].label = lMin[i]
+        rtnSym = list()
+        # Drop symbols that did not get repaired
+        for i, rSym in enumerate( symLst ):
+            if i in found:
+                rtnSym.append( rSym )
+        # Add symbols that did not get matched
+        for j, lSym in enumerate( lastFrame ):
+            if j not in match:
+                rtnSym.append( lSym )
+        return rtnSym
+        
 
 
 
@@ -756,26 +662,22 @@ class Memory:
     ##### Symbol Grounding #######################
 
 
-    def get_current_most_likely( self, strat = "combo" ) -> list[GraspObj]:
+    def get_current_most_likely( self, strat : str | list = "combo" ) -> list[GraspObj]:
         """ Generate symbols """
         symbols = list()
 
-        if strat == "combo":
+        if (strat == "combo") or isinstance( strat, list ):
 
             # # HACK: USE POINT COUNT AS A SCALE OF CONFIDENCE
             # self.bMem.scale_by_pcd_pop()
 
             # symbols = most_likely_objects( self.bMem.beliefs, "unique" )
-            symbols = most_likely_objects( self.bMem.beliefs, "sufficient" )
 
-        elif strat == "bayes":
+            if isinstance( strat, list ):
+                symbols = most_likely_objects( self.bMem.beliefs, strat )
+            else:
+                symbols = most_likely_objects( self.bMem.beliefs, "sufficient" )
 
-            # # HACK: USE POINT COUNT AS A SCALE OF CONFIDENCE
-            # self.bMem.scale_by_pcd_pop()
-
-            symbols = most_likely_non_conflict( self.bMem.beliefs ) 
-        elif strat == "score":
-            symbols = strongest_symbols_from_readings( self.scan, env_var("_N_REQD_OBJS") )
         else:
             raise ValueError( f"The update strategy {str(strat).upper()} is NOT recognized!" )
 

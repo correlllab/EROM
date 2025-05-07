@@ -1,7 +1,7 @@
 ########## INIT ####################################################################################
 import numpy as np
 from aspire.env_config import env_var, env_sto
-from aspire.symbols import ObjPose 
+from aspire.symbols import ObjPose, GraspObj
 
 
 
@@ -14,14 +14,31 @@ def BASE_TARGET():
                          0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE"), ]
     return ObjPose( _poseGrn )
 
-bloc1 = [[-0.994  0.111  0.022 -0.38 ]
-         [ 0.112  0.993  0.044  0.003]
-         [-0.017  0.046 -0.999  0.246]
-         [ 0.     0.     0.     1.   ]]
 
 
 def KNOWN_BLOCKS():
     """ Set block positions """
+    bloc1 = np.array([[-0.994,  0.111,  0.022, -0.38 ],
+                      [ 0.112,  0.993,  0.044,  0.003],
+                      [-0.017,  0.046, -0.999,  0.246],
+                      [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
+    bloc2 = np.array([[-0.994,  0.111,  0.022, -0.38 ],
+                      [ 0.112,  0.993,  0.044, -0.102],
+                      [-0.017,  0.046, -0.999,  0.246],
+                      [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
+    bloc3 = np.array([[-0.994,  0.111,  0.022, -0.38 ],
+                      [ 0.112,  0.993,  0.044, -0.199],
+                      [-0.017,  0.046, -0.999,  0.246],
+                      [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
+    for i, bloc_i in enumerate([bloc1,bloc2,bloc3,]):
+        pose_i = np.eye(4)
+        pose_i[0:3,3] = bloc_i[0:3,3]
+        pose_i[2,3]   = env_var("_BLOCK_SCALE") / 2.0
+        env_sto( f"_KNOWN_BLOCK_{i}",  GraspObj(
+            label = 'redBlock',
+            pose  = pose_i
+        ) ) 
+
 
 
 
@@ -43,6 +60,7 @@ def set_experiment_env():
 
      # 3D Printed Blocks
 
+    KNOWN_BLOCKS()
     _trgtGrn = BASE_TARGET()
     
     env_sto( "_BLOCK_VOLUME", env_var( "_BLOCK_SCALE" )**3 )
@@ -150,4 +168,5 @@ def set_experiment_env():
 
     env_sto( "_GRASP_NUDGE_M", -0.005 )
 
+    env_sto( "_USE_SPACE_HACK", False )
     env_sto( "_USE_POSE_CHEAT", True )
