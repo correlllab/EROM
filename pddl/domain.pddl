@@ -1,6 +1,6 @@
 (define (domain pick-place-and-stack)
-  ; (:requirements :strips :negative-preconditions)
-  (:requirements :negative-preconditions)
+  (:requirements :strips :negative-preconditions)
+  ; (:requirements :negative-preconditions)
 
   ;;;;;;;;;; PREDICATES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

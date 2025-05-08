@@ -3,32 +3,28 @@
     (:domain pick-place-and-stack)
     
     (:objects 
-        I0
-        I1
-        I2
-        I3
+        table
+        redBlock
+        grnBlock
+        bluBlock
+        P0
         P1
         P2
         P3
         P4
         P5
-        P0
-        redBlock
+        P6
+        P7
+        P8
     )
     
     
     (:init
-        (Base I0)
+        (Base table)
     
-        (Graspable I1)
-        (Graspable I2)
-        (Graspable I3)
-        
-        (Type redBlock)
-        
-        (ObjLabel I1 redBlock)
-        (ObjLabel I2 redBlock)
-        (ObjLabel I3 redBlock)
+        (Graspable redBlock)
+        (Graspable grnBlock)
+        (Graspable bluBlock)
         
         (Waypoint P0)
         (Waypoint P1)
@@ -37,39 +33,76 @@
         (Waypoint P3)
         (Waypoint P4)
         (Waypoint P5)
+        
+        (Waypoint P6)
+        (Waypoint P7)
+        (Waypoint P8)
     
-        (GraspObj I1 P0)
-        (GraspObj I2 P1)
-        (GraspObj I3 P2)
+        (GraspObj redBlock P0)
+        (GraspObj grnBlock P1)
+        (GraspObj bluBlock P2)
         
-        (PoseAbove P0 I0)
-        (PoseAbove P1 I0)
-        (PoseAbove P2 I0)
+        (PoseAbove P0 table)
+        (PoseAbove P1 table)
+        (PoseAbove P2 table)
         
-        (PoseAbove P3 I0)
-        (PoseAbove P4 I1)
-        (PoseAbove P5 I2)
+        (PoseAbove P3 table)
+        (PoseAbove P4 redBlock)
+        (PoseAbove P5 grnBlock)
         
         (Free P3)
         (Free P4)
         (Free P5)
         
-        (Supported I1 I0)
-        (Supported I2 I0)
-        (Supported I3 I0)
+        (Free P6)
+        (Free P7)
+        (Free P8)
+        
+        (Supported redBlock table)
+        (Supported grnBlock table)
+        (Supported bluBlock table)
         
         (HandEmpty)
-        (AtPose P0)
+        (AtPose P3)
     )
     
-    (:goal (and
-            (GraspObj  I1 P3)
-            (Supported I2 I1)
-            (Supported I3 I2)
-            (HandEmpty)
-            (ObjLabel I1 redBlock)
-            (ObjLabel I2 redBlock)
-            (ObjLabel I3 redBlock)
+    (:goal ( or
+            ( and
+                (GraspObj redBlock P3  ) 
+                (Supported grnBlock redBlock ) 
+                (Supported bluBlock grnBlock ) 
+                (HandEmpty)
+            )   
+            ( and
+                (GraspObj redBlock P3  ) 
+                (Supported bluBlock redBlock ) 
+                (Supported grnBlock bluBlock ) 
+                (HandEmpty)
+            )   
+            ( and
+                (GraspObj grnBlock P3  )
+                (Supported redBlock grnBlock ) 
+                (Supported bluBlock redBlock ) 
+                (HandEmpty)
+            )   
+            ( and
+                (GraspObj grnBlock P3  )
+                (Supported bluBlock grnBlock ) 
+                (Supported redBlock bluBlock ) 
+                (HandEmpty)
+            )   
+            ( and
+                (GraspObj bluBlock  P3  )
+                (Supported redBlock bluBlock ) 
+                (Supported grnBlock redBlock ) 
+                (HandEmpty)
+            )   
+            ( and
+                (GraspObj bluBlock P3  ) 
+                (Supported grnBlock bluBlock ) 
+                (Supported redBlock grnBlock ) 
+                (HandEmpty)
+            )   
         )
     )
 )
