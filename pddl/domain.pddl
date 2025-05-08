@@ -1,29 +1,31 @@
 (define (domain pick-place-and-stack)
-  (:requirements :strips :negative-preconditions :equality)
+  (:requirements :strips :negative-preconditions)
 
   ;;;;;;;;;; PREDICATES ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
   (:predicates
 
     ;;; Domains ;;;
-    (Graspable ?label); Name of a real object we can grasp
-    (Identifier ?id) ; ID of a real object we can grasp
-    (Base ?label); Name of a support object we CANNOT grasp
+    (Graspable ?id); Name of a real object we can grasp
+    (Base ?id); Name of a support object we CANNOT grasp
     (Waypoint ?pose) ; Model of any object we can go to in the world, real or not
+    (Type ?label)
     
     ;;; Objects ;;;
-    (GraspObj ?label ?pose ?id) ; The concept of a named object at a pose
-    (PoseAbove ?pose ?label) ; The concept of a pose being supported by an object
+    (GraspObj ?id ?pose) ; The concept of a named object at a pose
+    (PoseAbove ?pose ?id) ; The concept of a pose being supported by an object
+    (ObjLabel ?id ?label)
   
     ;;; Object State ;;;
     (Free ?pose) ; This pose is free of objects, therefore we can place something here without collision
-    (Supported ?labelUp ?labelDn ?idUp ?idDn) ; Is the "up" object on top of the "down" object?
+    (Supported ?idUp ?idDn) ; Is the "up" object on top of the "down" object?
     (Blocked ?id) ; This object cannot be lifted
     
     ;;; Robot State ;;;
     (HandEmpty)
-    (Holding ?label)
+    (Holding ?id)
     (AtPose ?pose)
+
   )
 
   ;;;;;;;;;; ACTIONS ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -43,141 +45,119 @@
   )
   
   (:action pick
-    ;:parameters (?label ?pose ?prevSupport ?idUp ?idDn)
-    :parameters (?label ?pose ?prevSupport ?idUp)
+    :parameters (?id ?pose ?prevSupportId)
     :precondition (and
       ;; Domain ;;
-      (Graspable ?label)
+      (Graspable ?id)
       (Waypoint ?pose)
-      (Base ?prevSupport)
-      (Identifier ?idUp)
-      ;(Identifier ?idDn)
-      ;; Identity ;;
-      ;(not (= ?idUp ?idDn))
+      (Base ?prevSupportId)
       ;; Object State ;;
-      (GraspObj ?label ?pose ?idUp)
-      ;(Supported ?label ?prevSupport ?idUp ?idDn)
-      (PoseAbove ?pose ?prevSupport)
-      (not (Blocked ?idUp))
+      (GraspObj ?id ?pose)
+      (Supported ?id ?prevSupportId)
+      (PoseAbove ?pose ?prevSupportId)
+      (not (Blocked ?id))
       ;; Robot State ;;
       (HandEmpty)
     )
     :effect (and
       ;; Robot State ;;
-      (Holding ?label)
+      (Holding ?id)
       (not (HandEmpty))
       ;; Object State ;;
-      ;(not (Supported ?label ?prevSupport ?idUp ?idDn))
+      (not (Supported ?id ?prevSupportId))
     )
   )
   
   (:action unstack
-    :parameters (?label ?pose ?prevSupport ?idUp ?idDn)
+    :parameters (?id ?pose ?prevSupportId)
     :precondition (and
       ;; Domain ;;
-      (Graspable ?label)
+      (Graspable ?id)
       (Waypoint ?pose)
-      (Graspable ?prevSupport)
-      (Identifier ?idUp)
-      (Identifier ?idDn)
-      ;; Identity ;;
-      (not (= ?idUp ?idDn))
+      (Graspable ?prevSupportId)
       ;; Object State ;;
-      (GraspObj ?label ?pose ?idUp)
-      (Supported ?label ?prevSupport ?idUp ?idDn)
-      (PoseAbove ?pose ?prevSupport)
-      (not (Blocked ?idUp))
+      (GraspObj ?id ?pose)
+      (Supported ?id ?prevSupportId)
+      (PoseAbove ?pose ?prevSupportId)
+      (not (Blocked ?id))
       ;; Robot State ;;
       (HandEmpty)
     )
     :effect (and
       ;; Robot State ;;
-      (Holding ?label)
+      (Holding ?id)
       (not (HandEmpty))
       ;; Object State ;;
-      (not (Supported ?label ?prevSupport ?idUp ?idDn))
-      (not (Blocked ?idDn))
+      (not (Supported ?id ?prevSupportId))
+      (not (Blocked ?prevSupportId))
     )
   )
   
   (:action move_holding
-      :parameters (?poseBgn ?poseEnd ?label ?id)
+      :parameters (?poseBgn ?poseEnd ?id)
       :precondition (and 
-        ;; Domain ;;
-        (Graspable ?label)
-        (Waypoint ?poseBgn)
-        (Waypoint ?poseEnd)
-        (Identifier ?id)
         ;; Robot State ;;
-        (Holding ?label)
+        (Holding ?id)
         (AtPose ?poseBgn)
         ;; Object State ;;
         (Free ?poseEnd)
-        (GraspObj ?label ?poseBgn ?id)
+        (GraspObj ?id ?poseBgn)
       )
       :effect (and 
         ;; Robot State ;;
         (AtPose ?poseEnd)
         (not (AtPose ?poseBgn))
         ;; Object State ;;
-        (GraspObj ?label ?poseEnd ?id)
-        (not (GraspObj ?label ?poseBgn ?id))
+        (GraspObj ?id ?poseEnd)
+        (not (GraspObj ?id ?poseBgn))
         (Free ?poseBgn)
         (not (Free ?poseEnd))
       )
   )
   
   (:action place
-      :parameters (?label ?pose ?support ?idUp)
+      :parameters (?id ?pose ?support)
       :precondition (and 
                       ;; Domain ;;
-                      (Graspable ?label)
+                      (Graspable ?id)
                       (Waypoint ?pose)
                       (Base ?support)
-                      (Identifier ?idUp)
-                      ;(Identifier ?idDn)
-                      ;; Identity ;;
-                      (not (= ?idUp ?idDn))
                       ;; Object State ;;
-                      (GraspObj ?label ?pose ?idUp) 
+                      (GraspObj ?id ?pose) 
                       (PoseAbove ?pose ?support)
                       ;; Robot State ;;
-                      (Holding ?label)
+                      (Holding ?id)
                       )
       :effect (and 
                 ;; Robot State ;;
                 (HandEmpty)
-                (not (Holding ?label))
-                ; (Supported ?label ?support ?idUp 0)
+                (not (Holding ?id))
+                (Supported ?id ?support)
               )
   )
   
   (:action stack
-      :parameters (?labelUp ?poseUp ?labelDn ?idUp ?idDn)
+      :parameters (?idUp ?poseUp ?idDn)
       :precondition (and 
                       ;; Domain ;;
-                      (Graspable ?labelUp)
+                      (Graspable ?idUp)
                       (Waypoint ?poseUp)
-                      (Graspable ?labelDn)
-                      (Identifier ?idUp)
-                      (Identifier ?idDn)
-                      ;; Identity ;;
-                      (not (= ?idUp ?idDn))
+                      (Graspable ?idDn)
                       ;; Object State ;;
-                      (GraspObj ?labelUp ?poseUp ?idUp) 
+                      (GraspObj ?idUp ?poseUp) 
                       (not (Blocked ?idDn))
                       ;; Requirements ;;
-                      (PoseAbove ?poseUp ?labelDn)
+                      (PoseAbove ?poseUp ?idDn)
                       ;; Robot State ;;
-                      (Holding ?labelUp)
+                      (Holding ?idUp)
                       )
       :effect (and 
                 ;; Object State ;;
-                (Supported ?labelUp ?labelDn ?idUp ?idDn)
+                (Supported ?idUp ?idDn)
                 (Blocked ?idDn)
                 ;; Robot State ;;
                 (HandEmpty)
-                (not (Holding ?labelUp))
+                (not (Holding ?idUp))
               )
   )
   
