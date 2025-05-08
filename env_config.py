@@ -134,10 +134,13 @@ def set_experiment_env():
 
     env_sto( "_GOAL_RRR" ,
         ( 'and',
-            ('GraspObj', 'redBlock' , _trgtGrn, 1  ), # ; Tower
-            ('Supported', 'redBlock', 'redBlock', 2, 1), 
-            ('Supported', 'redBlock', 'redBlock', 3, 2), 
+            ('GraspObj',  1 , _trgtGrn  ), # ; Tower
+            ('Supported', 2, 1), 
+            ('Supported', 3, 2), 
             ('HandEmpty',),
+            ('ObjLabel', 1, 'redBlock'),
+            ('ObjLabel', 2, 'redBlock'),
+            ('ObjLabel', 3, 'redBlock'),
         )
     )
 

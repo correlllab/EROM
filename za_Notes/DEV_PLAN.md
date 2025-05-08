@@ -1,0 +1,6 @@
+- [ ] Goal checker needs to check object `ident` stacking
+- [ ] Goal checker needs to check `ident` label
+- [ ] Determinizer needs to handle both `ident` and label
+	- [ ] Label limits `ident`
+	- [ ] Choose closest `ident` within label
+- [ ] If the problem is insoluble, then the colors are wrong
