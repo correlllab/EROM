@@ -127,10 +127,56 @@ def set_experiment_env():
             ('GraspObj', 'grnBlock' , _trgtGrn, 1  ), # ; Tower
             ('Supported', 'redBlock', 'grnBlock'), 
             ('Supported', 'bluBlock', 'redBlock'), 
-
             ('HandEmpty',),
-        )
+        )        
     )
+
+
+    env_sto( "_GOAL_OR_RGB" ,
+        ( 'or',
+            ## Red Base ##
+            ( 'and',
+                ('GraspObj', 'redBlock', _trgtGrn, 1  ), # ; Tower
+                ('Supported', 'grnBlock' 'redBlock' , ), 
+                ('Supported', 'bluBlock', 'grnBlock' ), 
+                ('HandEmpty',),
+            ),   
+            ( 'and',
+                ('GraspObj', 'redBlock', _trgtGrn, 1  ), # ; Tower
+                ('Supported',  'bluBlock' 'redBlock'), 
+                ('Supported', 'grnBlock', 'bluBlock'), 
+                ('HandEmpty',),
+            ),   
+            ## Green Base ##
+            ( 'and',
+                ('GraspObj', 'grnBlock' , _trgtGrn, 1  ), # ; Tower
+                ('Supported', 'redBlock', 'grnBlock'), 
+                ('Supported', 'bluBlock', 'redBlock'), 
+                ('HandEmpty',),
+            ),   
+            ( 'and',
+                ('GraspObj', 'grnBlock' , _trgtGrn, 1  ), # ; Tower
+                ('Supported', 'bluBlock', 'grnBlock'), 
+                ('Supported', 'redBlock', 'bluBlock'), 
+                ('HandEmpty',),
+            ),   
+            ## Blue Base ##
+            ( 'and',
+                ('GraspObj', 'bluBlock',  _trgtGrn, 1  ), # ; Tower
+                ('Supported', 'redBlock', 'bluBlock'), 
+                ('Supported', 'grnBlock' ,'redBlock'), 
+                ('HandEmpty',),
+            ),   
+            ( 'and',
+                ('GraspObj', 'bluBlock', _trgtGrn, 1  ), # ; Tower
+                ('Supported', 'grnBlock', 'bluBlock', ), 
+                ('Supported', 'redBlock', 'grnBlock', ), 
+                ('HandEmpty',),
+            ),   
+        )
+            
+    )
+
 
     env_sto( "_GOAL_RRR" ,
         ( 'and',
