@@ -351,7 +351,7 @@ class TaskPlanner:
                 "Event": "The robot has failed to plan any actions.",
             } )
         elif (self.symPln.status == Status.SUCCESS):
-            self.status = Status.RUNNING
+            self.status = Status.SUCCESS
             print( f"\n\nPlanner thinks we SUCCEEDED!\n\n" )
             self.memory.history.append( msg = "Annotation", datum = {
                 "Event": "The robot has determined that the sybolic goal has been met.",
@@ -377,7 +377,7 @@ class TaskPlanner:
             if ("pick" in name_i) or ("unstack" in name_i):
                 objName = action.args[0]
                 objPose = action.args[1]
-                break
+                # break
         return objName, objPose
     
 
@@ -390,7 +390,7 @@ class TaskPlanner:
             if ("place" in name_i) or ("stack" in name_i):
                 objName = action.args[0]
                 objPose = action.args[1]
-                break
+                # break
         return objName, objPose
     
 
@@ -471,6 +471,9 @@ class TaskPlanner:
                 self.memory.move_symbol_from_to_pose( srcPose, dstPose )
         
         else:
+            if self.symPln.nxtAct is None:
+                print( f"\nNO plan to run!\n" )
+                return None
             btr = BT_Runner( self.symPln.nxtAct, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
             btr.setup_BT_for_running()
 

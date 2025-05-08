@@ -418,7 +418,7 @@ class PoseCheater:
         """ Move the symbol to where the robot moved it """
         lastFrame = deep_copy_memory_list( self.symbols[-1] )
         dMin = 1e9
-        sCls : ObjPose = None
+        sCls : GraspObj = None
         for sym in lastFrame:
             d = euclidean_distance_between_symbols( sym, poseBgn )
             if d < dMin:
@@ -426,44 +426,30 @@ class PoseCheater:
                 sCls = sym
         sCls.pose = ObjPose( poseEnd )
         self.symbols.append( lastFrame[:] )
+        print( f"Moved {sCls.label} by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
 
 
-    def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ):
+    # def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ):
+    def repair_symbol_poses( self, symLst : list[GraspObj] ) -> list[GraspObj]:
         """ Adjust the positions of symbols to their last """
-        if maxDiff is None:
-            maxDiff = 0.75*env_var("_BLOCK_SCALE")
+        _BIG_NUM = 1e9
         lastFrame : list[GraspObj] = self.symbols[-1]
-        if not len( lastFrame ):
-            return  symLst
-        dMin  = [1e9 for _ in range( len( symLst ) )]
-        pMin  = [None for _ in range( len( symLst ) )]
-        lMin  = [None for _ in range( len( symLst ) )]
-        iMin  = [None for _ in range( len( symLst ) )]
-        match = [False for _ in range( len( symLst ) )]
-        found = [False for _ in range( len( lastFrame ) )]
-        for i, rSym in enumerate( symLst ):
-            for j, lSym in enumerate( lastFrame ):
-                d_ij = euclidean_distance_between_symbols( rSym, lSym )
-                if (d_ij < dMin[i]) and (d_ij <= maxDiff):
-                    dMin[i] = d_ij
-                    pMin[i] = lSym.pose
-                    lMin[i] = lSym.label
-                    iMin[i] = lSym.ident
-                    found[j] = i
-                    match[i] = j
-            if dMin[i] <= maxDiff:
-                symLst[i].pose  = pMin[i]
-                symLst[i].label = lMin[i]
-                symLst[i].ident = iMin[i]
         rtnSym = list()
-        # Drop symbols that did not get repaired
-        for i, rSym in enumerate( symLst ):
-            if i in found:
-                rtnSym.append( rSym )
-        # Add symbols that did not get matched
+        # if maxDiff is None:
+        #     # maxDiff = 0.75*env_var("_BLOCK_SCALE")
+        #     maxDiff = 3.00*env_var("_BLOCK_SCALE")
+        lSet = set([])
+        dlta = False
         for j, lSym in enumerate( lastFrame ):
-            if j not in match:
-                rtnSym.append( lSym )
+            lSet.add( lSym.label )
+            rtnSym.append( lSym )
+        for i, rSym in enumerate( symLst ):
+            if rSym.label not in lSet:
+                lSet.add( rSym.label )
+                rtnSym.append( rSym )
+                dlta = True
+        if dlta:
+            self.symbols.append( rtnSym )
         return rtnSym
         
 
