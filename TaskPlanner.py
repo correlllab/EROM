@@ -248,12 +248,14 @@ class TaskPlanner:
             elif fact[0] == 'Blocked':
                 rtnDesc.append( f"The {_BLOCK_DESC[ fact[1] ]} cannot be moved until the block above it is moved." )
             else:
-                print( f"There is no annotation for predicate: {fact}" )
+                pass
+                # print( f"There is no annotation for predicate: {fact}" )
         return rtnDesc
             
 
     def phase_2_Conditions( self ):
         """ Get the necessary initial state, Check for goals already met """
+        
         # self.symPln.symbols = self.memory.get_current_most_likely()
         self.symPln.symbols = self.memory.get_current_most_likely( self.symPln.get_goal_objects() )
 
@@ -551,7 +553,8 @@ class TaskPlanner:
         self.reset_state() 
         
         # self.symPln.set_goal( env_var("_GOAL_GRB") )
-        self.symPln.set_goal( env_var("_GOAL_RRR") )
+        # self.symPln.set_goal( env_var("_GOAL_RRR") )
+        self.symPln.set_goal( env_var("_GOAL_OR_RGB") )
 
         self.cheater.log_symbols( [env_var(f"_KNOWN_BLOCK_{i}") for i in range(3)] )
 

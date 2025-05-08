@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/DEV_PLAN.md",
+                "file": "za_Notes/2025-05-08.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "DEV_PLAN"
+              "title": "2025-05-08"
             }
           }
         ]
@@ -40,7 +40,7 @@
             "state": {
               "type": "file-explorer",
               "state": {
-                "sortOrder": "alphabetical",
+                "sortOrder": "byModifiedTime",
                 "autoReveal": false
               },
               "icon": "lucide-folder-closed",
@@ -165,9 +165,16 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "18694657bc33699d",
+  "active": "e97e7a592fb5cdbc",
   "lastOpenFiles": [
+    "data/EROM-Memories_05-08-2025_14-13-09.pkl",
+    "data/EROM-Memories_05-08-2025_13-59-20.pkl",
+    "data/EROM-Memories_05-08-2025_13-54-44.pkl",
+    "data/EROM-Memories_05-08-2025_13-47-58.pkl",
+    "data/EROM-Memories_05-08-2025_13-45-51.pkl",
+    "data/EROM-Memories_05-08-2025_13-13-34.pkl",
     "za_Notes/2025-05-07.md",
+    "za_Notes/2025-05-08.md",
     "za_Notes/DEV_PLAN.md"
   ]
 }

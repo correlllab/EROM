@@ -30,12 +30,13 @@ def KNOWN_BLOCKS():
                       [ 0.112,  0.993,  0.044, -0.199],
                       [-0.017,  0.046, -0.999,  0.246],
                       [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
+    names = ['redBlock','grnBlock','bluBlock',]
     for i, bloc_i in enumerate([bloc1,bloc2,bloc3,]):
         pose_i = np.eye(4)
         pose_i[0:3,3] = bloc_i[0:3,3]
         pose_i[2,3]   = env_var("_BLOCK_SCALE") / 2.0
         env_sto( f"_KNOWN_BLOCK_{i}",  GraspObj(
-            label = 'redBlock',
+            label = names[i],
             pose  = pose_i
         ) ) 
 
@@ -124,7 +125,7 @@ def set_experiment_env():
     
     env_sto( "_GOAL_GRB" ,
         ( 'and',
-            ('GraspObj', 'grnBlock' , _trgtGrn, 1  ), # ; Tower
+            ('GraspObj', 'grnBlock' , _trgtGrn ), # ; Tower
             ('Supported', 'redBlock', 'grnBlock'), 
             ('Supported', 'bluBlock', 'redBlock'), 
             ('HandEmpty',),
@@ -136,39 +137,39 @@ def set_experiment_env():
         ( 'or',
             ## Red Base ##
             ( 'and',
-                ('GraspObj', 'redBlock', _trgtGrn, 1  ), # ; Tower
-                ('Supported', 'grnBlock' 'redBlock' , ), 
-                ('Supported', 'bluBlock', 'grnBlock' ), 
+                ('GraspObj', 'redBlock', _trgtGrn  ), # ; Tower
+                ('Supported', 'grnBlock', 'redBlock', ), 
+                ('Supported', 'bluBlock', 'grnBlock', ), 
                 ('HandEmpty',),
             ),   
             ( 'and',
-                ('GraspObj', 'redBlock', _trgtGrn, 1  ), # ; Tower
-                ('Supported',  'bluBlock' 'redBlock'), 
-                ('Supported', 'grnBlock', 'bluBlock'), 
+                ('GraspObj', 'redBlock', _trgtGrn  ), # ; Tower
+                ('Supported', 'bluBlock', 'redBlock', ), 
+                ('Supported', 'grnBlock', 'bluBlock', ), 
                 ('HandEmpty',),
             ),   
             ## Green Base ##
             ( 'and',
-                ('GraspObj', 'grnBlock' , _trgtGrn, 1  ), # ; Tower
-                ('Supported', 'redBlock', 'grnBlock'), 
-                ('Supported', 'bluBlock', 'redBlock'), 
+                ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
+                ('Supported', 'redBlock', 'grnBlock', ), 
+                ('Supported', 'bluBlock', 'redBlock', ), 
                 ('HandEmpty',),
             ),   
             ( 'and',
-                ('GraspObj', 'grnBlock' , _trgtGrn, 1  ), # ; Tower
-                ('Supported', 'bluBlock', 'grnBlock'), 
-                ('Supported', 'redBlock', 'bluBlock'), 
+                ('GraspObj', 'grnBlock' , _trgtGrn  ), # ; Tower
+                ('Supported', 'bluBlock', 'grnBlock', ), 
+                ('Supported', 'redBlock', 'bluBlock', ), 
                 ('HandEmpty',),
             ),   
             ## Blue Base ##
             ( 'and',
-                ('GraspObj', 'bluBlock',  _trgtGrn, 1  ), # ; Tower
-                ('Supported', 'redBlock', 'bluBlock'), 
-                ('Supported', 'grnBlock' ,'redBlock'), 
+                ('GraspObj', 'bluBlock',  _trgtGrn  ), # ; Tower
+                ('Supported', 'redBlock', 'bluBlock', ), 
+                ('Supported', 'grnBlock', 'redBlock', ), 
                 ('HandEmpty',),
             ),   
             ( 'and',
-                ('GraspObj', 'bluBlock', _trgtGrn, 1  ), # ; Tower
+                ('GraspObj', 'bluBlock', _trgtGrn  ), # ; Tower
                 ('Supported', 'grnBlock', 'bluBlock', ), 
                 ('Supported', 'redBlock', 'grnBlock', ), 
                 ('HandEmpty',),
