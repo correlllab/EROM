@@ -501,6 +501,9 @@ class TaskPlanner:
 
             self.memory.history.append( msg = f"BT END: {btr.status}" )
 
+            _, srcPose = self.fetch_src_label_and_pose()
+            _, dstPose = self.fetch_dst_label_and_pose()
+
             if (btr.status == Status.FAILURE):
                 self.memory.history.append( msg = "Annotation", datum = {
                     "Event": "The robot's plan was not executed correctly.",
@@ -510,9 +513,7 @@ class TaskPlanner:
                     self.cheater.log_failed_action( srcPose, dstPose )
                 self.memory.bMem.action_failure_update( srcPose, dstPose )
             elif (btr.status == Status.SUCCESS):
-                _, srcPose = self.fetch_src_label_and_pose()
-                _, dstPose = self.fetch_dst_label_and_pose()
-
+                
                 if env_var("_USE_POSE_CHEAT"):
                     self.cheater.log_successful_action( srcPose, dstPose )
                 self.memory.bMem.action_success_update( srcPose, dstPose )
@@ -563,9 +564,8 @@ class TaskPlanner:
 
         self.reset_state() 
         
-        # self.symPln.set_goal( env_var("_GOAL_GRB") )
-        # self.symPln.set_goal( env_var("_GOAL_RRR") )
-        self.symPln.set_goal( env_var("_GOAL_OR_RGB") )
+        self.symPln.set_goal( env_var("_GOAL_GRB") )
+        # self.symPln.set_goal( env_var("_GOAL_OR_RGB") )
 
         self.cheater.log_symbols( [env_var(f"_KNOWN_BLOCK_{i}") for i in range(3)] )
 

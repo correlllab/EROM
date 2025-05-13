@@ -481,6 +481,10 @@ class PoseCheater:
                     rSym.pose = sMin.pose
                     dlta = True
                 rtnSym.append( rSym )
+            for j, lSym in enumerate( lastFrame ):
+                if id( lSym ) not in lSet:
+                    rtnSym.append( lSym )
+                    lSet.add( id( lSym ) )
                 
         if dlta:
             self.symbols.append( rtnSym )
