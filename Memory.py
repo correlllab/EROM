@@ -210,10 +210,21 @@ def most_likely_objects( objList : list[GraspObj], method : str | list = "suffic
     rtnSymbols = list()
 
     if isinstance( method, list ):
+        found = False
         for combo in totCombos:
             if p_match_label_quantity( combo[1], method ):
                 rtnSymbols = combo[1]
+                found      = True
                 break
+        if not found:
+            for combo in totCombos:
+                lblSet = set([])
+                for cSym in combo:
+                    lblSet.add( cSym.label )
+                if len( lblSet ) > 1:
+                    rtnSymbols = combo[1]
+                    break
+            # rtnSymbols = totCombos[0][1]  
     elif (method == "sufficient"):
         for combo in totCombos:
             if p_enough_labels( combo[1] ):
@@ -343,7 +354,7 @@ class SensoryPlanner:
         """ A Series of shots  """
         return [
             self.plan_3d_shot_centroid( objects, [  0.75, -0.25, 1.0, ], self.dShot, defaultPose ),
-            # self.plan_3d_shot_centroid( objects, [  1.00,  0.25, 1.0, ], self.dShot, defaultPose ),
+            self.plan_3d_shot_centroid( objects, [  1.00,  0.25, 1.0, ], self.dShot, defaultPose ),
             # self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
             # self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
         ]
@@ -452,6 +463,7 @@ class PoseCheater:
         lastFrame : list[GraspObj] = self.symbols[-1]
         rtnSym = list()
         lSet = set([])
+        cSet = set([])
         dlta = False
 
         if self.fixLabel and self.fixPose:
@@ -478,13 +490,22 @@ class PoseCheater:
                             sMin = lSym
                 if sMin is not None:
                     lSet.add( id( lSym ) )
+                    cSet.add( rSym.label )
                     rSym.pose = sMin.pose
                     dlta = True
                 rtnSym.append( rSym )
+
             for j, lSym in enumerate( lastFrame ):
-                if id( lSym ) not in lSet:
-                    rtnSym.append( lSym )
-                    lSet.add( id( lSym ) )
+                if (id( lSym ) not in lSet) and (lSym.label not in cSet):
+                    collide = False
+                    for i, rSym in enumerate( rtnSym ):
+                        if euclidean_distance_between_symbols( lSym, rSym ) < env_var("_BLOCK_SCALE"):
+                            collide = True
+                            break
+                    if not collide:
+                        rtnSym.append( lSym )
+                        lSet.add( id( lSym ) )
+                        cSet.add( lSym.label )
                 
         if dlta:
             self.symbols.append( rtnSym )
