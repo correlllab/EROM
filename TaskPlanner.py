@@ -156,7 +156,10 @@ class TaskPlanner:
         self.robot : UR5_Interface = UR5_Interface( provide_gripper = True ) if (not noBot) else None
 
         self.memory  = Memory( self.robot, self.perc ) 
-        self.cheater = PoseCheater()
+        self.cheater = PoseCheater(
+            fix_labels = env_var("_CHEAT_LABEL"),
+            fix_poses  = env_var("_CHEAT_POSE" )
+        )
 
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
@@ -502,12 +505,17 @@ class TaskPlanner:
                 self.memory.history.append( msg = "Annotation", datum = {
                     "Event": "The robot's plan was not executed correctly.",
                 } )
+
+                if env_var("_USE_POSE_CHEAT"):
+                    self.cheater.log_failed_action( srcPose, dstPose )
+                self.memory.bMem.action_failure_update( srcPose, dstPose )
             elif (btr.status == Status.SUCCESS):
                 _, srcPose = self.fetch_src_label_and_pose()
                 _, dstPose = self.fetch_dst_label_and_pose()
 
                 if env_var("_USE_POSE_CHEAT"):
                     self.cheater.log_successful_action( srcPose, dstPose )
+                self.memory.bMem.action_success_update( srcPose, dstPose )
 
                 self.memory.history.append( msg = f"Action Success: {btr.msg}, {now()}" )
                 self.memory.history.append( msg = "Annotation", datum = {

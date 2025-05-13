@@ -419,13 +419,22 @@ class BayesMemory:
         self.beliefs = [bel for bel in self.beliefs if (bel.index not in hits)]
         
 
-    def update_belief_pose( self, srcPose : np.ndarray, dstPose : np.ndarray, margin : float = 3.0*env_var("_BLOCK_SCALE") ):
+    def action_success_update( self, srcPose : np.ndarray, dstPose : np.ndarray, margin : float = 3.0*env_var("_BLOCK_SCALE") ):
         """ Find the symbol at `srcPose` and move it to `dstPose`, return whether the belief was moved """
+        self.del_beliefs_close_to_pose( dstPose, margin = 0.5*margin )
         belief = self.get_belief_closest_to_pose( srcPose, margin )
         if belief is None:
             return False
         belief.pose = ObjPose( extract_pose_as_homog( dstPose ) )
-        self.del_beliefs_close_to_pose( srcPose , margin = 2.0*env_var("_BLOCK_SCALE") )
+        self.del_beliefs_close_to_pose( srcPose , margin = margin )
+        return True
+    
+
+    def action_failure_update( self, srcPose : np.ndarray, dstPose : np.ndarray, margin : float = 3.0*env_var("_BLOCK_SCALE") ):
+        """ Delete beliefs where we were supposed to have grabbed an object """
+        if euclidean_distance_between_symbols( srcPose, dstPose ) < margin:
+            return False
+        self.del_beliefs_close_to_pose( srcPose , margin = margin )
         return True
 
     

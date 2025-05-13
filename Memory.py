@@ -6,7 +6,7 @@
 import time
 now = time.time
 from collections import deque, Counter
-from typing import Dict, Deque
+# from typing import Dict, Deque
 from math import log
 from uuid import uuid4
 from copy import deepcopy
@@ -403,8 +403,10 @@ class SensoryPlanner:
 class PoseCheater:
     """ Fudge the `Memory` such that things are where they should be """
 
-    def __init__( self, basePose = None, startSymbols = None ):
+    def __init__( self, basePose = None, startSymbols = None, fix_labels = False, fix_poses = True ):
         """ Setup local memory """
+        self.fixLabel = fix_labels
+        self.fixPose  = fix_poses
         self.symbols = deque( [startSymbols,] ) if isinstance( startSymbols, list ) else deque()
         self.base    = extract_pose_as_homog( basePose ) if (basePose is not None) else np.eye(4)
 
@@ -429,25 +431,57 @@ class PoseCheater:
         print( f"Moved {sCls.label} by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
 
 
+    def log_failed_action( self, poseBgn, poseEnd ):
+        """ We done goofed, Erase symbol """
+        lastFrame = deep_copy_memory_list( self.symbols[-1] )
+        dMin = 1e9
+        sCls : GraspObj = None
+        for sym in lastFrame:
+            d = euclidean_distance_between_symbols( sym, poseBgn )
+            if d < dMin:
+                dMin = d
+                sCls = sym
+        # sCls.pose = ObjPose( poseEnd )
+        self.symbols.append( [sym for sym in lastFrame if id(sym) != id(sCls)] )
+        print( f"Could NOT move {sCls.label} by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
+
+
     # def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ):
-    def repair_symbol_poses( self, symLst : list[GraspObj] ) -> list[GraspObj]:
+    def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ) -> list[GraspObj]:
         """ Adjust the positions of symbols to their last """
-        _BIG_NUM = 1e9
         lastFrame : list[GraspObj] = self.symbols[-1]
         rtnSym = list()
-        # if maxDiff is None:
-        #     # maxDiff = 0.75*env_var("_BLOCK_SCALE")
-        #     maxDiff = 3.00*env_var("_BLOCK_SCALE")
         lSet = set([])
         dlta = False
-        for j, lSym in enumerate( lastFrame ):
-            lSet.add( lSym.label )
-            rtnSym.append( lSym )
-        for i, rSym in enumerate( symLst ):
-            if rSym.label not in lSet:
-                lSet.add( rSym.label )
+
+        if self.fixLabel and self.fixPose:
+            for j, lSym in enumerate( lastFrame ):
+                lSet.add( lSym.label )
+                rtnSym.append( lSym )
+            for i, rSym in enumerate( symLst ):
+                if rSym.label not in lSet:
+                    lSet.add( rSym.label )
+                    rtnSym.append( rSym )
+                    dlta = True
+
+        elif self.fixPose:
+            if maxDiff is None:
+                maxDiff = 4.0 * env_var('_BLOCK_SCALE')
+            for i, rSym in enumerate( symLst ):
+                sMin = None
+                dMin = 1e9
+                for j, lSym in enumerate( lastFrame ):
+                    d_ij = euclidean_distance_between_symbols( rSym, lSym )
+                    if (d_ij <= maxDiff) and (d_ij < dMin):
+                        dMin = d_ij
+                        if id( lSym ) not in lSet:
+                            sMin = lSym
+                if sMin is not None:
+                    lSet.add( id( lSym ) )
+                    rSym.pose = sMin.pose
+                    dlta = True
                 rtnSym.append( rSym )
-                dlta = True
+                
         if dlta:
             self.symbols.append( rtnSym )
         return rtnSym
