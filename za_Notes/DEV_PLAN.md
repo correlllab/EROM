@@ -8,7 +8,11 @@
 
 # Repair Plan
 - [ ] Need to restore "Confirmation Squeeze" <--- $W$  
+- [ ] Turn OFF cheating!
+- [ ] Intermediate jog position
 - [ ] Push an empty cheat frame when an action fails
+- [ ] Better shot planning
+	- [ ] Don't allow poses too close to the robot
 
 # Memory w/ Increasing Confusion
 - [ ] Cheater
