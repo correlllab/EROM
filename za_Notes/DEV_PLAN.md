@@ -1,10 +1,14 @@
 # Plan Outline
 - [x] Basic Baseline
 	- --> 2025-05-13: 2 minutes!
-- [ ] Baseline: Class confusion only
-	- [ ] Needs testing!
+- [ ] Baseline: Class confusion only <--- $W$  
+	- [ ] Needs testing! <--- $W$  
 - [ ] Baseline: Remove pose cheat
 - [ ] Method w/ Shortcutting
+
+# Repair Plan
+- [ ] Need to restore "Confirmation Squeeze" <--- $W$  
+- [ ] Push an empty cheat frame when an action fails
 
 # Memory w/ Increasing Confusion
 - [ ] Cheater
