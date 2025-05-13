@@ -8,6 +8,8 @@
 
 # Repair Plan
 - [ ] Need to restore "Confirmation Squeeze" <--- $W$  
+- [ ] Add a mid-mid point to the Safe Jog such that it does not pass near the base
+- [ ] DISABLE Cheats!
 - [ ] Push an empty cheat frame when an action fails
 
 # Memory w/ Increasing Confusion
