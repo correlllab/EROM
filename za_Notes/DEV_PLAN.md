@@ -8,9 +8,11 @@
 
 # Repair Plan
 - [ ] Need to restore "Confirmation Squeeze" <--- $W$  
-- [ ] Add a mid-mid point to the Safe Jog such that it does not pass near the base
-- [ ] DISABLE Cheats!
+- [ ] Turn OFF cheating!
+- [ ] Intermediate jog position
 - [ ] Push an empty cheat frame when an action fails
+- [ ] Better shot planning
+	- [ ] Don't allow poses too close to the robot
 
 # Memory w/ Increasing Confusion
 - [ ] Cheater
