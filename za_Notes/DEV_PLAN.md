@@ -7,7 +7,8 @@
 - [ ] Method w/ Shortcutting
 
 # Repair Plan
-- [ ] Need to restore "Confirmation Squeeze" <--- $W$  
+- [x] Need to restore "Confirmation Squeeze" <--- $W$  
+	- --> 2025-05-14: For some reason setting the gripper width does not work, Just open the gripper instead
 - [ ] Turn OFF cheating!
 - [ ] Intermediate jog position
 - [ ] Push an empty cheat frame when an action fails

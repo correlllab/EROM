@@ -219,7 +219,7 @@ def most_likely_objects( objList : list[GraspObj], method : str | list = "suffic
         if not found:
             for combo in totCombos:
                 lblSet = set([])
-                for cSym in combo:
+                for cSym in combo[1]:
                     lblSet.add( cSym.label )
                 if len( lblSet ) > 1:
                     rtnSymbols = combo[1]
@@ -429,32 +429,35 @@ class PoseCheater:
 
     def log_successful_action( self, poseBgn, poseEnd ):
         """ Move the symbol to where the robot moved it """
+        print( f"Moved block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
         lastFrame = deep_copy_memory_list( self.symbols[-1] )
-        dMin = 1e9
-        sCls : GraspObj = None
-        for sym in lastFrame:
-            d = euclidean_distance_between_symbols( sym, poseBgn )
-            if d < dMin:
-                dMin = d
-                sCls = sym
-        sCls.pose = ObjPose( poseEnd )
-        self.symbols.append( lastFrame[:] )
-        print( f"Moved {sCls.label} by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
+        if len(lastFrame ):
+            dMin = 1e9
+            sCls : GraspObj = None
+            for sym in lastFrame:
+                d = euclidean_distance_between_symbols( sym, poseBgn )
+                if d < dMin:
+                    dMin = d
+                    sCls = sym
+            sCls.pose = ObjPose( poseEnd )
+            self.symbols.append( lastFrame[:] )
+        
 
 
     def log_failed_action( self, poseBgn, poseEnd ):
         """ We done goofed, Erase symbol """
-        lastFrame = deep_copy_memory_list( self.symbols[-1] )
-        dMin = 1e9
-        sCls : GraspObj = None
-        for sym in lastFrame:
-            d = euclidean_distance_between_symbols( sym, poseBgn )
-            if d < dMin:
-                dMin = d
-                sCls = sym
-        # sCls.pose = ObjPose( poseEnd )
-        self.symbols.append( [sym for sym in lastFrame if id(sym) != id(sCls)] )
-        print( f"Could NOT move {sCls.label} by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
+        # lastFrame = deep_copy_memory_list( self.symbols[-1] )
+        # dMin = 1e9
+        # sCls : GraspObj = None
+        # for sym in lastFrame:
+        #     d = euclidean_distance_between_symbols( sym, poseBgn )
+        #     if d < dMin:
+        #         dMin = d
+        #         sCls = sym
+        # self.symbols.append( [sym for sym in lastFrame if id(sym) != id(sCls)] )
+        self.symbols.append( list() )
+
+        print( f"Could NOT move block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
 
 
     # def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ):
@@ -479,6 +482,12 @@ class PoseCheater:
         elif self.fixPose:
             if maxDiff is None:
                 maxDiff = 4.0 * env_var('_BLOCK_SCALE')
+
+            print( "CHEAT OBJECTS:" )
+            for j, lSym in enumerate( lastFrame ):
+                print( f"\t{lSym}" )
+
+
             for i, rSym in enumerate( symLst ):
                 sMin = None
                 dMin = 1e9
@@ -496,16 +505,20 @@ class PoseCheater:
                 rtnSym.append( rSym )
 
             for j, lSym in enumerate( lastFrame ):
-                if (id( lSym ) not in lSet) and (lSym.label not in cSet):
-                    collide = False
-                    for i, rSym in enumerate( rtnSym ):
-                        if euclidean_distance_between_symbols( lSym, rSym ) < env_var("_BLOCK_SCALE"):
-                            collide = True
-                            break
-                    if not collide:
-                        rtnSym.append( lSym )
-                        lSet.add( id( lSym ) )
-                        cSet.add( lSym.label )
+                if (lSym.label not in cSet):
+                    cSet.add( lSym.label )
+                    rtnSym.append( lSym )
+
+                # if (id( lSym ) not in lSet) and (lSym.label not in cSet):
+                #     collide = False
+                #     for i, rSym in enumerate( rtnSym ):
+                #         if euclidean_distance_between_symbols( lSym, rSym ) < env_var("_BLOCK_SCALE"):
+                #             collide = True
+                #             break
+                #     if not collide:
+                #         rtnSym.append( lSym )
+                #         lSet.add( id( lSym ) )
+                #         cSet.add( lSym.label )
                 
         if dlta:
             self.symbols.append( rtnSym )

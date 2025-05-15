@@ -20,6 +20,7 @@ def KNOWN_BLOCKS():
     """ Set block positions """
     yOfst = 0.025
     bloc1 = np.array([[-0.994,  0.111,  0.022, -0.38 ],
+                    #   [ 0.112,  0.993,  0.044,  0.003+yOfst+yOfst],
                       [ 0.112,  0.993,  0.044,  0.003+yOfst],
                       [-0.017,  0.046, -0.999,  0.246],
                       [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
@@ -219,7 +220,7 @@ def set_experiment_env():
 
     env_sto( "_GRASP_NUDGE_M", -0.005 )
 
-    env_sto( "_USE_SPACE_HACK", False )
+    env_sto( "_USE_SPACE_HACK", True )
 
     env_sto( "_USE_POSE_CHEAT", True )
     env_sto( "_CHEAT_LABEL"   , False and env_var("_USE_POSE_CHEAT") )

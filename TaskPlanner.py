@@ -345,6 +345,7 @@ class TaskPlanner:
             # self.status = Status.FAILURE
             self.status = Status.RUNNING
 
+            self.cheater.log_failed_action( np.eye(4), np.eye(4) )
             if env_var("_USE_SPACE_HACK"):
                 self.blcMod.HACK_space_repair_plan( self.robot )
 
