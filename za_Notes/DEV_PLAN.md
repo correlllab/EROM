@@ -9,9 +9,7 @@
 # Repair Plan
 - [x] Need to restore "Confirmation Squeeze" <--- $W$  
 	- --> 2025-05-14: For some reason setting the gripper width does not work, Just open the gripper instead
-- [ ] Turn OFF cheating!
-- [ ] Intermediate jog position
-- [ ] Push an empty cheat frame when an action fails
+- [x] Push an empty cheat frame when an action fails
 - [ ] Better shot planning
 	- [ ] Don't allow poses too close to the robot
 

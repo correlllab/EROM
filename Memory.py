@@ -431,7 +431,7 @@ class PoseCheater:
         """ Move the symbol to where the robot moved it """
         print( f"Moved block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
         lastFrame = deep_copy_memory_list( self.symbols[-1] )
-        if len(lastFrame ):
+        if len( lastFrame ):
             dMin = 1e9
             sCls : GraspObj = None
             for sym in lastFrame:
@@ -469,6 +469,14 @@ class PoseCheater:
         cSet = set([])
         dlta = False
 
+        def p_collide_return( qSym ):
+            """ Did we already log a symbol at this location? """
+            for rSym in rtnSym:
+                if euclidean_distance_between_symbols( qSym, rSym ) < env_var('_BLOCK_SCALE')*0.75:
+                    return True
+            return False
+
+
         if self.fixLabel and self.fixPose:
             for j, lSym in enumerate( lastFrame ):
                 lSet.add( lSym.label )
@@ -493,10 +501,9 @@ class PoseCheater:
                 dMin = 1e9
                 for j, lSym in enumerate( lastFrame ):
                     d_ij = euclidean_distance_between_symbols( rSym, lSym )
-                    if (d_ij <= maxDiff) and (d_ij < dMin):
+                    if (d_ij <= maxDiff) and (d_ij < dMin) and (not p_collide_return( lSym )):
                         dMin = d_ij
-                        if id( lSym ) not in lSet:
-                            sMin = lSym
+                        sMin = lSym
                 if sMin is not None:
                     lSet.add( id( lSym ) )
                     cSet.add( rSym.label )
@@ -505,7 +512,7 @@ class PoseCheater:
                 rtnSym.append( rSym )
 
             for j, lSym in enumerate( lastFrame ):
-                if (lSym.label not in cSet):
+                if (lSym.label not in cSet) and (not p_collide_return( lSym )):
                     cSet.add( lSym.label )
                     rtnSym.append( lSym )
 
