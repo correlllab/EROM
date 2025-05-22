@@ -7,7 +7,8 @@ from math import asin as asin
 from math import sqrt as sqrt
 from math import pi as pi
 
-from copy import copy
+from random import random
+from collections import deque
 
 import numpy as np
 from numpy import linalg
@@ -92,23 +93,23 @@ def HTrans( th, c, num = 6 ):
     return transforms[num-1]
 
 
-def isJointPosSafe( joints , plane ):
-    """ #a*x+b*y+c*z+d """
+# def isJointPosSafe( joints , plane ):
+#     """ #a*x+b*y+c*z+d """
     
-    # do fwd kinematics
-    th     = np.matrix( [[joints[0]], [joints[1]], [joints[2]], [joints[3]], [joints[4]], [joints[5]]] )
-    c      = [0]
-    fk     = HTrans(th, c)
-    coords = [t[0] for t in fk[:3,3].tolist()]
+#     # do fwd kinematics
+#     th     = np.matrix( [[joints[0]], [joints[1]], [joints[2]], [joints[3]], [joints[4]], [joints[5]]] )
+#     c      = [0]
+#     fk     = HTrans(th, c)
+#     coords = [t[0] for t in fk[:3,3].tolist()]
     
-    for i in range(1,7):
-        fk     = HTrans(th, c, i)
-        coords = [t[0] for t in fk[:3,3].tolist()]
-        val    = (plane[0] * coords[0]) + (plane[1] * coords[1]) + (plane[2] * coords[2]) + plane[3]
+#     for i in range(1,7):
+#         fk     = HTrans(th, c, i)
+#         coords = [t[0] for t in fk[:3,3].tolist()]
+#         val    = (plane[0] * coords[0]) + (plane[1] * coords[1]) + (plane[2] * coords[2]) + plane[3]
         
-        if val >= 0:
-            return False    
-    return True
+#         if val >= 0:
+#             return False    
+#     return True
 
 
 
@@ -192,6 +193,97 @@ def invKine( desired_pos ):# T60
 
 
 
+########## HELPER FUNCTIONS ########################################################################
+
+def sample_on_sphere( center = [0.0, 0.0, 0.0,], radius = 1.0, N = 1 ):
+    """ Generate `N` point(s) on a sphere with `center` and `radius` """
+    center = np.array( center )
+    radius = abs( radius )
+    N      = int( N )
+
+    def gen_pnt():
+        """ Get one point """
+        pnt = np.array([ -1.0+2.0*random() for _ in range(3) ])
+        mag = np.linalg.norm( pnt )
+        if mag > 0.0:
+           pnt /= mag
+           pnt *= radius
+           return pnt
+        else:
+            return np.array([1.0, 0.0, 0.0,])
+        
+    if N == 1:
+        return gen_pnt()
+    elif N > 1:
+        rtnLst = deque()
+        for _ in range(N):
+            rtnLst.append( gen_pnt() )
+        return np.array( list( rtnLst ) )
+
+
+def UR5_Jacobian( q : list | np.ndarray ):
+    """ Get the full velocity Jacobian from the config """    
+    # Source: https://www.researchgate.net/publication/365895438_Singularity_Analysis_and_Complete_Methods_to_Compute_the_Inverse_Kinematics_for_a_6-DOF_URTM-Type_Robot/figures?lo=1
+    c1   = cos( q[0] )
+    c234 = cos( q[1] + q[2] + q[3] )
+    s234 = sin( q[1] + q[2] + q[3] )
+    s5   = sin( q[4] )
+    c5   = cos( q[4] )
+    s1   = sin( q[0] )
+    r13  = -c1*c234*s5 + c5*s1
+    r23  = -c234*s1*s5 - c1*c5 
+    r33  = -s234*s5
+    c23  = cos( q[1] + q[2] )
+    s23  = sin( q[1] + q[2] )
+    c2   = cos( q[1] )
+    s2   = sin( q[1] )
+    px   = r13*d6 + c1*(s234*d5 + c23*a3 + c2*a2) + s1*d4 
+    py   = r23*d6 + s1*(s234*d5 + c23*a3 + c2*a2) - c1*d4
+    pz   = r33*d6 - c234*d5 + s23*a3 + s2*a2 + d1 
+    J_A = np.array([
+        [0.0,  s1,  s1,  s1,  c1*s234, r13],
+        [0.0, -c1, -c1, -c1,  s1*s234, r23],
+        [1.0, 0.0, 0.0, 0.0, -c234   , r33],
+    ])
+    J_L1 = np.array([
+        [-py,],
+        [ px,],
+        [0.0,],
+    ])
+    J_L2 = np.array([
+        [-c1*(pz - d1),],
+        [-s1*(pz - d1),],
+        [s1*py + c1*px,],
+    ])
+    J_L3 = np.array([
+        [c1*(s234*s5*d6 + c234*d5 - s23*a3),],
+        [s1*(s234*s5*d6 + c234*d5 - s23*a3),],
+        [-c234*s5*d6 + s234*d5 + c23*a3,],
+    ])
+    J_L4 = np.array([
+        [c1*(s234*s5*d6 + c234*d5),],
+        [s1*(s234*s5*d6 + c234*d5),],
+        [-c234*s5*d6 + s234*d5,],
+    ])
+    J_L5 = np.array([
+        [-d6*(s1*s5 + c1*c234*c5),],
+        [d6*(c1*s5 - c234*c5*s1),],
+        [-c5*s234*d6,],
+    ])
+    J_L6 = np.array([
+        [0.0,],
+        [0.0,],
+        [0.0,],
+    ])
+    return np.vstack( (np.hstack( (J_L1,J_L2,J_L3,J_L4,J_L5,J_L6,) ), J_A,) )
+
+
+def UR5_manip_score( q : list | np.ndarray ):
+    """ Get the manipulability score of the config """
+    return np.linalg.det( UR5_Jacobian( q ) ) # 0.0 is BAD
+    
+
+
 ########## MOTION PLANNER ##########################################################################
 
 class LUMP:
@@ -199,14 +291,26 @@ class LUMP:
     def __init__( self, robot = None ):
         self.robot : UR5_Interface = robot
 
+
     def p_base_safe( self, effPose : np.ndarray ):
         """ Return true if the effector pose is sufficiently far from the base """
         return (euclidean_distance_between_symbols( np.eye(4), effPose ) >= _RBT_BASE_BUFFER)
-    
+
+
     def p_nonneg_Z( self, effPose : np.ndarray ):
         """ Return True if the Z-position is non-negative """
         return (effPose[2,3] >= 0.0)
-    
+
+
     def IK( self, effPose : np.ndarray ):
         """ Perform inverse kinematics (deterministic) """
         return invKine( effPose )
+
+
+    def verify_IK( self ):
+        """ Is our IK any good? """
+        pose = self.robot.get_tcp_pose()
+        jnts = self.robot.get_joint_angles()
+        soln = self.IK( pose )
+        diff = np.linalg.norm( np.subtract( jnts, soln ) )
+        print( f"Difference between actual and IK sol'n: {diff}" )
