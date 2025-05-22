@@ -511,10 +511,11 @@ class PoseCheater:
                     dlta = True
                 rtnSym.append( rSym )
 
-            for j, lSym in enumerate( lastFrame ):
-                if (lSym.label not in cSet) and (not p_collide_return( lSym )):
-                    cSet.add( lSym.label )
-                    rtnSym.append( lSym )
+            if env_var("_CHEAT_LKG"):
+                for j, lSym in enumerate( lastFrame ):
+                    if (lSym.label not in cSet) and (not p_collide_return( lSym )):
+                        cSet.add( lSym.label )
+                        rtnSym.append( lSym )
 
                 # if (id( lSym ) not in lSet) and (lSym.label not in cSet):
                 #     collide = False
