@@ -342,7 +342,7 @@ class LUMP:
         return mag + (1.0-UR5_manip_score( q ))*mag
 
 
-    def IK_multi( self, effPose : np.ndarray ):
+    def IK_search( self, effPose : np.ndarray ):
         """ Perform inverse kinematics (deterministic) """
         solns = invKine( effPose )
         qFltr = list()
@@ -362,8 +362,8 @@ class LUMP:
 
     def IK( self, effPose : np.ndarray, suppressCache = False ):
         """ Perform inverse kinematics (conditional) """
-        soln = self.IK_multi( effPose )
-        if ((not suppressCache) and (soln is not None) and self.p_pose_safe( effPose )):
+        soln = self.IK_search( effPose )
+        if ((not suppressCache) and (soln is not None) and self.p_safe_pose( effPose )):
             self.q    = np.array( soln )
             self.pose = np.array( effPose )
         return soln
