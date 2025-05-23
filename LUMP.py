@@ -1,4 +1,4 @@
-import cmath, math
+import cmath, math, os
 from math import cos as cos
 from math import sin as sin
 from math import atan2 as atan2
@@ -13,8 +13,10 @@ from collections import deque
 import numpy as np
 from numpy import linalg
 
+from magpie_control.poses import vec_unit
 from magpie_control.ur5 import UR5_Interface
-from aspire.symbols import euclidean_distance_between_symbols, extract_pose_as_homog
+from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog
+from aspire.env_config import env_var
 
 _RBT_BASE_BUFFER = 0.200
 
@@ -34,7 +36,6 @@ a3 = -0.3922
 d4 =  0.1333
 d5 =  0.0997
 d6 =  0.0996
-#TODO: change these too
 
 global d, a, alph
 
@@ -283,13 +284,41 @@ def UR5_manip_score( q : list | np.ndarray ):
     return np.linalg.det( UR5_Jacobian( q ) ) # 0.0 is BAD
     
 
+def p_all_joints_above_point_normal_plane( joints , point, normal, margin = 0.070 ):
+    """ Check if all joints are on the positive side of a point-normal plane """
+    normal = vec_unit( normal )
+    th     = np.matrix( [[joints[0]], [joints[1]], [joints[2]], [joints[3]], [joints[4]], [joints[5]]] )
+    c      = [0]
+    fk     = HTrans(th, c)
+    coords = [t[0] for t in fk[:3,3].tolist()]
+    
+    for i in range(1,7):
+        fk     = HTrans(th, c, i)
+        coords = [t[0] for t in fk[:3,3].tolist()]
+        diff   = np.subtract( coords, point )
+        dotPrd = np.dot( diff, normal )
+        
+        if (dotPrd-margin) <= 0:
+            return False    
+    return True
+
+
 
 ########## MOTION PLANNER ##########################################################################
 
 class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
-    def __init__( self, robot = None ):
-        self.robot : UR5_Interface = robot
+    def __init__( self, qInit = None ):
+        """ Set params """
+        ## Intenal Scoring ##
+        self.q    : np.ndarray = np.array( [0.0 for _ in range(6)] )
+        self.pose : np.ndarray = self.FK( self.q )
+        ## Problem-Specific ##
+        self.ZTableCam = -0.081666 - 0.017
+        self.dShot     = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
+        self.dLoc      = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
+        if isinstance( qInit, (list, np.ndarray) ):
+            self.q = np.array( qInit )
 
 
     def p_base_safe( self, effPose : np.ndarray ):
@@ -300,17 +329,128 @@ class LUMP:
     def p_nonneg_Z( self, effPose : np.ndarray ):
         """ Return True if the Z-position is non-negative """
         return (effPose[2,3] >= 0.0)
+    
+
+    def p_safe_pose( self, effPose : np.ndarray ):
+        """ Should the robot even consider this pose? """
+        return (self.p_base_safe( effPose ) and self.p_nonneg_Z( effPose ))
+    
+
+    def config_energy( self, q : list | np.ndarray ):
+        """ Compute a "joint position badness" """
+        mag = np.linalg.norm( np.subtract( q, self.q ) )
+        return mag + (1.0-UR5_manip_score( q ))*mag
 
 
-    def IK( self, effPose : np.ndarray ):
+    def IK_multi( self, effPose : np.ndarray ):
         """ Perform inverse kinematics (deterministic) """
-        return invKine( effPose )
+        solns = invKine( effPose )
+        qFltr = list()
+        for c in solns.T:
+            arr = c.tolist()[0]
+            if p_all_joints_above_point_normal_plane( arr, [0.0,0.0,0.0,], [0.0,0.0,1.0,], margin = 0.070 ):
+                qFltr.append( arr )
+        eMin = 1e9
+        qMin = None
+        for soln in qFltr:
+            nrg = self.config_energy( soln )
+            if nrg < eMin:
+                eMin = nrg
+                qMin = soln
+        return qMin
+    
+
+    def IK( self, effPose : np.ndarray, suppressCache = False ):
+        """ Perform inverse kinematics (conditional) """
+        soln = self.IK_multi( effPose )
+        if ((not suppressCache) and (soln is not None) and self.p_pose_safe( effPose )):
+            self.q    = np.array( soln )
+            self.pose = np.array( effPose )
+        return soln
+    
+
+    def FK( self, q : list | np.ndarray ):
+        """ Perform inverse kinematics (deterministic) """
+        th = np.matrix( [[q[0]], [q[1]], [q[2]], [q[3]], [q[4]], [q[5]]] )
+        c  = [0]
+        return HTrans( th, c )
+    
+
+    @staticmethod
+    def tcp_from_cam_pose( camPose : np.ndarray, robot : UR5_Interface  ):
+        """ Get a robot pose from the camera pose """
+        return camPose.dot( np.linalg.inv( np.array( robot.camXform ) ) )
 
 
-    def verify_IK( self ):
-        """ Is our IK any good? """
-        pose = self.robot.get_tcp_pose()
-        jnts = self.robot.get_joint_angles()
-        soln = self.IK( pose )
-        diff = np.linalg.norm( np.subtract( jnts, soln ) )
-        print( f"Difference between actual and IK sol'n: {diff}" )
+    def get_camera_Z_offset( self ):
+        """ Bump everything up by some Z value I guess """
+        return -self.ZTableCam 
+    
+
+    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 250 ):
+        """ Plan a camera pose for along a line to the centroid of the objects """
+        
+        
+        if len( objects ):
+            centroid = np.zeros( 3 )
+            for obj in objects:
+                centroid += extract_pose_as_homog( obj )[0:3,3].reshape( 3 )
+            centroid /= len( objects )
+        else:
+            return None
+        
+        sphrPts = sample_on_sphere( centroid, dBackup, N*2 )
+        testPts = deque()
+        for pnt in sphrPts:
+            if pnt[2] > 0.0:
+                testPts.append( pnt )
+        testPts = list( testPts )
+        ranking = deque()
+
+        for pnt in testPts:
+            rtnPose  = np.eye(4)
+            backupVc = np.subtract( pnt, centroid )
+            backupDr = vec_unit( backupVc ) 
+            xBasis   = np.array([0.0, -1.0, 0.0])
+            zBasis   = -backupDr
+            yBasis   = vec_unit( np.cross( zBasis, xBasis ) )
+            xBasis   = vec_unit( np.cross( yBasis, zBasis ) )
+            rtnPose[0:3,0] = xBasis
+            rtnPose[0:3,1] = yBasis
+            rtnPose[0:3,2] = zBasis
+            rtnPose[0:3,3] = pnt
+            rtnSoln = self.IK( rtnSoln, suppressCache = True )
+            if ((rtnSoln is not None) and self.p_safe_pose( rtnSoln )):
+                ranking.append((
+                    self.config_energy( rtnSoln ),
+                    np.array( rtnSoln ),
+                ))
+        
+        # FIXME, START HERE: RANK ALL THE CANDIDATE POSES AND RETURN THE BEST ONE
+
+        # return self.tcp_from_cam_pose( rtnPose )
+
+
+    # def verify_IK( self ):
+    #     """ Is our IK any good? """
+    #     jnts = np.array([ -1.0+2.0*random() for _ in range(6) ])
+    #     pose = self.FK( jnts )
+    #     print( f"Solve for effector pose:\n{pose}" )
+    #     soln = self.IK( pose )
+    #     if soln is not None:
+    #         sPos = self.FK( soln )
+    #         print( f"Sol'n : {soln}" )
+    #         print( f"Config: {jnts}" )
+    #         diff = euclidean_distance_between_symbols( pose, sPos )
+    #         print( f"Difference between actual and IK sol'n: {diff}" )
+    #     else:
+    #         print( "FAILED to solve!" )
+        
+
+
+########## MAIN ####################################################################################
+if __name__ == "__main__":
+    mp = LUMP()
+    # mp.verify_IK()
+
+    os.system( 'kill %d' % os.getpid() ) 
