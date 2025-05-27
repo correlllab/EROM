@@ -15,10 +15,13 @@ from numpy import linalg
 
 from magpie_control.poses import vec_unit
 from magpie_control.ur5 import UR5_Interface
-from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog
+from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog, extract_position
 from aspire.env_config import env_var
+from aspire.utils import diff_norm
 
-_RBT_BASE_BUFFER = 0.200
+_RBT_BASE_BUFFER  = 0.200
+_RBT_BASE_FACTOR  = 1.250
+_RBT_TABLE_MARGIN = 0.070
 
 ##### Globals #####
 
@@ -284,7 +287,7 @@ def UR5_manip_score( q : list | np.ndarray ):
     return np.linalg.det( UR5_Jacobian( q ) ) # 0.0 is BAD
     
 
-def p_all_joints_above_point_normal_plane( joints , point, normal, margin = 0.070 ):
+def p_all_joints_above_point_normal_plane( joints , point, normal, margin = _RBT_TABLE_MARGIN ):
     """ Check if all joints are on the positive side of a point-normal plane """
     normal = vec_unit( normal )
     th     = np.matrix( [[joints[0]], [joints[1]], [joints[2]], [joints[3]], [joints[4]], [joints[5]]] )
@@ -302,6 +305,10 @@ def p_all_joints_above_point_normal_plane( joints , point, normal, margin = 0.07
             return False    
     return True
 
+
+def angle_between_vectors_rad( vec1, vec2 ):
+    """ Get the angle between vectors in radians """
+    return np.arccos( np.dot( vec1, vec2 ) / ( np.linalg.norm( vec1 ) * np.linalg.norm( vec2 ) ) )
 
 
 ########## MOTION PLANNER ##########################################################################
@@ -326,9 +333,9 @@ class LUMP:
         return (euclidean_distance_between_symbols( np.eye(4), effPose ) >= _RBT_BASE_BUFFER)
 
 
-    def p_nonneg_Z( self, effPose : np.ndarray ):
+    def p_nonneg_Z( self, effPose : np.ndarray, margin = _RBT_TABLE_MARGIN ):
         """ Return True if the Z-position is non-negative """
-        return (effPose[2,3] >= 0.0)
+        return ((effPose[2,3] - margin) >= 0.0)
     
 
     def p_safe_pose( self, effPose : np.ndarray ):
@@ -386,14 +393,21 @@ class LUMP:
         """ Bump everything up by some Z value I guess """
         return -self.ZTableCam 
     
+    @staticmethod
+    def symbol_centroid( objects : list[GraspObj] ):
+        """ Get the position centroid of all the objects """
+        centroid = np.zeros( 3 )
+        for obj in objects:
+            centroid += extract_pose_as_homog( obj )[0:3,3].reshape( 3 )
+        centroid /= len( objects )
+        return centroid
+    
 
     def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 250 ):
         """ Plan a camera pose for along a line to the centroid of the objects """
+        # FIXME: ALLOW THE USER TO SPECIFY THEIR OWN ENERGY FUNCTION
         if len( objects ):
-            centroid = np.zeros( 3 )
-            for obj in objects:
-                centroid += extract_pose_as_homog( obj )[0:3,3].reshape( 3 )
-            centroid /= len( objects )
+            centroid = self.symbol_centroid( objects )
         else:
             return None
         
@@ -427,7 +441,42 @@ class LUMP:
         ranking = list( ranking )
         ranking.sort( key = lambda x: x[0], reverse = True )
         return ranking[0][1], self.FK( ranking[0][1] )
-        
+    
+
+    def make_path_safe( self, bgnPose, endPose ):
+        """ If the straight-line path would pass too close to the robot base, then propose an intermediate waypoint """
+        bgnPosn = extract_position( bgnPose )
+        endPosn = extract_position( endPose )
+        trvlDir = vec_unit( np.subtract( endPosn, bgnPosn ) )
+        baseVec = np.multiply( bgnPosn, -1.0 )
+        tClose  = np.dot( trvlDir, baseVec )
+        closPsn = bgnPosn + np.multiply( trvlDir, tClose )
+        dClose  = np.linalg.norm( closPsn )
+        rtnPath = [bgnPose,]
+        if dClose < _RBT_BASE_BUFFER:
+            midPosn = (bgnPosn + endPosn)/2.0
+            midDir  = vec_unit( midPosn )
+            safPosn = midDir * (_RBT_BASE_BUFFER * _RBT_BASE_FACTOR)
+            safPose = np.eye(4)
+            safPose[0:3,0:3] = endPose[0:3,0:3]
+            safPose[0:3,3]   = safPosn
+            if not self.p_nonneg_Z( safPose ):
+                safPose[2,3] = _RBT_TABLE_MARGIN * _RBT_BASE_FACTOR
+            rtnPath.append( safPose )
+        rtnPath.append( endPose )
+        return rtnPath
+    
+
+    def plan_3d_shots( self, objects : list[GraspObj], dBackup : float, N : int, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
+        """ A Series of shots with some angular distance between them """
+        centroid = None
+        if len( objects ):
+            centroid = self.symbol_centroid( objects )
+        else:
+            return None
+        shots = [self.plan_3d_shot_centroid( objects, dBackup ),]
+        while len( shots ) < N:
+            # FIXME: START HERE
 
 
     # def verify_IK( self ):
