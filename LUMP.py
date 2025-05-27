@@ -22,6 +22,12 @@ from aspire.utils import diff_norm
 _RBT_BASE_BUFFER  = 0.200
 _RBT_BASE_FACTOR  = 1.250
 _RBT_TABLE_MARGIN = 0.070
+_REVERSE_QUERIES  = {
+    "bluBlock": {'query': "a photo of a small block", 'abbrv': "blu", },
+    "ylwBlock": {'query': "a photo of a small block", 'abbrv': "ylw", },
+    "grnBlock": {'query': "a photo of a small block", 'abbrv': "grn", },
+    "redBlock": {'query': "a photo of a small block", 'abbrv': "red", },
+}
 
 ##### Globals #####
 
@@ -311,11 +317,25 @@ def angle_between_vectors_rad( vec1, vec2 ):
     return np.arccos( np.dot( vec1, vec2 ) / ( np.linalg.norm( vec1 ) * np.linalg.norm( vec2 ) ) )
 
 
+def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
+    """ Project a ray through the center of the mask """
+    rows   = image.shape[0]
+    rwHf   = rows / 2
+    cols   = image.shape[1]
+    clHf   = cols / 2
+    cntr2d = np.zeros( 2 )
+    Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) * zLen
+    Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) * zLen 
+    cntr2d = np.array([ ((bbox[0]+bbox[2])/2.0-clHf)/clHf, ((bbox[1]+bbox[3])/2.0-rwHf)/rwHf, ])
+    
+    return np.array([ cntr2d[0]*Xlen, cntr2d[1]*Ylen, zLen, ])
+
+
 ########## MOTION PLANNER ##########################################################################
 
 class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
-    def __init__( self, qInit = None ):
+    def __init__( self, qInit = None, robot : UR5_Interface = None ):
         """ Set params """
         ## Intenal Scoring ##
         self.q    : np.ndarray = np.array( [0.0 for _ in range(6)] )
@@ -324,6 +344,7 @@ class LUMP:
         self.ZTableCam = -0.081666 - 0.017
         self.dShot     = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
         self.dLoc      = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
+        self.robot : UR5_Interface = robot
         if isinstance( qInit, (list, np.ndarray) ):
             self.q = np.array( qInit )
 
@@ -343,9 +364,10 @@ class LUMP:
         return (self.p_base_safe( effPose ) and self.p_nonneg_Z( effPose ))
     
 
-    def config_energy( self, q : list | np.ndarray ):
+    @staticmethod
+    def config_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
         """ Compute a "joint position badness" """
-        mag = np.linalg.norm( np.subtract( q, self.q ) )
+        mag = np.linalg.norm( np.subtract( q, qRef ) )
         return mag + (1.0-UR5_manip_score( q ))*mag
 
 
@@ -376,7 +398,8 @@ class LUMP:
         return soln
     
 
-    def FK( self, q : list | np.ndarray ):
+    @staticmethod
+    def FK( q : list | np.ndarray ):
         """ Perform inverse kinematics (deterministic) """
         th = np.matrix( [[q[0]], [q[1]], [q[2]], [q[3]], [q[4]], [q[5]]] )
         c  = [0]
@@ -393,6 +416,7 @@ class LUMP:
         """ Bump everything up by some Z value I guess """
         return -self.ZTableCam 
     
+    
     @staticmethod
     def symbol_centroid( objects : list[GraspObj] ):
         """ Get the position centroid of all the objects """
@@ -403,9 +427,10 @@ class LUMP:
         return centroid
     
 
-    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 250 ):
+    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 250, energyFunc : function = None ):
         """ Plan a camera pose for along a line to the centroid of the objects """
-        # FIXME: ALLOW THE USER TO SPECIFY THEIR OWN ENERGY FUNCTION
+        if energyFunc is None:
+            energyFunc = self.config_energy
         if len( objects ):
             centroid = self.symbol_centroid( objects )
         else:
@@ -434,7 +459,7 @@ class LUMP:
             rtnSoln = self.IK( rtnSoln, suppressCache = True )
             if ((rtnSoln is not None) and self.p_safe_pose( rtnSoln )):
                 ranking.append((
-                    self.config_energy( rtnSoln ),
+                    energyFunc( self.q, rtnSoln ),
                     np.array( rtnSoln ),
                 ))
 
@@ -475,8 +500,76 @@ class LUMP:
         else:
             return None
         shots = [self.plan_3d_shot_centroid( objects, dBackup ),]
+
+        def sep_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
+            """ Compute badness based on angle between this and existing shots """
+            nonlocal shots, centroid, desiredAngularSeparation_rad
+            pose = LUMP.FK( q )
+            vc_i = np.subtract( extract_position( pose ), centroid )
+            vecs = [np.subtract( extract_position(shot), centroid ) for shot in shots]
+            angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs]
+            nrg  = LUMP.config_energy( qRef, q )
+            for theta_j in angl:
+                nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )
+            return nrg
+
         while len( shots ) < N:
-            # FIXME: START HERE
+            shots.append( self.plan_3d_shot_centroid( objects, dBackup, energyFunc = sep_energy ) )
+
+        return shots
+    
+
+    def locate( self, obj : GraspObj ):
+        """ Home in on a partcular block """
+        if self.robot is None:
+            return None
+        initShot = self.plan_3d_shot_centroid( list(), [0.0, 0.0, 1.0,], self.dLoc, extract_pose_as_homog( obj ) )
+        self.robot.moveL( initShot, asynch = False )
+        query   = _REVERSE_QUERIES[ obj.label ]['query']
+        abbrevq = _REVERSE_QUERIES[ obj.label ]['abbrv']
+        
+        res = self.perc.bound( query, abbrevq )
+        while not len( res['hits'] ):
+            res = self.perc.bound( query, abbrevq )
+
+        # 2025-04-22: One-Shot Version
+        dMin = 1e9
+        for hit in res['hits']:
+            offset_i  = image_offset( res['image'], hit['bboxi'], self.dLoc )
+            dist_i    = np.linalg.norm( offset_i[:2] )
+            if dist_i < dMin:
+                offset = offset_i
+                dMin   = dist_i
+        xyDist = np.linalg.norm( offset[:2] )
+        if xyDist > 1.5*env_var("_BLOCK_SCALE"):
+            return None
+
+        camPose = self.robot.get_cam_pose()
+        tcpOfst = np.dot( camPose[0:3,0:3], offset ).reshape(3)
+        print( tcpOfst )
+        obj.pose.pose[0:2,3] += tcpOfst[0:2]
+
+
+    def locate_all( self, objLst : list[GraspObj] ):
+        """ Locate one object at a time """
+        # FIXME: DID THIS EVER WORK? WERE THE POSES CHANGED IN-PLACE?
+        if self.robot is None:
+            return None
+        locLst = objLst[:]
+        for i, obj_i in enumerate( objLst ):
+            for j, obj_j in enumerate( objLst ):
+                if i != j:
+                    posn_i = extract_pose_as_homog( obj_i )[0:3,3].reshape(3)
+                    posn_j = extract_pose_as_homog( obj_j )[0:3,3].reshape(3)
+                    vec_ij = vec_unit( posn_j - posn_i )
+                    if vec_ij[2] > 0.0:
+                        if np.arctan2( np.linalg.norm( vec_ij[0:2] ), vec_ij[2] ) < np.pi/3.0:
+                            try:
+                                locLst.remove( obj_i )
+                            except ValueError:
+                                pass
+        for obj in locLst:
+            self.locate( obj )
 
 
     # def verify_IK( self ):
