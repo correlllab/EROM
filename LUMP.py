@@ -389,8 +389,6 @@ class LUMP:
 
     def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 250 ):
         """ Plan a camera pose for along a line to the centroid of the objects """
-        
-        
         if len( objects ):
             centroid = np.zeros( 3 )
             for obj in objects:
@@ -425,10 +423,11 @@ class LUMP:
                     self.config_energy( rtnSoln ),
                     np.array( rtnSoln ),
                 ))
-        
-        # FIXME, START HERE: RANK ALL THE CANDIDATE POSES AND RETURN THE BEST ONE
 
-        # return self.tcp_from_cam_pose( rtnPose )
+        ranking = list( ranking )
+        ranking.sort( key = lambda x: x[0], reverse = True )
+        return ranking[0][1], self.FK( ranking[0][1] )
+        
 
 
     # def verify_IK( self ):
