@@ -9,11 +9,13 @@ from math import pi as pi
 
 from random import random
 from collections import deque
+from collections.abc import Callable
+from pprint import pprint
 
 import numpy as np
 from numpy import linalg
 
-from magpie_control.poses import vec_unit
+from magpie_control.poses import vec_unit, is_pose_mtrx
 from magpie_control.ur5 import UR5_Interface
 from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog, extract_position
 from aspire.env_config import env_var
@@ -130,13 +132,25 @@ def invKine( desired_pos ):# T60
         #KEEP ROWS AND COLUMNS STRAIGHT
         #each column is a result to check
         #8 RESULTS, 6 JOINTS  """
+    
+    # if len( desired_pos ) == 4:
+    #     desired_pos = pose_mtrx_to_vec( desired_pos )
+
+    print( f"Target:\n{desired_pos}" )
+
     th   = mat( np.zeros((6, 8)) )
     P_05 = ( desired_pos * mat([0,0, -d6, 1]).T-mat([0,0,0,1 ]).T )
 
     # **** theta1 ****
 
     psi = atan2(P_05[2-1,0], P_05[1-1,0])
-    phi = acos(d4 /sqrt(P_05[2-1,0]*P_05[2-1,0] + P_05[1-1,0]*P_05[1-1,0]))
+    # phi = acos(d4 / sqrt(P_05[2-1,0]*P_05[2-1,0] + P_05[1-1,0]*P_05[1-1,0]) )
+
+    try:
+        phi = acos(d4 / sqrt(P_05[2-1,0]*P_05[2-1,0] + P_05[1-1,0]*P_05[1-1,0]) )
+    except ValueError:
+        return None
+
     #The two solutions for theta1 correspond to the shoulder
     #being either left or right
     th[0, 0:4] = pi/2 + psi + phi
@@ -374,15 +388,19 @@ class LUMP:
     def IK_search( self, effPose : np.ndarray ):
         """ Perform inverse kinematics (deterministic) """
         solns = invKine( effPose )
+        if solns is None:
+            return None
         qFltr = list()
         for c in solns.T:
             arr = c.tolist()[0]
             if p_all_joints_above_point_normal_plane( arr, [0.0,0.0,0.0,], [0.0,0.0,1.0,], margin = 0.070 ):
                 qFltr.append( arr )
+            else:
+                print( f"UNSAFE: {arr}" )
         eMin = 1e9
         qMin = None
         for soln in qFltr:
-            nrg = self.config_energy( soln )
+            nrg = self.config_energy( self.q, soln )
             if nrg < eMin:
                 eMin = nrg
                 qMin = soln
@@ -416,7 +434,7 @@ class LUMP:
         """ Bump everything up by some Z value I guess """
         return -self.ZTableCam 
     
-    
+
     @staticmethod
     def symbol_centroid( objects : list[GraspObj] ):
         """ Get the position centroid of all the objects """
@@ -427,7 +445,7 @@ class LUMP:
         return centroid
     
 
-    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 250, energyFunc : function = None ):
+    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 8, energyFunc : Callable = None ):
         """ Plan a camera pose for along a line to the centroid of the objects """
         if energyFunc is None:
             energyFunc = self.config_energy
@@ -456,16 +474,28 @@ class LUMP:
             rtnPose[0:3,1] = yBasis
             rtnPose[0:3,2] = zBasis
             rtnPose[0:3,3] = pnt
-            rtnSoln = self.IK( rtnSoln, suppressCache = True )
-            if ((rtnSoln is not None) and self.p_safe_pose( rtnSoln )):
+            rtnSoln = self.IK( rtnPose, suppressCache = True )
+            # if is_pose_mtrx( rtnPose ):
+            #     rtnSoln = self.IK( rtnPose, suppressCache = True )
+            # else:
+            #     rtnSoln = None
+            # rtnSoln = pose_vec_to_mtrx( rtnSoln )
+            print( rtnSoln )
+            if ((rtnSoln is not None) and self.p_safe_pose( rtnPose )):
                 ranking.append((
                     energyFunc( self.q, rtnSoln ),
                     np.array( rtnSoln ),
                 ))
+            else:
+                print( f"Cannot Rank: {rtnSoln}" )
 
         ranking = list( ranking )
         ranking.sort( key = lambda x: x[0], reverse = True )
-        return ranking[0][1], self.FK( ranking[0][1] )
+
+        if len( ranking ):
+            return ranking[0][1], self.FK( ranking[0][1] )
+        else:
+            return None
     
 
     def make_path_safe( self, bgnPose, endPose ):
@@ -499,14 +529,15 @@ class LUMP:
             centroid = self.symbol_centroid( objects )
         else:
             return None
-        shots = [self.plan_3d_shot_centroid( objects, dBackup ),]
+        shots = []
 
         def sep_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
             """ Compute badness based on angle between this and existing shots """
             nonlocal shots, centroid, desiredAngularSeparation_rad
             pose = LUMP.FK( q )
             vc_i = np.subtract( extract_position( pose ), centroid )
-            vecs = [np.subtract( extract_position(shot), centroid ) for shot in shots]
+            print( shots )
+            vecs = [np.subtract( extract_position(shot[1]), centroid ) for shot in shots if (shot is not None)]
             angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs]
             nrg  = LUMP.config_energy( qRef, q )
             for theta_j in angl:
@@ -514,7 +545,9 @@ class LUMP:
             return nrg
 
         while len( shots ) < N:
-            shots.append( self.plan_3d_shot_centroid( objects, dBackup, energyFunc = sep_energy ) )
+            nuShot = self.plan_3d_shot_centroid( objects, dBackup, energyFunc = sep_energy )
+            if nuShot is not None:
+                shots.append( nuShot )
 
         return shots
     
