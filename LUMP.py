@@ -41,17 +41,19 @@ mat=np.matrix
 
 
 global d1, a2, a3, d4, d5, d6
-d1 =  0.1625
+d1 =  0.089159
 a2 = -0.425
-a3 = -0.3922
-d4 =  0.1333
-d5 =  0.0997
-d6 =  0.0996
+a3 = -0.39225
+d4 =  0.10915
+d5 =  0.09465
+d6 =  0.0823
 
 global d, a, alph
 
-d    = mat([0.1625, 0, 0, 0.1333, 0.0997, 0.0996])
-a    = mat([0 ,-0.425 ,-0.3922 ,0 ,0 ,0])
+UR5distMod = 0.10915 # Offset shows Link 2 and it's COM where it belongs in space
+
+d    = mat([0.089159, UR5distMod, -UR5distMod, 0.10915, 0.09465, 0.0823])
+a    = mat([0 ,-0.425 ,-0.39225 ,0 ,0 ,0])
 alph = mat([math.pi/2, 0, 0, math.pi/2, -math.pi/2, 0 ])
 
 plane = [0,0,0,-0.5] #probably wrong but it still works
@@ -232,7 +234,7 @@ def sample_on_sphere( center = [0.0, 0.0, 0.0,], radius = 1.0, N = 1 ):
         if mag > 0.0:
            pnt /= mag
            pnt *= radius
-           return pnt
+           return pnt + center
         else:
             return np.array([1.0, 0.0, 0.0,])
         
@@ -549,7 +551,7 @@ class LUMP:
             if nuShot is not None:
                 shots.append( nuShot )
 
-        return shots
+        return [np.array( shot[1] ) for shot in shots]
     
 
     def locate( self, obj : GraspObj ):
@@ -621,6 +623,81 @@ class LUMP:
     #         print( "FAILED to solve!" )
         
 
+
+########## RENDER ROBOT ############################################################################
+from vispy import scene
+from vispy.visuals import transforms
+
+from homog_utils import posn_from_xform, bases_from_xform, R_krot
+from dh_mp import FK_DH_chain, dh_link_homog
+
+def plot_DH_robot( dhParamsMatx, qConfig, axesScale = 0.050 ):
+    """ Plot the kinematic chain represented by `dhParamsMatx` in `qConfig`, using Open3d """
+    # 0. Set up drawing accounting
+    geo     = []
+    index   = 0
+    lastPnt = posn_from_xform( np.eye(4) )
+    addSeg  = [ lastPnt.copy().flatten(), ]
+    addIdx  = []
+    # 1. Generate link frames
+    chain = FK_DH_chain( dhParamsMatx, qConfig ) #, baseLink = baseLink, baseQ = baseQ )
+    # 2. Fetch base link bases
+    [alpha, a, d] = [0.0 for _ in range(3)]
+    theta         = 0.0
+    [xB, yB, zB]  = bases_from_xform( dh_link_homog( theta, alpha, a, d ) )    
+    
+    # 3. For each link: Create geometries for frame, a-segment, and d-segment
+    for i, frm in enumerate( chain ):
+        
+        # 4. Create frame geo
+        f_i = scene.visuals.XYZAxis()
+        # VISPY IS COLUMN-MAJOR
+        rot = np.eye(4)
+        rot[0:3,0:3] = frm[0:3,0:3]
+        vizXfrm = transforms.linear.MatrixTransform( matrix = rot.transpose() )
+        vizXfrm.scale( [axesScale,axesScale,axesScale,] )
+        vizXfrm.translate( frm[0:3,3] )
+        f_i.transform = vizXfrm
+        geo.append( f_i )
+        
+        if i > 0: 
+            # 5. Fetch link measurements
+            [alpha, a, d] = dhParamsMatx[i-1]
+            theta         = qConfig[i-1]
+            
+            # 6. Paint 'd', if present
+            if abs(d) > 0.0:
+                nextPnt = np.add( lastPnt, np.multiply(zB, d) )
+                addSeg.append( nextPnt.copy().flatten() )
+                addIdx.append( [index, index+1] )
+                index += 1
+                lastPnt = nextPnt.copy()
+        
+            # 7. Paint 'a', if present
+            if abs(a) > 0.0:
+                nextPnt = np.add(
+                    lastPnt,
+                    np.multiply(
+                        R_krot( xB, alpha ).dot( R_krot( zB, theta ) ).dot( xB ), 
+                        a
+                    )
+                )
+                addSeg.append( nextPnt.copy().flatten() )
+                addIdx.append( [index, index+1] )
+                index += 1
+                lastPnt = nextPnt.copy()
+            
+            # 8. Fetch frame bases
+            [xB, yB, zB]  = bases_from_xform( frm )
+    
+    # 9. Create link geo
+    geo.append( scene.visuals.Line(
+        pos     = np.array(addSeg),
+        connect = np.array(addIdx),
+        color   = [0.0,0.0,0.0,1.0],
+    ) )
+    
+    return geo
 
 ########## MAIN ####################################################################################
 if __name__ == "__main__":

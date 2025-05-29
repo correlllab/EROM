@@ -34,14 +34,18 @@ def KNOWN_BLOCKS():
                       [-0.017,  0.046, -0.999,  0.246],
                       [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
     names = ['redBlock','grnBlock','bluBlock',]
+    rtnBlocks = list()
     for i, bloc_i in enumerate([bloc1,bloc2,bloc3,]):
         pose_i = np.eye(4)
         pose_i[0:3,3] = bloc_i[0:3,3]
         pose_i[2,3]   = env_var("_BLOCK_SCALE") / 2.0
-        env_sto( f"_KNOWN_BLOCK_{i}",  GraspObj(
+        obj_i         = GraspObj(
             label = names[i],
             pose  = pose_i
-        ) ) 
+        )
+        rtnBlocks.append( obj_i )
+        env_sto( f"_KNOWN_BLOCK_{i}", obj_i ) 
+    return rtnBlocks
 
 def dummy_object():
     """ Use as target for first-pass sensory planning """

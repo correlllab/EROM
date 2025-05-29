@@ -7,13 +7,14 @@
 - [x] Move all sensory planning here <-- "Memory.py"
 - [x] Test
 - [ ] Visualize + Test
-	- [ ] Viz stick links
-	- [ ] Viz perceptions shots w/ Starting blocks
+	- [x] Viz perceptions shots w/ Starting blocks
+	- [x] Viz stick links
 	- [ ] Viz corrected path
 	- [ ] Account for the effector
-	- [ ] Viz 3D links
-	- [ ] Check for self-collisions
+- [ ] Search for objects
+
 
 ## Medium Term Needs
-- [ ] Check an IK solution for self-collisions
-- [ ] Search for objects
+- [ ] Adapt to easier IK
+- [ ] Viz 3D links
+- [ ] Check for self-collisions
