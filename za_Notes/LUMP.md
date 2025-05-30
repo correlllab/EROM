@@ -6,7 +6,6 @@
 - [x] Check if a task space path comes too close to the base
 - [x] Add waypoints to a task space path that comes too close to the base
 - [ ] Move all sensory planning here <-- "Memory.py"
-	- [ ] What would happen if all the supposed blocks cannot be in a single shot?
 - [ ] Search for objects
 - [ ] Visualize
 
