@@ -16,17 +16,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 ### Local ###
-from magpie_control.poses import vec_unit, translation_diff
 from magpie_control.ur5 import UR5_Interface
-
 from aspire.env_config import env_var
 from aspire.utils import match_name, normalize_dist
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols )
-from aspire.actions.pdls_behaviors import GroundedAction, Plan
 
 from utils import ( LogPickler, zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, )
-from OWLv2_Segment import Perception_OWLv2
 from Bayes import BayesMemory
+from LUMP import LUMP
 
 
 ##### Constants #####
@@ -298,117 +295,6 @@ def get_uniform_prior_over_labels( labelsLst : list = None ):
 
 
 
-########## SENSORY PLANNING ########################################################################
-
-
-class SensoryPlanner:
-    """ Do sensing in a way that gets the task done """
-
-    def __init__( self, robot : UR5_Interface, perc : Perception_OWLv2 ):
-        """ HACK: THIS IS NOT MEASURED """
-        self.robot     = robot
-        self.perc      = perc
-        self.ZTableCam = -0.081666 - 0.017
-        self.dShot     = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
-        self.dLoc      = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
-
-
-    def tcp_from_cam_pose( self, camPose : np.ndarray ):
-        """ Get a robot pose from the camera pose """
-        return camPose.dot( np.linalg.inv( np.array( self.robot.camXform ) ) )
-
-
-    def get_camera_Z_offset( self ):
-        """ Bump everything up by some Z value I guess """
-        return -self.ZTableCam 
-
-
-    def plan_3d_shot_centroid( self, objects : list[GraspObj], backupDir : np.ndarray, dBackup : float, defaultPose : np.ndarray ):
-        """ Plan a camera pose for along a line to the centroid of the objects """
-        rtnPose = defaultPose.copy()
-
-        if len( objects ):
-            centroid = np.zeros( 3 )
-            for obj in objects:
-                centroid += extract_pose_as_homog( obj )[0:3,3].reshape( 3 )
-            centroid /= len( objects )
-        else:
-            centroid = defaultPose[0:3,3].reshape(3)
-
-        backupDr = vec_unit( backupDir ) # vec_unit( [1.0,0.25,1.0] )
-        backupVc = backupDr * dBackup
-        backupPt = centroid + backupVc
-        xBasis = np.array([0.0, -1.0, 0.0])
-        zBasis = -backupDr
-        yBasis = vec_unit( np.cross( zBasis, xBasis ) )
-        xBasis = vec_unit( np.cross( yBasis, zBasis ) )
-        rtnPose[0:3,0] = xBasis
-        rtnPose[0:3,1] = yBasis
-        rtnPose[0:3,2] = zBasis
-        rtnPose[0:3,3] = backupPt
-        # return self.tcp_from_cam_pose( repair_pose( rtnPose ) )
-        return self.tcp_from_cam_pose( rtnPose )
-    
-
-    def plan_3d_shots( self, objects : list[GraspObj], defaultPose : np.ndarray ):
-        """ A Series of shots  """
-        return [
-            self.plan_3d_shot_centroid( objects, [  0.75, -0.25, 1.0, ], self.dShot, defaultPose ),
-            self.plan_3d_shot_centroid( objects, [  1.00,  0.25, 1.0, ], self.dShot, defaultPose ),
-            # self.plan_3d_shot_centroid( objects, [ -1.25,  0.25, 1.0, ], self.dShot, defaultPose ), 
-            # self.plan_3d_shot_centroid( objects, [ -1.25, -0.25, 1.0, ], self.dShot, defaultPose ), 
-        ]
-    
-
-    def locate( self, obj : GraspObj ):
-        """ Home in on a partcular block """
-        initShot = self.plan_3d_shot_centroid( list(), [0.0, 0.0, 1.0,], self.dLoc, extract_pose_as_homog( obj ) )
-        self.robot.moveL( initShot, asynch = False )
-        query   = _REVERSE_QUERIES[ obj.label ]['query']
-        abbrevq = _REVERSE_QUERIES[ obj.label ]['abbrv']
-        
-        res = self.perc.bound( query, abbrevq )
-        while not len( res['hits'] ):
-            res = self.perc.bound( query, abbrevq )
-
-        # 2025-04-22: One-Shot Version
-        dMin = 1e9
-        for hit in res['hits']:
-            offset_i  = image_offset( res['image'], hit['bboxi'], self.dLoc )
-            dist_i    = np.linalg.norm( offset_i[:2] )
-            if dist_i < dMin:
-                offset = offset_i
-                dMin   = dist_i
-        xyDist = np.linalg.norm( offset[:2] )
-        if xyDist > 1.5*env_var("_BLOCK_SCALE"):
-            return None
-
-        camPose = self.robot.get_cam_pose()
-        tcpOfst = np.dot( camPose[0:3,0:3], offset ).reshape(3)
-        print( tcpOfst )
-        obj.pose.pose[0:2,3] += tcpOfst[0:2]
-
-
-    def locate_all( self, objLst : list[GraspObj] ):
-        """ Locate one object at a time """
-        locLst = objLst[:]
-        for i, obj_i in enumerate( objLst ):
-            for j, obj_j in enumerate( objLst ):
-                if i != j:
-                    posn_i = extract_pose_as_homog( obj_i )[0:3,3].reshape(3)
-                    posn_j = extract_pose_as_homog( obj_j )[0:3,3].reshape(3)
-                    vec_ij = vec_unit( posn_j - posn_i )
-                    if vec_ij[2] > 0.0:
-                        if np.arctan2( np.linalg.norm( vec_ij[0:2] ), vec_ij[2] ) < np.pi/3.0:
-                            try:
-                                locLst.remove( obj_i )
-                            except ValueError:
-                                pass
-        for obj in locLst:
-            self.locate( obj )
-
-
-
 ########## POSE CHEATER ############################################################################
 
 class PoseCheater:
@@ -664,14 +550,14 @@ class Memory:
 
     ##### Begin / End ############################
 
-    def __init__( self, robot, perc, suppressRecord = False ):
+    def __init__( self, robot : UR5_Interface, suppressRecord : bool = False ):
         """ Set up for logging and tracking """
         self.record  = not bool( suppressRecord )
         if self.record:
             self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
         else:
             self.history = None
-        self.camPlan = SensoryPlanner( robot, perc )
+        self.mp = LUMP( robot.get_joint_angles().tolist(), robot )
         self.reset_memory()
 
 
@@ -689,15 +575,14 @@ class Memory:
 
     ##### Perception #############################
 
-    def plan_3d_shots( self, defaultPose : np.ndarray ):
+    def plan_3d_shots( self, objects: list[GraspObj], radius : float = LUMP.dShot, N : int = 3 ):
         """ Ask the sensory planner to get us a shot """
-        # return self.camPlan.plan_3d_shots( self.scan, defaultPose )
-        return self.camPlan.plan_3d_shots( list(), defaultPose )
+        return self.mp.plan_3d_shots( objects, radius, N )
     
 
     def locate_all( self, objLst : list[GraspObj] ):
         """ Locate one object at a time """
-        self.camPlan.locate_all( objLst )
+        self.mp.locate_all( objLst )
 
 
     def process_observations( self, obs, xform = None, Append = False ):

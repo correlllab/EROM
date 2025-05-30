@@ -579,7 +579,8 @@ class TaskPlanner:
             # for bgnPose in beginPlanPose:
 
             # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
-            bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
+            # bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
+            bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1] )
 
             if not _RESPONSIVE_MODE:
                 self.memory.reset_memory()

@@ -354,15 +354,17 @@ def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
 
 class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
+
+    ## Problem-Specific Static Vars ##
+    ZTableCam = -0.081666 - 0.017
+    dShot     = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
+    dLoc      = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
+
     def __init__( self, qInit = None, robot : UR5_Interface = None ):
         """ Set params """
         ## Intenal Scoring ##
-        self.q    : np.ndarray = np.array( [0.0 for _ in range(6)] )
-        self.pose : np.ndarray = self.FK( self.q )
-        ## Problem-Specific ##
-        self.ZTableCam = -0.081666 - 0.017
-        self.dShot     = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
-        self.dLoc      = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
+        self.q     : np.ndarray = np.array( [0.0 for _ in range(6)] )
+        self.pose  : np.ndarray = self.FK( self.q )
         self.robot : UR5_Interface = robot
         if isinstance( qInit, (list, np.ndarray) ):
             self.q = np.array( qInit )
@@ -450,7 +452,7 @@ class LUMP:
         return centroid
     
 
-    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 8, energyFunc : Callable = None ):
+    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float = dShot, N : int = 8, energyFunc : Callable = None ):
         """ Plan a camera pose for along a line to the centroid of the objects """
         if energyFunc is None:
             energyFunc = self.config_energy
