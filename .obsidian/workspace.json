@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/LUMP.md",
+                "file": "za_Notes/DEV_PLAN.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "LUMP"
+              "title": "DEV_PLAN"
             }
           }
         ]
@@ -168,6 +168,8 @@
   },
   "active": "f9dad22835caca8b",
   "lastOpenFiles": [
+    "README.md",
+    "za_Notes/LUMP.md",
     "__pycache__/LUMP.cpython-310.pyc",
     "__pycache__/homog_utils.cpython-310.pyc",
     "__pycache__/dh_mp.cpython-310.pyc",
@@ -178,9 +180,7 @@
     "data/Pose-Help_Baseline_2025-05-20/EROM-Memories_05-20-2025_16-09-17.pkl",
     "data/Pose-Help_Baseline_2025-05-20/EROM-Memories_05-20-2025_16-06-17.pkl",
     "data/Pose-Help_Baseline_2025-05-20/EROM-Memories_05-20-2025_16-02-50.pkl",
-    "data/Pose-Help_Baseline_2025-05-20/EROM-Memories_05-20-2025_15-59-14.pkl",
     "za_Notes/Log/2025-05-20.md",
-    "za_Notes/LUMP.md",
     "za_Notes/DEV_PLAN.md",
     "za_Notes/Log/2025-05-13.md",
     "za_Notes/Log/2025-05-12.md",

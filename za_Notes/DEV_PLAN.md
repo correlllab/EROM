@@ -10,14 +10,14 @@
 - [x] Need to restore "Confirmation Squeeze" <--- $W$  
 	- --> 2025-05-14: For some reason setting the gripper width does not work, Just open the gripper instead
 - [x] Push an empty cheat frame when an action fails
-- [ ] Better shot planning
-	- [ ] Don't allow poses too close to the robot
+- [x] Better shot planning
+	- [x] Don't allow poses too close to the robot
 
 # Memory w/ Increasing Confusion
-- [ ] Cheater
+- [x] Cheater
 	- [x] Allow class confusion
 	- [x] Retain Pose Cheat
-	- [ ] Needs testing!
+	- [x] Needs testing!
 - [x] If an action fails, then erase it from Beliefs
 - [ ] Needs testing!
 

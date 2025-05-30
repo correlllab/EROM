@@ -11,11 +11,12 @@
 	- [x] Viz stick links
 	- [x] Viz corrected path
 	- [x] Account for the effector 
-		- --> Pretty sure the planner already takes care of this
-- [ ] Integrate into planner
+		- --> 2025-05-30: Pretty sure the planner already takes care of this
+- [x] Integrate into planner
 
 
 ## Medium Term Needs
-- [ ] Adapt to easier IK
+- [x] Adapt to easier IK
+	- --> 2025-05-30: Don't appear to need this?
 - [ ] Viz 3D links
 - [ ] Check for self-collisions
