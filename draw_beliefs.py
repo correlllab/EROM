@@ -38,7 +38,7 @@ def set_render_env():
 
 ########## DISPLAY WINDOW ##########################################################################
 
-def vispy_geo_list_window( geoLst, robotPose = None ):
+def vispy_geo_list_window( geoLst : list, robotPose = None, xtra = None ):
     canvas = scene.SceneCanvas( keys='interactive', size=(1000, 900), show=True )
     # Enable backface culling
     gloo.set_state( cull_face = True )
@@ -74,12 +74,14 @@ def vispy_geo_list_window( geoLst, robotPose = None ):
         rbtAxs.transform = vizXfrm
         geoLst.append( rbtAxs )
 
-    if 1:
-        if isinstance( robotPose, np.ndarray ):
-            add_pose( robotPose )
-        elif isinstance( robotPose, list ):
-            for pose in robotPose:
-                add_pose( pose )
+    if isinstance( robotPose, np.ndarray ):
+        add_pose( robotPose )
+    elif isinstance( robotPose, list ):
+        for pose in robotPose:
+            add_pose( pose )
+
+    if isinstance( xtra, list ):
+        geoLst.extend( xtra )
 
     for geo in geoLst:
         view.add( geo )
@@ -490,9 +492,10 @@ def scan_list_geo( objs : list[GraspObj], noTable = True ):
     return rtnGeo
 
 
+
 ########## RENDER MEMORY ###########################################################################
 
-def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = None, robotPose = None ):
+def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = None, robotPose = None, xtra = None ):
     """ Render the memory """
     if objs is not None:
         objLst       = reading_list_geo( objs )
@@ -504,7 +507,7 @@ def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = Non
         objLst.extend( symbol_list_geo( syms, noTable = (not missingTable) ) )
     if removed is not None:
         objLst.extend( neg_list_geo( removed ) )
-    vispy_geo_list_window( objLst, robotPose )
+    vispy_geo_list_window( objLst, robotPose, xtra )
 
 
 def render_scan_list( objs : list[GraspObj], robotPose = None ):

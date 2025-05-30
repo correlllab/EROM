@@ -202,15 +202,7 @@ class TaskPlanner:
         print( f"\nRobot returned to \n{goPose}\n" )
 
 
-    def dummy_object( self ):
-        """ Use as target for first-pass sensory planning """
-        return GraspObj(
-            labels = {'grnBlock':1.0,}, 
-            pose   = BASE_TARGET(), 
-            ts     = now(), 
-            count  = 1, 
-            score  = 0.0,
-        )
+    
 
 
     ##### Task Planning Phases ############################################

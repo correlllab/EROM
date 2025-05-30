@@ -9,11 +9,13 @@ from math import pi as pi
 
 from random import random
 from collections import deque
+from collections.abc import Callable
+from pprint import pprint
 
 import numpy as np
 from numpy import linalg
 
-from magpie_control.poses import vec_unit
+from magpie_control.poses import vec_unit, is_pose_mtrx
 from magpie_control.ur5 import UR5_Interface
 from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog, extract_position
 from aspire.env_config import env_var
@@ -22,6 +24,12 @@ from aspire.utils import diff_norm
 _RBT_BASE_BUFFER  = 0.200
 _RBT_BASE_FACTOR  = 1.250
 _RBT_TABLE_MARGIN = 0.070
+_REVERSE_QUERIES  = {
+    "bluBlock": {'query': "a photo of a small block", 'abbrv': "blu", },
+    "ylwBlock": {'query': "a photo of a small block", 'abbrv': "ylw", },
+    "grnBlock": {'query': "a photo of a small block", 'abbrv': "grn", },
+    "redBlock": {'query': "a photo of a small block", 'abbrv': "red", },
+}
 
 ##### Globals #####
 
@@ -33,17 +41,19 @@ mat=np.matrix
 
 
 global d1, a2, a3, d4, d5, d6
-d1 =  0.1625
+d1 =  0.089159
 a2 = -0.425
-a3 = -0.3922
-d4 =  0.1333
-d5 =  0.0997
-d6 =  0.0996
+a3 = -0.39225
+d4 =  0.10915
+d5 =  0.09465
+d6 =  0.0823
 
 global d, a, alph
 
-d    = mat([0.1625, 0, 0, 0.1333, 0.0997, 0.0996])
-a    = mat([0 ,-0.425 ,-0.3922 ,0 ,0 ,0])
+UR5distMod = 0.10915 # Offset shows Link 2 and it's COM where it belongs in space
+
+d    = mat([0.089159, UR5distMod, -UR5distMod, 0.10915, 0.09465, 0.0823])
+a    = mat([0 ,-0.425 ,-0.39225 ,0 ,0 ,0])
 alph = mat([math.pi/2, 0, 0, math.pi/2, -math.pi/2, 0 ])
 
 plane = [0,0,0,-0.5] #probably wrong but it still works
@@ -124,13 +134,25 @@ def invKine( desired_pos ):# T60
         #KEEP ROWS AND COLUMNS STRAIGHT
         #each column is a result to check
         #8 RESULTS, 6 JOINTS  """
+    
+    # if len( desired_pos ) == 4:
+    #     desired_pos = pose_mtrx_to_vec( desired_pos )
+
+    print( f"Target:\n{desired_pos}" )
+
     th   = mat( np.zeros((6, 8)) )
     P_05 = ( desired_pos * mat([0,0, -d6, 1]).T-mat([0,0,0,1 ]).T )
 
     # **** theta1 ****
 
     psi = atan2(P_05[2-1,0], P_05[1-1,0])
-    phi = acos(d4 /sqrt(P_05[2-1,0]*P_05[2-1,0] + P_05[1-1,0]*P_05[1-1,0]))
+    # phi = acos(d4 / sqrt(P_05[2-1,0]*P_05[2-1,0] + P_05[1-1,0]*P_05[1-1,0]) )
+
+    try:
+        phi = acos(d4 / sqrt(P_05[2-1,0]*P_05[2-1,0] + P_05[1-1,0]*P_05[1-1,0]) )
+    except ValueError:
+        return None
+
     #The two solutions for theta1 correspond to the shoulder
     #being either left or right
     th[0, 0:4] = pi/2 + psi + phi
@@ -212,7 +234,7 @@ def sample_on_sphere( center = [0.0, 0.0, 0.0,], radius = 1.0, N = 1 ):
         if mag > 0.0:
            pnt /= mag
            pnt *= radius
-           return pnt
+           return pnt + center
         else:
             return np.array([1.0, 0.0, 0.0,])
         
@@ -311,11 +333,25 @@ def angle_between_vectors_rad( vec1, vec2 ):
     return np.arccos( np.dot( vec1, vec2 ) / ( np.linalg.norm( vec1 ) * np.linalg.norm( vec2 ) ) )
 
 
+def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
+    """ Project a ray through the center of the mask """
+    rows   = image.shape[0]
+    rwHf   = rows / 2
+    cols   = image.shape[1]
+    clHf   = cols / 2
+    cntr2d = np.zeros( 2 )
+    Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) * zLen
+    Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) * zLen 
+    cntr2d = np.array([ ((bbox[0]+bbox[2])/2.0-clHf)/clHf, ((bbox[1]+bbox[3])/2.0-rwHf)/rwHf, ])
+    
+    return np.array([ cntr2d[0]*Xlen, cntr2d[1]*Ylen, zLen, ])
+
+
 ########## MOTION PLANNER ##########################################################################
 
 class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
-    def __init__( self, qInit = None ):
+    def __init__( self, qInit = None, robot : UR5_Interface = None ):
         """ Set params """
         ## Intenal Scoring ##
         self.q    : np.ndarray = np.array( [0.0 for _ in range(6)] )
@@ -324,6 +360,7 @@ class LUMP:
         self.ZTableCam = -0.081666 - 0.017
         self.dShot     = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
         self.dLoc      = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
+        self.robot : UR5_Interface = robot
         if isinstance( qInit, (list, np.ndarray) ):
             self.q = np.array( qInit )
 
@@ -343,24 +380,29 @@ class LUMP:
         return (self.p_base_safe( effPose ) and self.p_nonneg_Z( effPose ))
     
 
-    def config_energy( self, q : list | np.ndarray ):
+    @staticmethod
+    def config_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
         """ Compute a "joint position badness" """
-        mag = np.linalg.norm( np.subtract( q, self.q ) )
+        mag = np.linalg.norm( np.subtract( q, qRef ) )
         return mag + (1.0-UR5_manip_score( q ))*mag
 
 
     def IK_search( self, effPose : np.ndarray ):
         """ Perform inverse kinematics (deterministic) """
         solns = invKine( effPose )
+        if solns is None:
+            return None
         qFltr = list()
         for c in solns.T:
             arr = c.tolist()[0]
             if p_all_joints_above_point_normal_plane( arr, [0.0,0.0,0.0,], [0.0,0.0,1.0,], margin = 0.070 ):
                 qFltr.append( arr )
+            else:
+                print( f"UNSAFE: {arr}" )
         eMin = 1e9
         qMin = None
         for soln in qFltr:
-            nrg = self.config_energy( soln )
+            nrg = self.config_energy( self.q, soln )
             if nrg < eMin:
                 eMin = nrg
                 qMin = soln
@@ -376,7 +418,8 @@ class LUMP:
         return soln
     
 
-    def FK( self, q : list | np.ndarray ):
+    @staticmethod
+    def FK( q : list | np.ndarray ):
         """ Perform inverse kinematics (deterministic) """
         th = np.matrix( [[q[0]], [q[1]], [q[2]], [q[3]], [q[4]], [q[5]]] )
         c  = [0]
@@ -393,6 +436,7 @@ class LUMP:
         """ Bump everything up by some Z value I guess """
         return -self.ZTableCam 
     
+
     @staticmethod
     def symbol_centroid( objects : list[GraspObj] ):
         """ Get the position centroid of all the objects """
@@ -403,9 +447,10 @@ class LUMP:
         return centroid
     
 
-    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 250 ):
+    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float, N : int = 8, energyFunc : Callable = None ):
         """ Plan a camera pose for along a line to the centroid of the objects """
-        # FIXME: ALLOW THE USER TO SPECIFY THEIR OWN ENERGY FUNCTION
+        if energyFunc is None:
+            energyFunc = self.config_energy
         if len( objects ):
             centroid = self.symbol_centroid( objects )
         else:
@@ -431,16 +476,28 @@ class LUMP:
             rtnPose[0:3,1] = yBasis
             rtnPose[0:3,2] = zBasis
             rtnPose[0:3,3] = pnt
-            rtnSoln = self.IK( rtnSoln, suppressCache = True )
-            if ((rtnSoln is not None) and self.p_safe_pose( rtnSoln )):
+            rtnSoln = self.IK( rtnPose, suppressCache = True )
+            # if is_pose_mtrx( rtnPose ):
+            #     rtnSoln = self.IK( rtnPose, suppressCache = True )
+            # else:
+            #     rtnSoln = None
+            # rtnSoln = pose_vec_to_mtrx( rtnSoln )
+            print( rtnSoln )
+            if ((rtnSoln is not None) and self.p_safe_pose( rtnPose )):
                 ranking.append((
-                    self.config_energy( rtnSoln ),
+                    energyFunc( self.q, rtnSoln ),
                     np.array( rtnSoln ),
                 ))
+            else:
+                print( f"Cannot Rank: {rtnSoln}" )
 
         ranking = list( ranking )
         ranking.sort( key = lambda x: x[0], reverse = True )
-        return ranking[0][1], self.FK( ranking[0][1] )
+
+        if len( ranking ):
+            return ranking[0][1], self.FK( ranking[0][1] )
+        else:
+            return None
     
 
     def make_path_safe( self, bgnPose, endPose ):
@@ -474,9 +531,80 @@ class LUMP:
             centroid = self.symbol_centroid( objects )
         else:
             return None
-        shots = [self.plan_3d_shot_centroid( objects, dBackup ),]
+        shots = []
+
+        def sep_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
+            """ Compute badness based on angle between this and existing shots """
+            nonlocal shots, centroid, desiredAngularSeparation_rad
+            pose = LUMP.FK( q )
+            vc_i = np.subtract( extract_position( pose ), centroid )
+            print( shots )
+            vecs = [np.subtract( extract_position(shot[1]), centroid ) for shot in shots if (shot is not None)]
+            angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs]
+            nrg  = LUMP.config_energy( qRef, q )
+            for theta_j in angl:
+                nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )
+            return nrg
+
         while len( shots ) < N:
-            # FIXME: START HERE
+            nuShot = self.plan_3d_shot_centroid( objects, dBackup, energyFunc = sep_energy )
+            if nuShot is not None:
+                shots.append( nuShot )
+
+        return [np.array( shot[1] ) for shot in shots]
+    
+
+    def locate( self, obj : GraspObj ):
+        """ Home in on a partcular block """
+        if self.robot is None:
+            return None
+        initShot = self.plan_3d_shot_centroid( list(), [0.0, 0.0, 1.0,], self.dLoc, extract_pose_as_homog( obj ) )
+        self.robot.moveL( initShot, asynch = False )
+        query   = _REVERSE_QUERIES[ obj.label ]['query']
+        abbrevq = _REVERSE_QUERIES[ obj.label ]['abbrv']
+        
+        res = self.perc.bound( query, abbrevq )
+        while not len( res['hits'] ):
+            res = self.perc.bound( query, abbrevq )
+
+        # 2025-04-22: One-Shot Version
+        dMin = 1e9
+        for hit in res['hits']:
+            offset_i  = image_offset( res['image'], hit['bboxi'], self.dLoc )
+            dist_i    = np.linalg.norm( offset_i[:2] )
+            if dist_i < dMin:
+                offset = offset_i
+                dMin   = dist_i
+        xyDist = np.linalg.norm( offset[:2] )
+        if xyDist > 1.5*env_var("_BLOCK_SCALE"):
+            return None
+
+        camPose = self.robot.get_cam_pose()
+        tcpOfst = np.dot( camPose[0:3,0:3], offset ).reshape(3)
+        print( tcpOfst )
+        obj.pose.pose[0:2,3] += tcpOfst[0:2]
+
+
+    def locate_all( self, objLst : list[GraspObj] ):
+        """ Locate one object at a time """
+        # FIXME: DID THIS EVER WORK? WERE THE POSES CHANGED IN-PLACE?
+        if self.robot is None:
+            return None
+        locLst = objLst[:]
+        for i, obj_i in enumerate( objLst ):
+            for j, obj_j in enumerate( objLst ):
+                if i != j:
+                    posn_i = extract_pose_as_homog( obj_i )[0:3,3].reshape(3)
+                    posn_j = extract_pose_as_homog( obj_j )[0:3,3].reshape(3)
+                    vec_ij = vec_unit( posn_j - posn_i )
+                    if vec_ij[2] > 0.0:
+                        if np.arctan2( np.linalg.norm( vec_ij[0:2] ), vec_ij[2] ) < np.pi/3.0:
+                            try:
+                                locLst.remove( obj_i )
+                            except ValueError:
+                                pass
+        for obj in locLst:
+            self.locate( obj )
 
 
     # def verify_IK( self ):
@@ -495,6 +623,81 @@ class LUMP:
     #         print( "FAILED to solve!" )
         
 
+
+########## RENDER ROBOT ############################################################################
+from vispy import scene
+from vispy.visuals import transforms
+
+from homog_utils import posn_from_xform, bases_from_xform, R_krot
+from dh_mp import FK_DH_chain, dh_link_homog
+
+def plot_DH_robot( dhParamsMatx, qConfig, axesScale = 0.050 ):
+    """ Plot the kinematic chain represented by `dhParamsMatx` in `qConfig`, using Open3d """
+    # 0. Set up drawing accounting
+    geo     = []
+    index   = 0
+    lastPnt = posn_from_xform( np.eye(4) )
+    addSeg  = [ lastPnt.copy().flatten(), ]
+    addIdx  = []
+    # 1. Generate link frames
+    chain = FK_DH_chain( dhParamsMatx, qConfig ) #, baseLink = baseLink, baseQ = baseQ )
+    # 2. Fetch base link bases
+    [alpha, a, d] = [0.0 for _ in range(3)]
+    theta         = 0.0
+    [xB, yB, zB]  = bases_from_xform( dh_link_homog( theta, alpha, a, d ) )    
+    
+    # 3. For each link: Create geometries for frame, a-segment, and d-segment
+    for i, frm in enumerate( chain ):
+        
+        # 4. Create frame geo
+        f_i = scene.visuals.XYZAxis()
+        # VISPY IS COLUMN-MAJOR
+        rot = np.eye(4)
+        rot[0:3,0:3] = frm[0:3,0:3]
+        vizXfrm = transforms.linear.MatrixTransform( matrix = rot.transpose() )
+        vizXfrm.scale( [axesScale,axesScale,axesScale,] )
+        vizXfrm.translate( frm[0:3,3] )
+        f_i.transform = vizXfrm
+        geo.append( f_i )
+        
+        if i > 0: 
+            # 5. Fetch link measurements
+            [alpha, a, d] = dhParamsMatx[i-1]
+            theta         = qConfig[i-1]
+            
+            # 6. Paint 'd', if present
+            if abs(d) > 0.0:
+                nextPnt = np.add( lastPnt, np.multiply(zB, d) )
+                addSeg.append( nextPnt.copy().flatten() )
+                addIdx.append( [index, index+1] )
+                index += 1
+                lastPnt = nextPnt.copy()
+        
+            # 7. Paint 'a', if present
+            if abs(a) > 0.0:
+                nextPnt = np.add(
+                    lastPnt,
+                    np.multiply(
+                        R_krot( xB, alpha ).dot( R_krot( zB, theta ) ).dot( xB ), 
+                        a
+                    )
+                )
+                addSeg.append( nextPnt.copy().flatten() )
+                addIdx.append( [index, index+1] )
+                index += 1
+                lastPnt = nextPnt.copy()
+            
+            # 8. Fetch frame bases
+            [xB, yB, zB]  = bases_from_xform( frm )
+    
+    # 9. Create link geo
+    geo.append( scene.visuals.Line(
+        pos     = np.array(addSeg),
+        connect = np.array(addIdx),
+        color   = [0.0,0.0,0.0,1.0],
+    ) )
+    
+    return geo
 
 ########## MAIN ####################################################################################
 if __name__ == "__main__":
