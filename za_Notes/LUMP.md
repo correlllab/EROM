@@ -6,12 +6,13 @@
 - [x] Add waypoints to a task space path that comes too close to the base
 - [x] Move all sensory planning here <-- "Memory.py"
 - [x] Test
-- [ ] Visualize + Test
+- [x] Visualize + Test
 	- [x] Viz perceptions shots w/ Starting blocks
 	- [x] Viz stick links
-	- [ ] Viz corrected path
-	- [ ] Account for the effector
-- [ ] Search for objects
+	- [x] Viz corrected path
+	- [x] Account for the effector 
+		- --> Pretty sure the planner already takes care of this
+- [ ] Integrate into planner
 
 
 ## Medium Term Needs

@@ -10,19 +10,22 @@ from math import pi as pi
 from random import random
 from collections import deque
 from collections.abc import Callable
-from pprint import pprint
 
 import numpy as np
 from numpy import linalg
+from vispy import scene
+from vispy.visuals import transforms
 
-from magpie_control.poses import vec_unit, is_pose_mtrx
+from magpie_control.poses import vec_unit
 from magpie_control.ur5 import UR5_Interface
 from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog, extract_position
 from aspire.env_config import env_var
-from aspire.utils import diff_norm
+
+from homog_utils import posn_from_xform, bases_from_xform, R_krot
+from dh_mp import FK_DH_chain, dh_link_homog
 
 _RBT_BASE_BUFFER  = 0.200
-_RBT_BASE_FACTOR  = 1.250
+# _RBT_BASE_FACTOR  = 1.500
 _RBT_TABLE_MARGIN = 0.070
 _REVERSE_QUERIES  = {
     "bluBlock": {'query': "a photo of a small block", 'abbrv': "blu", },
@@ -502,6 +505,7 @@ class LUMP:
 
     def make_path_safe( self, bgnPose, endPose ):
         """ If the straight-line path would pass too close to the robot base, then propose an intermediate waypoint """
+        _EXTRA_PAD_BASE = 0.400
         bgnPosn = extract_position( bgnPose )
         endPosn = extract_position( endPose )
         trvlDir = vec_unit( np.subtract( endPosn, bgnPosn ) )
@@ -510,15 +514,22 @@ class LUMP:
         closPsn = bgnPosn + np.multiply( trvlDir, tClose )
         dClose  = np.linalg.norm( closPsn )
         rtnPath = [bgnPose,]
-        if dClose < _RBT_BASE_BUFFER:
+        if dClose < _EXTRA_PAD_BASE:
             midPosn = (bgnPosn + endPosn)/2.0
             midDir  = vec_unit( midPosn )
-            safPosn = midDir * (_RBT_BASE_BUFFER * _RBT_BASE_FACTOR)
+            safPosn = midDir * _EXTRA_PAD_BASE
             safPose = np.eye(4)
             safPose[0:3,0:3] = endPose[0:3,0:3]
             safPose[0:3,3]   = safPosn
             if not self.p_nonneg_Z( safPose ):
-                safPose[2,3] = _RBT_TABLE_MARGIN * _RBT_BASE_FACTOR
+                safPose[2,3] = _EXTRA_PAD_BASE
+            soln = self.IK( safPose )
+            while soln is None:
+                safPose[0:3,3] += sample_on_sphere( radius = 0.050 )
+                if not self.p_safe_pose( safPose ):
+                    soln = None
+                else:
+                    soln = self.IK( safPose )
             rtnPath.append( safPose )
         rtnPath.append( endPose )
         return rtnPath
@@ -625,11 +636,7 @@ class LUMP:
 
 
 ########## RENDER ROBOT ############################################################################
-from vispy import scene
-from vispy.visuals import transforms
 
-from homog_utils import posn_from_xform, bases_from_xform, R_krot
-from dh_mp import FK_DH_chain, dh_link_homog
 
 def plot_DH_robot( dhParamsMatx, qConfig, axesScale = 0.050 ):
     """ Plot the kinematic chain represented by `dhParamsMatx` in `qConfig`, using Open3d """
