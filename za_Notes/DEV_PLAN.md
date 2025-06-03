@@ -12,6 +12,16 @@
 - [x] Push an empty cheat frame when an action fails
 - [x] Better shot planning
 	- [x] Don't allow poses too close to the robot
+- [ ] If the problem is insoluble --> Run search of environment with 
+	- [ ] More views
+	- [ ] Wider area
+	- [ ] Accounting of Last Best Object Locations
+		- [ ] Keep count of how many views were needed last time
+		- [ ] Keep track of where objects were found last time --> More views there!
+- TODO: 
+	- [ ] Let the robot reset the scene --> Possible confusion?
+		- [ ] Let the planner do this?
+	- [ ] Log the iteration number as a message
 
 # Memory w/ Increasing Confusion
 - [x] Cheater
