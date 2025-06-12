@@ -581,7 +581,7 @@ class TaskPlanner:
 
             # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
             # bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
-            bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot )
+            bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot, 3, 60.0/180.0*np.pi )
 
             if not _RESPONSIVE_MODE:
                 self.memory.reset_memory()
@@ -698,54 +698,7 @@ def experiment_prep( beginPlanPose = None ):
 
 ########## MAIN ####################################################################################
 
-_TROUBLESHOOT   = 0
-
-
-
-_CONF_CAM_POSE_ANGLED1 = repair_pose( np.array( [[ 0.55 , -0.479,  0.684, -0.45 ],
-                                                 [-0.297, -0.878, -0.376, -0.138],
-                                                 [ 0.781,  0.003, -0.625,  0.206],
-                                                 [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
-
-_YCB_LANDSCAPE_CLOSE_BGN = repair_pose( np.array( [[-0.698,  0.378,  0.608, -0.52 ],
-                                                   [ 0.264,  0.926, -0.272, -0.308],
-                                                   [-0.666, -0.029, -0.746,  0.262],
-                                                   [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
-
-_YCB_LANDSCAPE_FAR_BGN = repair_pose( np.array( [[-0.873,  0.238,  0.426, -0.474],
-                                                 [ 0.206,  0.971, -0.121, -0.212],
-                                                 [-0.442, -0.018, -0.897,  0.394],
-                                                 [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
-
-
-_SHOT_1 = repair_pose( np.array( [[-0.635,  0.251,  0.731, -0.615,],
-                                  [ 0.172,  0.968, -0.182, -0.18 ,],
-                                  [-0.753,  0.011, -0.658,  0.302,],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
-
-
-_SHOT_3 = repair_pose( np.array( [[-0.824,  0.078,  0.562, -0.498,],
-                                  [ 0.1  ,  0.995,  0.008, -0.26 ,],
-                                  [-0.558,  0.063, -0.827,  0.379,],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
-
-
-_SHOT_2 = repair_pose( np.array( [[-0.905,  0.17 ,  0.391, -0.44 ,],
-                                  [ 0.116,  0.981, -0.158, -0.181,],
-                                  [-0.41 , -0.098, -0.907,  0.513,],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
-
-
-_SHOT_4 = repair_pose( np.array( [[-0.843,  0.018,  0.538, -0.476,],
-                                  [ 0.056,  0.997,  0.054, -0.279,],
-                                  [-0.535,  0.075, -0.841,  0.338,],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
-
-
-_SHOT_5 = repair_pose( np.array( [[-0.705, -0.694,  0.144, -0.365],
-                                  [-0.708,  0.678, -0.197, -0.322],
-                                  [ 0.039, -0.24 , -0.97 ,  0.439],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ],] ))
+_TROUBLESHOOT = 0
 
 
 _SHOT_6 = repair_pose( np.array( [[-0.07,  -0.951, -0.3 ,  -0.059],
@@ -797,6 +750,13 @@ if __name__ == "__main__":
 
         try:
             planner = experiment_prep( _EXP_BGN_POSES ) # _EXP_BGN_POSE
+            xHi = -0.469
+            yLo =  0.258
+            pad =  0.500
+            planner.memory.mp.register_aabb_obstacle( [
+                [xHi    , yLo    , 0.000,],
+                [xHi-pad, yLo+pad, 0.300,],
+            ] )
             planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSES )
             sleep( 2.5 )
             planner.shutdown()

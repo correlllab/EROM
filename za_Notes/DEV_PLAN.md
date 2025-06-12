@@ -7,12 +7,12 @@
 - [ ] Method w/ Shortcutting
 
 # Repair Plan
-- [x] Need to restore "Confirmation Squeeze" <--- $W$  
+- [x] Need to restore "Confirmation Squeeze" 
 	- --> 2025-05-14: For some reason setting the gripper width does not work, Just open the gripper instead
 - [x] Push an empty cheat frame when an action fails
 - [x] Better shot planning
 	- [x] Don't allow poses too close to the robot
-- [ ] If the problem is insoluble --> Run search of environment with 
+- [ ] If the problem is insoluble --> Run search of environment with <--- $W$  
 	- [ ] More views
 	- [ ] Wider area
 	- [ ] Accounting of Last Best Object Locations

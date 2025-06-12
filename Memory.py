@@ -578,9 +578,10 @@ class Memory:
 
     ##### Perception #############################
 
-    def plan_3d_shots( self, objects: list[GraspObj], radius : float = LUMP.dShot, N : int = 3 ):
+    def plan_3d_shots( self, objects: list[GraspObj], radius : float = LUMP.dShot, N : int = 3,
+                             desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
         """ Ask the sensory planner to get us a shot """
-        return self.mp.plan_3d_shots( objects, radius, N )
+        return self.mp.plan_3d_shots( objects, radius, N, desiredAngularSeparation_rad )
     
 
     def locate_all( self, objLst : list[GraspObj] ):

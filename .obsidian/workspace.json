@@ -10,15 +10,17 @@
           {
             "id": "f9dad22835caca8b",
             "type": "leaf",
+            "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/LUMP.md",
+                "file": "za_Notes/DEV_PLAN.md",
                 "mode": "source",
                 "source": false
               },
+              "pinned": true,
               "icon": "lucide-file",
-              "title": "LUMP"
+              "title": "DEV_PLAN"
             }
           }
         ]
@@ -168,10 +170,10 @@
   },
   "active": "f9dad22835caca8b",
   "lastOpenFiles": [
+    "za_Notes/LUMP.md",
     "za_Notes/DEV_PLAN.md",
     "za_Notes/Log/2025-05-20.md",
     "README.md",
-    "za_Notes/LUMP.md",
     "__pycache__/LUMP.cpython-310.pyc",
     "__pycache__/homog_utils.cpython-310.pyc",
     "__pycache__/dh_mp.cpython-310.pyc",

@@ -410,10 +410,15 @@ class LUMP:
         """ Return True if the `pnt` is inside the `aabb` of arbitrary dimension """
         ans = True
         for dim, coord in enumerate( pnt ):
-            ans = ans and (aabb[0,dim] < (coord + margin))
-            ans = ans and (aabb[1,dim] > (coord - margin))
+            ans = ans and (aabb[0,dim] < (coord - margin))
+            ans = ans and (aabb[1,dim] > (coord + margin))
         return ans
     
+
+    def p_safe_pose( self, effPose : np.ndarray ):
+        """ Should the robot even consider this pose? """
+        return (self.p_base_safe( effPose ) and self.p_nonneg_Z( effPose ))
+
 
     def p_collision_q( self, q, margin = _RBT_TABLE_MARGIN ):
         """ Return true if the `q` would put the robot in collision """
@@ -421,6 +426,8 @@ class LUMP:
             if obstacle["type"] == "aabb":
                 aabb   = obstacle["geo"]
                 frames = LUMP.FK_all( q )
+                if not self.p_safe_pose( frames[-1] ): # Check base<->effector<->table collision
+                    return True
                 for frm in frames:
                     posn = extract_position( frm )
                     if LUMP.p_point_in_aabb( posn, aabb, margin ):
@@ -428,11 +435,19 @@ class LUMP:
             else:
                 raise ValueError( f"`LUMP.p_collision_q()`, UNDEFINED obstacle:\n{obstacle}\n" )
         return False
+    
+
+    # @staticmethod
+    # def dist_to_aabb( pnt, aabb, margin = _RBT_TABLE_MARGIN ):
+    #     """ Return True if the `pnt` is inside the `aabb` of arbitrary dimension """
+    #     ans = 1e9
+    #     for dim, coord in enumerate( pnt ):
+    #         ans = ans and (aabb[0,dim] < (coord + margin))
+    #         ans = ans and (aabb[1,dim] > (coord - margin))
+    #     return ans
 
 
-    def p_safe_pose( self, effPose : np.ndarray ):
-        """ Should the robot even consider this pose? """
-        return (self.p_base_safe( effPose ) and self.p_nonneg_Z( effPose ))
+    
     
 
     @staticmethod
@@ -542,7 +557,8 @@ class LUMP:
                 print( f"Cannot Rank: {rtnSoln}" )
 
         ranking = list( ranking )
-        ranking.sort( key = lambda x: x[0], reverse = True )
+        # ranking.sort( key = lambda x: x[0], reverse = True )
+        ranking.sort( key = lambda x: x[0] )
 
         if len( ranking ):
             return ranking[0][1], self.FK( ranking[0][1] )
@@ -593,7 +609,7 @@ class LUMP:
 
         def sep_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
             """ Compute badness based on angle between this and existing shots """
-            nonlocal shots, centroid, desiredAngularSeparation_rad
+            nonlocal shots, centroid, desiredAngularSeparation_rad, self
             pose = LUMP.FK( q )
             vc_i = np.subtract( extract_position( pose ), centroid )
             # print( shots )
@@ -603,6 +619,10 @@ class LUMP:
             nrg  = LUMP.config_energy( qRef, q )
             zQ   = pose[2,3]
             nrg += max( 0.0, 1.0-zQ ) # Penalize being near the table
+            hit = 1.0 if self.p_collision_q( q ) else 0.0
+            nrg += hit*_COLLISION_NRG_PENALTY
+            nrg += np.linalg.norm( pose[0:2,3] )*3.0
+            nrg += np.linalg.norm( np.subtract( qRef, q ) )*1.0
             for theta_j in angl:
                 nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )
             return nrg
