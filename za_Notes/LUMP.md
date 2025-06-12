@@ -13,9 +13,10 @@
 	- [x] Account for the effector 
 		- --> 2025-05-30: Pretty sure the planner already takes care of this
 - [x] Integrate into planner
-- [ ] Penalize being close to the table
-- [ ] Avoid Cuboid Obstacles + Margin
-	- [ ] START SIMPLE!
+- [x] Avoid AABB Obstacles + Margin
+	- [x] START SIMPLE!
+- [x] Penalize being close to the table
+
 
 
 ## Medium Term Needs

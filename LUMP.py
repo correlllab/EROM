@@ -351,6 +351,7 @@ def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
 
 
 ########## MOTION PLANNER ##########################################################################
+_COLLISION_NRG_PENALTY = 5.0
 
 class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
@@ -363,11 +364,30 @@ class LUMP:
     def __init__( self, qInit = None, robot : UR5_Interface = None ):
         """ Set params """
         ## Intenal Scoring ##
-        self.q     : np.ndarray = np.array( [0.0 for _ in range(6)] )
-        self.pose  : np.ndarray = self.FK( self.q )
-        self.robot : UR5_Interface = robot
+        self.q         : np.ndarray    = np.array( [0.0 for _ in range(6)] )
+        self.pose      : np.ndarray    = self.FK( self.q )
+        self.robot     : UR5_Interface = robot
+        self.obstacles : list          = list()
         if isinstance( qInit, (list, np.ndarray) ):
             self.q = np.array( qInit )
+
+    @staticmethod
+    def FK( q : list | np.ndarray ):
+        """ Perform forward kinematics """
+        th = np.matrix( [[q[0]], [q[1]], [q[2]], [q[3]], [q[4]], [q[5]]] )
+        c  = [0]
+        return HTrans( th, c )
+    
+
+    @staticmethod
+    def FK_all( q : list | np.ndarray ):
+        """ Perform forward kinematics for all frames """
+        th  = np.matrix( [[q[0]], [q[1]], [q[2]], [q[3]], [q[4]], [q[5]]] )
+        c   = [0]
+        rtn = list()
+        for i in range(1,7):
+            rtn.append( HTrans( th, c, i ) )
+        return rtn
 
 
     def p_base_safe( self, effPose : np.ndarray ):
@@ -379,6 +399,36 @@ class LUMP:
         """ Return True if the Z-position is non-negative """
         return ((effPose[2,3] - margin) >= 0.0)
     
+
+    def register_aabb_obstacle( self, aabb ):
+        """ Add an Axis-Aligned Boudning Box that the robot should avoid """
+        self.obstacles.append({ 'type': "aabb", 'geo' : np.array( aabb ) })
+
+
+    @staticmethod
+    def p_point_in_aabb( pnt, aabb, margin = _RBT_TABLE_MARGIN ):
+        """ Return True if the `pnt` is inside the `aabb` of arbitrary dimension """
+        ans = True
+        for dim, coord in enumerate( pnt ):
+            ans = ans and (aabb[0,dim] < (coord + margin))
+            ans = ans and (aabb[1,dim] > (coord - margin))
+        return ans
+    
+
+    def p_collision_q( self, q, margin = _RBT_TABLE_MARGIN ):
+        """ Return true if the `q` would put the robot in collision """
+        for obstacle in self.obstacles:
+            if obstacle["type"] == "aabb":
+                aabb   = obstacle["geo"]
+                frames = LUMP.FK_all( q )
+                for frm in frames:
+                    posn = extract_position( frm )
+                    if LUMP.p_point_in_aabb( posn, aabb, margin ):
+                        return True
+            else:
+                raise ValueError( f"`LUMP.p_collision_q()`, UNDEFINED obstacle:\n{obstacle}\n" )
+        return False
+
 
     def p_safe_pose( self, effPose : np.ndarray ):
         """ Should the robot even consider this pose? """
@@ -408,6 +458,8 @@ class LUMP:
         qMin = None
         for soln in qFltr:
             nrg = self.config_energy( self.q, soln )
+            hit = 1.0 if self.p_collision_q( soln ) else 0.0
+            nrg += hit*_COLLISION_NRG_PENALTY
             if nrg < eMin:
                 eMin = nrg
                 qMin = soln
@@ -421,14 +473,6 @@ class LUMP:
             self.q    = np.array( soln )
             self.pose = np.array( effPose )
         return soln
-    
-
-    @staticmethod
-    def FK( q : list | np.ndarray ):
-        """ Perform inverse kinematics (deterministic) """
-        th = np.matrix( [[q[0]], [q[1]], [q[2]], [q[3]], [q[4]], [q[5]]] )
-        c  = [0]
-        return HTrans( th, c )
     
 
     @staticmethod
@@ -452,7 +496,8 @@ class LUMP:
         return centroid
     
 
-    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float = dShot, N : int = 8, energyFunc : Callable = None ):
+    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float = dShot, N : int = 8, 
+                                     energyFunc : Callable = None ):
         """ Plan a camera pose for along a line to the centroid of the objects """
         if energyFunc is None:
             energyFunc = self.config_energy
@@ -551,10 +596,13 @@ class LUMP:
             nonlocal shots, centroid, desiredAngularSeparation_rad
             pose = LUMP.FK( q )
             vc_i = np.subtract( extract_position( pose ), centroid )
-            print( shots )
+            # print( shots )
             vecs = [np.subtract( extract_position(shot[1]), centroid ) for shot in shots if (shot is not None)]
+            vecs.append( np.array([0.0, 0.0, 1.0,]) ) # Penalize being exactly vertical
             angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs]
             nrg  = LUMP.config_energy( qRef, q )
+            zQ   = pose[2,3]
+            nrg += max( 0.0, 1.0-zQ ) # Penalize being near the table
             for theta_j in angl:
                 nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )
             return nrg
