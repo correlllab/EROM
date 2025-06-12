@@ -42,6 +42,7 @@ from BT import ReactivePlanParser
 from OWLv2_Segment import Perception_OWLv2, _QUERIES
 
 from Memory import Memory, PoseCheater
+from LUMP import LUMP
 from draw_beliefs import render_memory_list, render_scan_list
 from env_config import set_experiment_env, BASE_TARGET
 
@@ -580,7 +581,7 @@ class TaskPlanner:
 
             # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
             # bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
-            bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1] )
+            bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot )
 
             if not _RESPONSIVE_MODE:
                 self.memory.reset_memory()
