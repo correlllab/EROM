@@ -82,7 +82,7 @@ def set_experiment_env():
     env_sto( "_BLOCK_VOLUME", env_var( "_BLOCK_SCALE" )**3 )
 
     env_sto( "_VERBOSE"     , True )
-    env_sto( "_USE_GRAPHICS", False )
+    env_sto( "_USE_GRAPHICS", True )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
 
     # env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )

@@ -13,10 +13,13 @@
 	- [x] Account for the effector 
 		- --> 2025-05-30: Pretty sure the planner already takes care of this
 - [x] Integrate into planner
+- [ ] Penalize being close to the table
+- [ ] Avoid Cuboid Obstacles + Margin
+	- [ ] START SIMPLE!
 
 
 ## Medium Term Needs
 - [x] Adapt to easier IK
 	- --> 2025-05-30: Don't appear to need this?
-- [ ] Viz 3D links
+- [x] Viz 3D links
 - [ ] Check for self-collisions

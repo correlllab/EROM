@@ -152,10 +152,12 @@ class TaskPlanner:
 
         # self.perc    = Perception_OWLViT
         self.perc = Perception_OWLv2()
-
         self.robot : UR5_Interface = UR5_Interface( provide_gripper = True ) if (not noBot) else None
+        if (not noBot):
+            self.robot.start()
+            self.perc.start_vision()
 
-        self.memory  = Memory( self.robot, self.perc ) 
+        self.memory  = Memory( self.robot ) 
         self.cheater = PoseCheater(
             fix_labels = env_var("_CHEAT_LABEL"),
             fix_poses  = env_var("_CHEAT_POSE" )
@@ -167,9 +169,7 @@ class TaskPlanner:
             planParser = ReactivePlanParser( self.robot )
         )
         self.blcMod = BlockFunctions( self.symPln )
-        if (not noBot):
-            self.robot.start()
-            self.perc.start_vision()
+        
 
         self.nPlnFl = 0
         self.lmFail = 5
@@ -585,15 +585,8 @@ class TaskPlanner:
             if not _RESPONSIVE_MODE:
                 self.memory.reset_memory()
 
-            # if env_var("_USE_GRAPHICS"):
-            #     if _RESPONSIVE_MODE:
-            #         if len( self.memory.bMem.beliefs ):
-            #             symLst = self.memory.get_current_most_likely()
-            #         else:
-            #             symLst = self.symPln.symbols
-            #         render_memory_list( syms = symLst, robotPose = bgnPoses )
-            #     else:
-            #         vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
+            if env_var("_USE_GRAPHICS"):
+                render_memory_list( syms = self.cheater.symbols[-1], robotPose = bgnPoses )
 
             for bgnPose in bgnPoses:
                 self.robot.moveL( _SAFE, 
