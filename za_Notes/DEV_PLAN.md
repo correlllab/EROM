@@ -18,12 +18,17 @@
 	- [ ] Accounting of Last Best Object Locations
 		- [ ] Keep count of how many views were needed last time
 		- [ ] Keep track of where objects were found last time --> More views there!
-- [ ] **Can In incorporate Information Gain in any way?**
-- [ ] 
 - TODO: 
 	- [ ] Let the robot reset the scene --> Possible confusion?
 		- [ ] Let the planner do this?
 	- [ ] Log the iteration number as a message
+
+# Information Theoretic Sensory Planning?
+- [ ] **Can I incorporate Information Gain in any way?**
+- [ ] Given each set of hypotheses, what are the probs that new readings will reduce ambiguity?
+- [ ] What is the probability that something is obscured from this view?
+- [ ] How to compute a better view?
+
 
 # Memory w/ Increasing Confusion
 - [x] Cheater

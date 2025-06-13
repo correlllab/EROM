@@ -469,14 +469,20 @@ class TaskPlanner:
                     self.memory.fail_symbol( srcPose )
                 else:
                     self.memory.reset_memory()
+                    
             else:
                 self.status = Status.RUNNING
                 self.memory.move_symbol_from_to_pose( srcPose, dstPose )
         
         else:
             if self.symPln.nxtAct is None:
+                if env_var("_USE_PERC_HACK"):
+                    self.memory.mp.log_failed_perc()
                 print( f"\nNO plan to run!\n" )
                 return None
+            else:
+                if env_var("_USE_PERC_HACK"):
+                    self.memory.mp.log_success_perc()
             btr = BT_Runner( self.symPln.nxtAct, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
             btr.setup_BT_for_running()
 
@@ -589,7 +595,7 @@ class TaskPlanner:
             # bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
             # bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot, 3, 60.0/180.0*np.pi )
             bgnPoses = self.memory.plan_3d_shots( self.cheater.last_known_symbols(), 
-                                                  1.5*LUMP.dShot, 
+                                                  1.25*LUMP.dShot, 
                                                   desiredAngularSeparation_rad = 60.0/180.0*np.pi )
 
             if not _RESPONSIVE_MODE:

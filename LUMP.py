@@ -141,7 +141,7 @@ def invKine( desired_pos ):# T60
     # if len( desired_pos ) == 4:
     #     desired_pos = pose_mtrx_to_vec( desired_pos )
 
-    print( f"Target:\n{desired_pos}" )
+    # print( f"Target:\n{desired_pos}" )
 
     th   = mat( np.zeros((6, 8)) )
     P_05 = ( desired_pos * mat([0,0, -d6, 1]).T-mat([0,0,0,1 ]).T )
@@ -481,7 +481,8 @@ class LUMP:
             if p_all_joints_above_point_normal_plane( arr, [0.0,0.0,0.0,], [0.0,0.0,1.0,], margin = 0.070 ):
                 qFltr.append( arr )
             else:
-                print( f"UNSAFE: {arr}" )
+                pass
+                # print( f"UNSAFE: {arr}" )
         eMin = 1e9
         qMin = None
         for soln in qFltr:
@@ -524,7 +525,7 @@ class LUMP:
         return centroid
     
 
-    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float = dShot, N : int = 8, 
+    def plan_3d_shot_centroid( self, objects : list[GraspObj], dBackup : float = dShot, N : int = 16, 
                                      energyFunc : Callable = None ):
         """ Plan a camera pose for along a line to the centroid of the objects """
         if energyFunc is None:
@@ -560,14 +561,15 @@ class LUMP:
             # else:
             #     rtnSoln = None
             # rtnSoln = pose_vec_to_mtrx( rtnSoln )
-            print( rtnSoln )
+            # print( rtnSoln )
             if ((rtnSoln is not None) and self.p_safe_pose( rtnPose )):
                 ranking.append((
                     energyFunc( self.q, rtnSoln ),
                     np.array( rtnSoln ),
                 ))
             else:
-                print( f"Cannot Rank: {rtnSoln}" )
+                pass
+                # print( f"Cannot Rank: {rtnSoln}" )
 
         ranking = list( ranking )
         # ranking.sort( key = lambda x: x[0], reverse = True )
@@ -634,13 +636,14 @@ class LUMP:
             vecs = [np.subtract( extract_position(shot[1]), centroid ) for shot in shots if (shot is not None)]
             vecs.append( np.array([0.0, 0.0, 1.0,]) ) # Penalize being exactly vertical
             angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs]
-            nrg  = LUMP.config_energy( qRef, q )
+            nrg  = LUMP.config_energy( qRef, q ) * 3.0
             zQ   = pose[2,3]
-            nrg += max( 0.0, 1.0-zQ ) # Penalize being near the table
+            nrg += max( 0.0, 1.0-zQ )*3.0 # Penalize being near the table
             hit = 1.0 if self.p_collision_q( q ) else 0.0
             nrg += hit*_COLLISION_NRG_PENALTY
-            nrg += np.linalg.norm( pose[0:2,3] )*3.0
+            nrg += np.linalg.norm( pose[0:2,3] )*5.0
             nrg += np.linalg.norm( np.subtract( qRef, q ) )*1.0
+            nrg += max( 0.0, 0.75 - np.linalg.norm( extract_position( pose ) ) )/0.75*4.0
             for theta_j in angl:
                 nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )
             return nrg
