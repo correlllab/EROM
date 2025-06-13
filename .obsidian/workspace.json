@@ -10,7 +10,6 @@
           {
             "id": "f9dad22835caca8b",
             "type": "leaf",
-            "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
@@ -18,7 +17,6 @@
                 "mode": "source",
                 "source": false
               },
-              "pinned": true,
               "icon": "lucide-file",
               "title": "DEV_PLAN"
             }
