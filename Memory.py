@@ -308,6 +308,16 @@ class PoseCheater:
         self.base    = extract_pose_as_homog( basePose ) if (basePose is not None) else np.eye(4)
 
 
+    def last_known_symbols( self ):
+        """ Get last known symbol locations, even if we goofed last time """
+        rtnSym = self.symbols[-1]
+        index  = 2
+        while ((not len( rtnSym )) and (index <= len( self.symbols ))):
+            rtnSym = self.symbols[ -index ]
+            index += 1
+        return rtnSym
+
+
     def log_symbols( self, symLst ):
         """ Store the most recent symbols """
         self.symbols.append( deep_copy_memory_list( symLst ) )
@@ -332,15 +342,6 @@ class PoseCheater:
 
     def log_failed_action( self, poseBgn, poseEnd ):
         """ We done goofed, Erase symbol """
-        # lastFrame = deep_copy_memory_list( self.symbols[-1] )
-        # dMin = 1e9
-        # sCls : GraspObj = None
-        # for sym in lastFrame:
-        #     d = euclidean_distance_between_symbols( sym, poseBgn )
-        #     if d < dMin:
-        #         dMin = d
-        #         sCls = sym
-        # self.symbols.append( [sym for sym in lastFrame if id(sym) != id(sCls)] )
         self.symbols.append( list() )
 
         print( f"Could NOT move block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )

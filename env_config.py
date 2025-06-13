@@ -233,7 +233,8 @@ def set_experiment_env():
 
     env_sto( "_GRASP_NUDGE_M", -0.005 )
 
-    env_sto( "_USE_SPACE_HACK", True )
+    env_sto( "_USE_SPACE_HACK", False )
+    env_sto( "_USE_PERC_HACK" , True )
 
     env_sto( "_USE_POSE_CHEAT", True )
     env_sto( "_CHEAT_LABEL"   , False and env_var("_USE_POSE_CHEAT") )

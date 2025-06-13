@@ -339,6 +339,10 @@ class TaskPlanner:
             self.status = Status.RUNNING
 
             self.cheater.log_failed_action( np.eye(4), np.eye(4) )
+            
+            if env_var("_USE_PERC_HACK"):
+                self.memory.mp.log_failed_perc()
+
             if env_var("_USE_SPACE_HACK"):
                 self.blcMod.HACK_space_repair_plan( self.robot )
 
@@ -348,6 +352,8 @@ class TaskPlanner:
                 "Event": "The robot has failed to plan any actions.",
             } )
         elif (self.symPln.status == Status.SUCCESS):
+            if env_var("_USE_PERC_HACK"):
+                self.memory.mp.log_success_perc()
             self.status = Status.SUCCESS
             print( f"\n\nPlanner thinks we SUCCEEDED!\n\n" )
             self.memory.history.append( msg = "Annotation", datum = {
@@ -581,7 +587,10 @@ class TaskPlanner:
 
             # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
             # bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
-            bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot, 3, 60.0/180.0*np.pi )
+            # bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot, 3, 60.0/180.0*np.pi )
+            bgnPoses = self.memory.plan_3d_shots( self.cheater.last_known_symbols(), 
+                                                  1.5*LUMP.dShot, 
+                                                  desiredAngularSeparation_rad = 60.0/180.0*np.pi )
 
             if not _RESPONSIVE_MODE:
                 self.memory.reset_memory()

@@ -368,8 +368,21 @@ class LUMP:
         self.pose      : np.ndarray    = self.FK( self.q )
         self.robot     : UR5_Interface = robot
         self.obstacles : list          = list()
+        self.NshotDflt : int           = 3
+        self.nextNshot : int           = self.NshotDflt
         if isinstance( qInit, (list, np.ndarray) ):
             self.q = np.array( qInit )
+
+
+    def log_failed_perc( self ):
+        """ Tell planner we didn't get enough info last time """
+        self.nextNshot += 1
+
+
+    def log_success_perc( self ):
+        """ Tell planner info from last time was good """
+        self.nextNshot = self.NshotDflt
+
 
     @staticmethod
     def FK( q : list | np.ndarray ):
@@ -598,8 +611,13 @@ class LUMP:
         return rtnPath
     
 
-    def plan_3d_shots( self, objects : list[GraspObj], dBackup : float, N : int, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
+    def plan_3d_shots( self, objects : list[GraspObj], dBackup : float, N : int = None, 
+                             desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
         """ A Series of shots with some angular distance between them """
+        if N is None:
+            N = self.nextNshot
+        else:
+            self.nextNshot = N
         centroid = None
         if len( objects ):
             centroid = self.symbol_centroid( objects )
