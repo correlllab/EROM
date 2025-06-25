@@ -8,6 +8,7 @@
     :inputs (?label)
     :domain (Graspable ?label)
     :outputs (?pose)
+    ; :certified (and (PoseAbove ?pose ?label) (Waypoint ?pose) (Free ?pose) ) 
     :certified (and (PoseAbove ?pose ?label) (Waypoint ?pose) ) 
   )
 

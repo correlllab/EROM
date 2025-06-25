@@ -42,6 +42,7 @@ from BT import ReactivePlanParser
 from OWLv2_Segment import Perception_OWLv2, _QUERIES
 
 from Memory import Memory, PoseCheater
+from LUMP import LUMP
 from draw_beliefs import render_memory_list, render_scan_list
 from env_config import set_experiment_env, BASE_TARGET
 
@@ -152,11 +153,16 @@ class TaskPlanner:
 
         # self.perc    = Perception_OWLViT
         self.perc = Perception_OWLv2()
-
         self.robot : UR5_Interface = UR5_Interface( provide_gripper = True ) if (not noBot) else None
+        if (not noBot):
+            self.robot.start()
+            self.perc.start_vision()
 
-        self.memory  = Memory( self.robot, self.perc ) 
-        self.cheater = PoseCheater()
+        self.memory  = Memory( self.robot ) 
+        self.cheater = PoseCheater(
+            fix_labels = env_var("_CHEAT_LABEL"),
+            fix_poses  = env_var("_CHEAT_POSE" )
+        )
 
         self.symPln = SymPlanner(
             os.path.join( os.path.dirname( __file__ ), "pddl", "domain.pddl" ),
@@ -164,9 +170,7 @@ class TaskPlanner:
             planParser = ReactivePlanParser( self.robot )
         )
         self.blcMod = BlockFunctions( self.symPln )
-        if (not noBot):
-            self.robot.start()
-            self.perc.start_vision()
+        
 
         self.nPlnFl = 0
         self.lmFail = 5
@@ -199,15 +203,7 @@ class TaskPlanner:
         print( f"\nRobot returned to \n{goPose}\n" )
 
 
-    def dummy_object( self ):
-        """ Use as target for first-pass sensory planning """
-        return GraspObj(
-            labels = {'grnBlock':1.0,}, 
-            pose   = BASE_TARGET(), 
-            ts     = now(), 
-            count  = 1, 
-            score  = 0.0,
-        )
+    
 
 
     ##### Task Planning Phases ############################################
@@ -342,6 +338,11 @@ class TaskPlanner:
             # self.status = Status.FAILURE
             self.status = Status.RUNNING
 
+            self.cheater.log_failed_action( np.eye(4), np.eye(4) )
+            
+            if env_var("_USE_PERC_HACK"):
+                self.memory.mp.log_failed_perc()
+
             if env_var("_USE_SPACE_HACK"):
                 self.blcMod.HACK_space_repair_plan( self.robot )
 
@@ -351,6 +352,8 @@ class TaskPlanner:
                 "Event": "The robot has failed to plan any actions.",
             } )
         elif (self.symPln.status == Status.SUCCESS):
+            if env_var("_USE_PERC_HACK"):
+                self.memory.mp.log_success_perc()
             self.status = Status.SUCCESS
             print( f"\n\nPlanner thinks we SUCCEEDED!\n\n" )
             self.memory.history.append( msg = "Annotation", datum = {
@@ -466,14 +469,20 @@ class TaskPlanner:
                     self.memory.fail_symbol( srcPose )
                 else:
                     self.memory.reset_memory()
+                    
             else:
                 self.status = Status.RUNNING
                 self.memory.move_symbol_from_to_pose( srcPose, dstPose )
         
         else:
             if self.symPln.nxtAct is None:
+                if env_var("_USE_PERC_HACK"):
+                    self.memory.mp.log_failed_perc()
                 print( f"\nNO plan to run!\n" )
                 return None
+            else:
+                if env_var("_USE_PERC_HACK"):
+                    self.memory.mp.log_success_perc()
             btr = BT_Runner( self.symPln.nxtAct, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
             btr.setup_BT_for_running()
 
@@ -498,16 +507,22 @@ class TaskPlanner:
 
             self.memory.history.append( msg = f"BT END: {btr.status}" )
 
+            _, srcPose = self.fetch_src_label_and_pose()
+            _, dstPose = self.fetch_dst_label_and_pose()
+
             if (btr.status == Status.FAILURE):
                 self.memory.history.append( msg = "Annotation", datum = {
                     "Event": "The robot's plan was not executed correctly.",
                 } )
-            elif (btr.status == Status.SUCCESS):
-                _, srcPose = self.fetch_src_label_and_pose()
-                _, dstPose = self.fetch_dst_label_and_pose()
 
                 if env_var("_USE_POSE_CHEAT"):
+                    self.cheater.log_failed_action( srcPose, dstPose )
+                self.memory.bMem.action_failure_update( srcPose, dstPose )
+            elif (btr.status == Status.SUCCESS):
+                
+                if env_var("_USE_POSE_CHEAT"):
                     self.cheater.log_successful_action( srcPose, dstPose )
+                self.memory.bMem.action_success_update( srcPose, dstPose )
 
                 self.memory.history.append( msg = f"Action Success: {btr.msg}, {now()}" )
                 self.memory.history.append( msg = "Annotation", datum = {
@@ -555,9 +570,8 @@ class TaskPlanner:
 
         self.reset_state() 
         
-        # self.symPln.set_goal( env_var("_GOAL_GRB") )
-        # self.symPln.set_goal( env_var("_GOAL_RRR") )
-        self.symPln.set_goal( env_var("_GOAL_OR_RGB") )
+        self.symPln.set_goal( env_var("_GOAL_GRB") )
+        # self.symPln.set_goal( env_var("_GOAL_OR_RGB") )
 
         self.cheater.log_symbols( [env_var(f"_KNOWN_BLOCK_{i}") for i in range(3)] )
 
@@ -578,20 +592,17 @@ class TaskPlanner:
             # for bgnPose in beginPlanPose:
 
             # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
-            bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
+            # bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
+            # bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot, 3, 60.0/180.0*np.pi )
+            bgnPoses = self.memory.plan_3d_shots( self.cheater.last_known_symbols(), 
+                                                  1.25*LUMP.dShot, 
+                                                  desiredAngularSeparation_rad = 60.0/180.0*np.pi )
 
             if not _RESPONSIVE_MODE:
                 self.memory.reset_memory()
 
-            # if env_var("_USE_GRAPHICS"):
-            #     if _RESPONSIVE_MODE:
-            #         if len( self.memory.bMem.beliefs ):
-            #             symLst = self.memory.get_current_most_likely()
-            #         else:
-            #             symLst = self.symPln.symbols
-            #         render_memory_list( syms = symLst, robotPose = bgnPoses )
-            #     else:
-            #         vispy_geo_list_window( [table_geo(),], robotPose = bgnPoses )
+            if env_var("_USE_GRAPHICS"):
+                render_memory_list( syms = self.cheater.symbols[-1], robotPose = bgnPoses )
 
             for bgnPose in bgnPoses:
                 self.robot.moveL( _SAFE, 
@@ -702,54 +713,7 @@ def experiment_prep( beginPlanPose = None ):
 
 ########## MAIN ####################################################################################
 
-_TROUBLESHOOT   = 0
-
-
-
-_CONF_CAM_POSE_ANGLED1 = repair_pose( np.array( [[ 0.55 , -0.479,  0.684, -0.45 ],
-                                                 [-0.297, -0.878, -0.376, -0.138],
-                                                 [ 0.781,  0.003, -0.625,  0.206],
-                                                 [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
-
-_YCB_LANDSCAPE_CLOSE_BGN = repair_pose( np.array( [[-0.698,  0.378,  0.608, -0.52 ],
-                                                   [ 0.264,  0.926, -0.272, -0.308],
-                                                   [-0.666, -0.029, -0.746,  0.262],
-                                                   [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
-
-_YCB_LANDSCAPE_FAR_BGN = repair_pose( np.array( [[-0.873,  0.238,  0.426, -0.474],
-                                                 [ 0.206,  0.971, -0.121, -0.212],
-                                                 [-0.442, -0.018, -0.897,  0.394],
-                                                 [ 0.   ,  0.   ,  0.   ,  1.   ],] ) )
-
-
-_SHOT_1 = repair_pose( np.array( [[-0.635,  0.251,  0.731, -0.615,],
-                                  [ 0.172,  0.968, -0.182, -0.18 ,],
-                                  [-0.753,  0.011, -0.658,  0.302,],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
-
-
-_SHOT_3 = repair_pose( np.array( [[-0.824,  0.078,  0.562, -0.498,],
-                                  [ 0.1  ,  0.995,  0.008, -0.26 ,],
-                                  [-0.558,  0.063, -0.827,  0.379,],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
-
-
-_SHOT_2 = repair_pose( np.array( [[-0.905,  0.17 ,  0.391, -0.44 ,],
-                                  [ 0.116,  0.981, -0.158, -0.181,],
-                                  [-0.41 , -0.098, -0.907,  0.513,],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
-
-
-_SHOT_4 = repair_pose( np.array( [[-0.843,  0.018,  0.538, -0.476,],
-                                  [ 0.056,  0.997,  0.054, -0.279,],
-                                  [-0.535,  0.075, -0.841,  0.338,],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ,],] ) )
-
-
-_SHOT_5 = repair_pose( np.array( [[-0.705, -0.694,  0.144, -0.365],
-                                  [-0.708,  0.678, -0.197, -0.322],
-                                  [ 0.039, -0.24 , -0.97 ,  0.439],
-                                  [ 0.   ,  0.   ,  0.   ,  1.   ],] ))
+_TROUBLESHOOT = 0
 
 
 _SHOT_6 = repair_pose( np.array( [[-0.07,  -0.951, -0.3 ,  -0.059],
@@ -801,6 +765,13 @@ if __name__ == "__main__":
 
         try:
             planner = experiment_prep( _EXP_BGN_POSES ) # _EXP_BGN_POSE
+            xHi = -0.469
+            yLo =  0.258
+            pad =  0.500
+            planner.memory.mp.register_aabb_obstacle( [
+                [xHi    , yLo    , 0.000,],
+                [xHi-pad, yLo+pad, 0.300,],
+            ] )
             planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSES )
             sleep( 2.5 )
             planner.shutdown()

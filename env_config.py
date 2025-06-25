@@ -2,6 +2,7 @@
 import numpy as np
 from aspire.env_config import env_var, env_sto
 from aspire.symbols import ObjPose, GraspObj
+from Memory import now
 
 
 
@@ -18,29 +19,43 @@ def BASE_TARGET():
 
 def KNOWN_BLOCKS():
     """ Set block positions """
+    yOfst = 0.025
     bloc1 = np.array([[-0.994,  0.111,  0.022, -0.38 ],
-                      [ 0.112,  0.993,  0.044,  0.003],
+                    #   [ 0.112,  0.993,  0.044,  0.003+yOfst+yOfst],
+                      [ 0.112,  0.993,  0.044,  0.003+yOfst],
                       [-0.017,  0.046, -0.999,  0.246],
                       [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
     bloc2 = np.array([[-0.994,  0.111,  0.022, -0.38 ],
-                      [ 0.112,  0.993,  0.044, -0.102],
+                      [ 0.112,  0.993,  0.044, -0.102+yOfst],
                       [-0.017,  0.046, -0.999,  0.246],
                       [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
     bloc3 = np.array([[-0.994,  0.111,  0.022, -0.38 ],
-                      [ 0.112,  0.993,  0.044, -0.199],
+                      [ 0.112,  0.993,  0.044, -0.199+yOfst],
                       [-0.017,  0.046, -0.999,  0.246],
                       [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
     names = ['redBlock','grnBlock','bluBlock',]
+    rtnBlocks = list()
     for i, bloc_i in enumerate([bloc1,bloc2,bloc3,]):
         pose_i = np.eye(4)
         pose_i[0:3,3] = bloc_i[0:3,3]
         pose_i[2,3]   = env_var("_BLOCK_SCALE") / 2.0
-        env_sto( f"_KNOWN_BLOCK_{i}",  GraspObj(
+        obj_i         = GraspObj(
             label = names[i],
             pose  = pose_i
-        ) ) 
+        )
+        rtnBlocks.append( obj_i )
+        env_sto( f"_KNOWN_BLOCK_{i}", obj_i ) 
+    return rtnBlocks
 
-
+def dummy_object():
+    """ Use as target for first-pass sensory planning """
+    return GraspObj(
+        labels = {'grnBlock':1.0,}, 
+        pose   = BASE_TARGET(), 
+        ts     = now(), 
+        count  = 1, 
+        score  = 0.0,
+    )
 
 
 def set_experiment_env():
@@ -67,7 +82,7 @@ def set_experiment_env():
     env_sto( "_BLOCK_VOLUME", env_var( "_BLOCK_SCALE" )**3 )
 
     env_sto( "_VERBOSE"     , True )
-    env_sto( "_USE_GRAPHICS", False )
+    env_sto( "_USE_GRAPHICS", True )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
 
     # env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )
@@ -219,4 +234,9 @@ def set_experiment_env():
     env_sto( "_GRASP_NUDGE_M", -0.005 )
 
     env_sto( "_USE_SPACE_HACK", False )
+    env_sto( "_USE_PERC_HACK" , True )
+
     env_sto( "_USE_POSE_CHEAT", True )
+    env_sto( "_CHEAT_LABEL"   , False and env_var("_USE_POSE_CHEAT") )
+    env_sto( "_CHEAT_POSE"    , True  and env_var("_USE_POSE_CHEAT") )
+    env_sto( "_CHEAT_LKG"     , True  and env_var("_USE_POSE_CHEAT") )
