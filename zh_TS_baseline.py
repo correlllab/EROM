@@ -15,8 +15,8 @@ from Memory import Memory
 
 # path = "data/Baseline_2025-03-11"
 # path = "data/Baseline_2025-03-13" 
-path = "data/Baseline_2025-04-28" 
-# path = "data/Baseline_2025-04-29" 
+# path = "data/Baseline_2025-04-28" 
+path = "data/Basic-Baseline_2025-05-08" 
 
 pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
 for pkl in pkls:
