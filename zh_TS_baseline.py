@@ -15,8 +15,9 @@ from Memory import Memory
 
 # path = "data/Baseline_2025-03-11"
 # path = "data/Baseline_2025-03-13" 
-path = "data/Baseline_2025-04-28" 
-# path = "data/Baseline_2025-04-29" 
+# path = "data/Baseline_2025-04-28" 
+# path = "data/Basic-Baseline_2025-05-08" 
+path = "data/Pose-Help_Baseline_2025-05-20"
 
 pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
 for pkl in pkls:
@@ -95,6 +96,11 @@ if _TS_DETERM:
     actFl = 0
     Nrun  = 0
     epRun = list()
+    result = {
+        'Ntrial' : 0,
+        'outcome': list(),
+        'tRun'   : list(),
+    }
     
 
     for pklDex, pklPath in enumerate( pkls ):
@@ -102,7 +108,7 @@ if _TS_DETERM:
         try:
 
             # We are going to troubleshoot how belief updates should go on the robot
-            bMem   = Memory( None, None, suppressRecord = True ) 
+            bMem   = Memory( None, suppressRecord = True ) 
             Nrun  += 1
             totRun = 0.0 
             totMty = 0.0
@@ -110,12 +116,19 @@ if _TS_DETERM:
             print( f"Loading {pklPath} ...\n" )
 
             with open( pklPath, 'rb' ) as f:
+
+                
                 
                 data    = pickle.load( f )
                 totRun += (data[-1]['t'] - data[0]['t'])
                 epRun.append( totRun )
                 tLst    = data[0]['t']
                 camPose = None
+
+                result['Ntrial'] += 1
+                result['tRun'  ].append( epRun )
+
+                
 
                 for datum in data:
                     tMsg  = datum['msg']
