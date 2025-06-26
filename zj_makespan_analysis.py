@@ -13,8 +13,19 @@ from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_g
 # path = "data/Baseline_2025-03-11"
 # path = "data/Baseline_2025-03-13" 
 # path = "data/Baseline_2025-04-28" 
-# path = "data/Basic-Baseline_2025-05-08" 
-path = "data/Pose-Help_Baseline_2025-05-20"
+# path =  
+
+_PLOT_DIR = "data/plots/"
+
+if 0:
+    path      = "data/Pose-Help_Baseline_2025-05-20"
+    plotTitle = "Makespan Distribution with Pose Help"
+    fName     = f"{_PLOT_DIR}poseHelp.pdf"
+
+if 1:
+    path      = "data/Basic-Baseline_2025-05-08"
+    plotTitle = "Makespan Distribution with Pose & Class Help"
+    fName     = f"{_PLOT_DIR}classPoseHelp.pdf"
 
 pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
 for pkl in pkls:
@@ -42,7 +53,7 @@ def get_symbol_parents( objLst : list[GraspObj] ):
 
 
 ########## ANALYSIS ################################################################################
-
+from pprint import pprint
 
 ##### Success Rate ########################################################
 N   = 0
@@ -102,7 +113,23 @@ if F > 0:
 print( f"\n{N} episodes, Success Rate: {S*1.0/N}, Failure Rate: {F*1.0/N}, Sanity Check == 0.0: {1.0-S*1.0/N-F*1.0/N}" )
 print( f"Mean Time to Success: {[int(item) for item in divmod( MTS, 60.0 )]}, Mean Time to Failure: {[int(item) for item in divmod( MTF, 60.0 )]}" )
 
+pprint( result )
 
+import matplotlib.pyplot as plt
+
+
+
+print()
+print( f"Mean: ___ {np.mean(result['tRun'])} [s]" )
+print( f"Median: _ {np.median(result['tRun'])} [s]" )
+print( f"Std.Dev.: {np.std(result['tRun'])} [s]" )
+
+plt.hist( result['tRun'] )
+plt.title( plotTitle ) # Set the title
+plt.xlabel('Makespan [s]')  # Setting the x-axis label
+plt.ylabel('Occurrences') # Setting the y-axis label
+plt.savefig( fName )
+plt.show() 
 
 
 ########## DRAW SCANS ##############################################################################
