@@ -558,10 +558,13 @@ class Memory:
             self.history = LogPickler( prefix = "EROM-Memories", outDir = "data" )
         else:
             self.history = None
-        print( robot )
-        print( robot.recv )
-        print( robot.ctrl )
-        self.mp = LUMP( robot.get_joint_angles().tolist(), robot )
+        if robot is not None:
+            print( robot )
+            print( robot.recv )
+            print( robot.ctrl )
+            self.mp = LUMP( robot.get_joint_angles().tolist(), robot )
+        else:
+            self.mp = LUMP()
         self.reset_memory()
 
 
