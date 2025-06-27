@@ -24,9 +24,11 @@ from aspire.env_config import env_var
 from homog_utils import posn_from_xform, bases_from_xform, R_krot
 from dh_mp import FK_DH_chain, dh_link_homog
 
-_RBT_BASE_BUFFER  = 0.200
+# _RBT_BASE_BUFFER  = 0.200
+_RBT_BASE_BUFFER  = 0.300
 # _RBT_BASE_FACTOR  = 1.500
-_RBT_TABLE_MARGIN = 0.070
+# _RBT_TABLE_MARGIN = 0.070
+_RBT_TABLE_MARGIN = 0.140
 _REVERSE_QUERIES  = {
     "bluBlock": {'query': "a photo of a small block", 'abbrv': "blu", },
     "ylwBlock": {'query': "a photo of a small block", 'abbrv': "ylw", },
@@ -627,6 +629,14 @@ class LUMP:
             return None
         shots = []
 
+        _CONFIG_FACTOR = 4.5
+        _TABLE_FACTOR  = 3.0
+        _REACH_FACTOR  = 6.5
+        _DELTA_FACTOR  = 1.0
+        _DELTA_MAX     = [np.pi for _ in range(6)]
+        _DELTA_MAX[-1] = np.pi*2.0
+        _DELTA_DIVISOR = np.linalg.norm( _DELTA_MAX )
+
         def sep_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
             """ Compute badness based on angle between this and existing shots """
             nonlocal shots, centroid, desiredAngularSeparation_rad, self
@@ -636,13 +646,13 @@ class LUMP:
             vecs = [np.subtract( extract_position(shot[1]), centroid ) for shot in shots if (shot is not None)]
             vecs.append( np.array([0.0, 0.0, 1.0,]) ) # Penalize being exactly vertical
             angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs]
-            nrg  = LUMP.config_energy( qRef, q ) * 3.0
+            nrg  = LUMP.config_energy( qRef, q ) * _CONFIG_FACTOR
             zQ   = pose[2,3]
-            nrg += max( 0.0, 1.0-zQ )*3.0 # Penalize being near the table
+            nrg += max( 0.0, 1.0-zQ )*_TABLE_FACTOR # Penalize being near the table
             hit = 1.0 if self.p_collision_q( q ) else 0.0
             nrg += hit*_COLLISION_NRG_PENALTY
-            nrg += np.linalg.norm( pose[0:2,3] )*5.0
-            nrg += np.linalg.norm( np.subtract( qRef, q ) )*1.0
+            nrg += np.linalg.norm( pose[0:2,3] )*_REACH_FACTOR
+            nrg += np.linalg.norm( np.subtract( qRef, q ) )/_DELTA_DIVISOR*_DELTA_FACTOR
             nrg += max( 0.0, 0.75 - np.linalg.norm( extract_position( pose ) ) )/0.75*4.0
             for theta_j in angl:
                 nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )

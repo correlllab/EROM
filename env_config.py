@@ -82,7 +82,7 @@ def set_experiment_env():
     env_sto( "_BLOCK_VOLUME", env_var( "_BLOCK_SCALE" )**3 )
 
     env_sto( "_VERBOSE"     , True )
-    env_sto( "_USE_GRAPHICS", True )
+    env_sto( "_USE_GRAPHICS", False )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
 
     # env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )
@@ -237,6 +237,6 @@ def set_experiment_env():
     env_sto( "_USE_PERC_HACK" , True )
 
     env_sto( "_USE_POSE_CHEAT", True )
-    env_sto( "_CHEAT_LABEL"   , False and env_var("_USE_POSE_CHEAT") )
-    env_sto( "_CHEAT_POSE"    , True  and env_var("_USE_POSE_CHEAT") )
-    env_sto( "_CHEAT_LKG"     , True  and env_var("_USE_POSE_CHEAT") )
+    env_sto( "_CHEAT_LABEL"   , True and env_var("_USE_POSE_CHEAT") )
+    env_sto( "_CHEAT_POSE"    , True and env_var("_USE_POSE_CHEAT") )
+    env_sto( "_CHEAT_LKG"     , True and env_var("_USE_POSE_CHEAT") )
