@@ -143,6 +143,9 @@ class TaskPlanner:
         self.status = Status.INVALID # Running status
 
 
+    
+
+
     def __init__( self, noBot = False ):
         """ Create a pre-determined collection of poses and plan skeletons """
         set_blocks_env()
@@ -171,9 +174,20 @@ class TaskPlanner:
         )
         self.blcMod = BlockFunctions( self.symPln )
         
-
+        self.robot.set_move_callback( self.move_report_cb )
         self.nPlnFl = 0
         self.lmFail = 5
+
+
+    def move_report_cb( self ):
+        """ Record where the robot is at the end of each move """
+        self.memory.history.append( 
+            msg   = "RobotState", 
+            datum = {
+                'pose': self.robot.get_tcp_pose().tolist(),
+                'q'   : self.robot.get_joint_angles().tolist(),
+            }
+        )
 
 
     def shutdown( self ):
@@ -204,6 +218,7 @@ class TaskPlanner:
 
 
     
+        
 
 
     ##### Task Planning Phases ############################################
@@ -220,6 +235,7 @@ class TaskPlanner:
 
         self.memory.history.append( msg = "Annotation", datum = {"Event": "The robot takes a 3D picture of the scene."} )
         self.memory.history.append( msg = "ObsMeta"   , datum = metadata )
+        self.memory.history.append( msg = "Observation BEGIN" )
         
         self.memory.process_observations( 
             obsrv,
@@ -229,6 +245,8 @@ class TaskPlanner:
 
         if not suppressDeterm:
             self.memory.get_current_most_likely()
+
+        self.memory.history.append( msg = "Observation END" )
 
 
     ##### Phase 2 ################################
@@ -569,6 +587,7 @@ class TaskPlanner:
         print( "\n\n\n##### TASK BEGIN #####\n" )
 
         self.reset_state() 
+        self.move_report_cb()
         
         self.symPln.set_goal( env_var("_GOAL_GRB") )
         # self.symPln.set_goal( env_var("_GOAL_OR_RGB") )
