@@ -452,19 +452,6 @@ class LUMP:
         return False
     
 
-    # @staticmethod
-    # def dist_to_aabb( pnt, aabb, margin = _RBT_TABLE_MARGIN ):
-    #     """ Return True if the `pnt` is inside the `aabb` of arbitrary dimension """
-    #     ans = 1e9
-    #     for dim, coord in enumerate( pnt ):
-    #         ans = ans and (aabb[0,dim] < (coord + margin))
-    #         ans = ans and (aabb[1,dim] > (coord - margin))
-    #     return ans
-
-
-    
-    
-
     @staticmethod
     def config_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
         """ Compute a "joint position badness" """
@@ -550,6 +537,7 @@ class LUMP:
             backupVc = np.subtract( pnt, centroid )
             backupDr = vec_unit( backupVc ) 
             xBasis   = np.array([0.0, -1.0, 0.0])
+            # xBasis   = np.array([1.0, 0.0, 0.0]) # 2025-06-30: Does NOT work!
             zBasis   = -backupDr
             yBasis   = vec_unit( np.cross( zBasis, xBasis ) )
             xBasis   = vec_unit( np.cross( yBasis, zBasis ) )
@@ -616,7 +604,8 @@ class LUMP:
     
 
     def plan_3d_shots( self, objects : list[GraspObj], dBackup : float, N : int = None, 
-                             desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
+                             desiredAngularSeparation_rad : float = 30.0/180.0*np.pi,
+                             individual : bool = False ):
         """ A Series of shots with some angular distance between them """
         if N is None:
             N = self.nextNshot
@@ -658,10 +647,17 @@ class LUMP:
                 nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )
             return nrg
 
-        while len( shots ) < N:
-            nuShot = self.plan_3d_shot_centroid( objects, dBackup, energyFunc = sep_energy )
-            if nuShot is not None:
+        if individual:
+            for obj_i in objects:
+                nuShot = self.plan_3d_shot_centroid( [obj_i,], dBackup, energyFunc = sep_energy )
+                while nuShot is None:
+                    nuShot = self.plan_3d_shot_centroid( [obj_i,], dBackup, energyFunc = sep_energy )
                 shots.append( nuShot )
+        else:
+            while len( shots ) < N:
+                nuShot = self.plan_3d_shot_centroid( objects, dBackup, energyFunc = sep_energy )
+                if nuShot is not None:
+                    shots.append( nuShot )
 
         return [np.array( shot[1] ) for shot in shots]
     
