@@ -320,6 +320,14 @@ class PoseCheater:
             return rtnSym
         else:
             return list()
+        
+
+    def all_past_symbols( self ):
+        rtnLst = list()
+        for frame in self.symbols:
+            rtnLst.extend( frame )
+        return rtnLst
+
     
 
     def last_known_beliefs( self ):

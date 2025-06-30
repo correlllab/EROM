@@ -620,6 +620,7 @@ class TaskPlanner:
                 posLst.extend( self.cheater.last_known_beliefs() )
                 posLst.extend( self.cheater.last_known_symbols() )
                 posLst = [item for item in posLst if random() < 0.75]
+                posLst.extend( [item for item in self.cheater.all_past_symbols() if random() < 0.25] )
                 bgnPoses = self.memory.plan_3d_shots( posLst, 
                                                       1.25*LUMP.dShot, 
                                                       desiredAngularSeparation_rad = 60.0/180.0*np.pi,

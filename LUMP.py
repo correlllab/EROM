@@ -452,19 +452,6 @@ class LUMP:
         return False
     
 
-    # @staticmethod
-    # def dist_to_aabb( pnt, aabb, margin = _RBT_TABLE_MARGIN ):
-    #     """ Return True if the `pnt` is inside the `aabb` of arbitrary dimension """
-    #     ans = 1e9
-    #     for dim, coord in enumerate( pnt ):
-    #         ans = ans and (aabb[0,dim] < (coord + margin))
-    #         ans = ans and (aabb[1,dim] > (coord - margin))
-    #     return ans
-
-
-    
-    
-
     @staticmethod
     def config_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
         """ Compute a "joint position badness" """
