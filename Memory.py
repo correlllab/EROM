@@ -300,22 +300,40 @@ def get_uniform_prior_over_labels( labelsLst : list = None ):
 class PoseCheater:
     """ Fudge the `Memory` such that things are where they should be """
 
-    def __init__( self, basePose = None, startSymbols = None, fix_labels = False, fix_poses = True ):
+    def __init__( self, startSymbols = None, fix_labels = False, fix_poses = True ):
         """ Setup local memory """
         self.fixLabel = fix_labels
         self.fixPose  = fix_poses
-        self.symbols = deque( [startSymbols,] ) if isinstance( startSymbols, list ) else deque()
-        self.base    = extract_pose_as_homog( basePose ) if (basePose is not None) else np.eye(4)
+        self.symbols  = deque( [startSymbols,] ) if isinstance( startSymbols, list ) else deque()
+        self.beliefs  = deque() # WARNING: STATE LEAKAGE
+        self.trouble  = False # WARNING: STATE LEAKAGE
 
 
     def last_known_symbols( self ):
         """ Get last known symbol locations, even if we goofed last time """
-        rtnSym = self.symbols[-1]
-        index  = 2
-        while ((not len( rtnSym )) and (index <= len( self.symbols ))):
-            rtnSym = self.symbols[ -index ]
-            index += 1
-        return rtnSym
+        if len( self.symbols ):
+            rtnSym = self.symbols[-1]
+            index  = 2
+            while ((not len( rtnSym )) and (index <= len( self.symbols ))):
+                rtnSym = self.symbols[ -index ]
+                index += 1
+            return rtnSym
+        else:
+            return list()
+    
+
+    def last_known_beliefs( self ):
+        """ Get last known belief locations, even if we goofed last time """
+        # WARNING: STATE LEAKAGE
+        if len( self.beliefs ):
+            rtnSym = self.beliefs[-1]
+            index  = 2
+            while ((not len( rtnSym )) and (index <= len( self.beliefs ))):
+                rtnSym = self.beliefs[ -index ]
+                index += 1
+            return rtnSym
+        else:
+            return list()
 
 
     def log_symbols( self, symLst ):
@@ -323,8 +341,14 @@ class PoseCheater:
         self.symbols.append( deep_copy_memory_list( symLst ) )
 
 
+    def log_beliefs( self, symLst ):
+        """ Store the most recent symbols """
+        self.beliefs.append( deep_copy_memory_list( symLst ) )
+
+
     def log_successful_action( self, poseBgn, poseEnd ):
         """ Move the symbol to where the robot moved it """
+        self.trouble = False
         print( f"Moved block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
         lastFrame = deep_copy_memory_list( self.symbols[-1] )
         if len( lastFrame ):
@@ -339,22 +363,23 @@ class PoseCheater:
             self.symbols.append( lastFrame[:] )
         
 
-
     def log_failed_action( self, poseBgn, poseEnd ):
         """ We done goofed, Erase symbol """
+        self.trouble = True
         self.symbols.append( list() )
-
+        # if (len( self.beliefs ) > 1):
+        #     self.beliefs.pop()
         print( f"Could NOT move block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
 
 
     # def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ):
     def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ) -> list[GraspObj]:
         """ Adjust the positions of symbols to their last """
-        lastFrame : list[GraspObj] = self.symbols[-1]
+        lastFrame : list[GraspObj] = self.last_known_symbols()
         rtnSym = list()
-        lSet = set([])
-        cSet = set([])
-        dlta = False
+        lSet   = set([])
+        cSet   = set([])
+        dlta   = False
 
         def p_collide_return( qSym ):
             """ Did we already log a symbol at this location? """
@@ -362,7 +387,6 @@ class PoseCheater:
                 if euclidean_distance_between_symbols( qSym, rSym ) < env_var('_BLOCK_SCALE')*0.75:
                     return True
             return False
-
 
         if self.fixLabel and self.fixPose:
             for j, lSym in enumerate( lastFrame ):
@@ -381,7 +405,6 @@ class PoseCheater:
             print( "CHEAT OBJECTS:" )
             for j, lSym in enumerate( lastFrame ):
                 print( f"\t{lSym}" )
-
 
             for i, rSym in enumerate( symLst ):
                 sMin = None
@@ -403,17 +426,6 @@ class PoseCheater:
                     if (lSym.label not in cSet) and (not p_collide_return( lSym )):
                         cSet.add( lSym.label )
                         rtnSym.append( lSym )
-
-                # if (id( lSym ) not in lSet) and (lSym.label not in cSet):
-                #     collide = False
-                #     for i, rSym in enumerate( rtnSym ):
-                #         if euclidean_distance_between_symbols( lSym, rSym ) < env_var("_BLOCK_SCALE"):
-                #             collide = True
-                #             break
-                #     if not collide:
-                #         rtnSym.append( lSym )
-                #         lSet.add( id( lSym ) )
-                #         cSet.add( lSym.label )
                 
         if dlta:
             self.symbols.append( rtnSym )
@@ -583,9 +595,10 @@ class Memory:
     ##### Perception #############################
 
     def plan_3d_shots( self, objects: list[GraspObj], radius : float = LUMP.dShot, N : int = 3,
-                             desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
+                             desiredAngularSeparation_rad : float = 30.0/180.0*np.pi,
+                             individual : bool = False ):
         """ Ask the sensory planner to get us a shot """
-        return self.mp.plan_3d_shots( objects, radius, N, desiredAngularSeparation_rad )
+        return self.mp.plan_3d_shots( objects, radius, N, desiredAngularSeparation_rad, individual )
     
 
     def locate_all( self, objLst : list[GraspObj] ):

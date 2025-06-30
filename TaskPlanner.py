@@ -13,7 +13,7 @@ Contacts: {james.watson-2@colorado.edu,}
 import time, os
 now = time.time
 from time import sleep
-# from random import random
+from random import random
 from traceback import print_exc
 from datetime import datetime
 
@@ -247,6 +247,7 @@ class TaskPlanner:
             self.memory.get_current_most_likely()
 
         self.memory.history.append( msg = "Observation END" )
+        
 
 
     ##### Phase 2 ################################
@@ -370,6 +371,7 @@ class TaskPlanner:
                 "Event": "The robot has failed to plan any actions.",
             } )
         elif (self.symPln.status == Status.SUCCESS):
+            
             if env_var("_USE_PERC_HACK"):
                 self.memory.mp.log_success_perc()
             self.status = Status.SUCCESS
@@ -613,9 +615,19 @@ class TaskPlanner:
             # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
             # bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
             # bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot, 3, 60.0/180.0*np.pi )
-            bgnPoses = self.memory.plan_3d_shots( self.cheater.last_known_symbols(), 
-                                                  1.25*LUMP.dShot, 
-                                                  desiredAngularSeparation_rad = 60.0/180.0*np.pi )
+            if self.cheater.trouble:
+                posLst = list()
+                posLst.extend( self.cheater.last_known_beliefs() )
+                posLst.extend( self.cheater.last_known_symbols() )
+                posLst = [item for item in posLst if random() < 0.75]
+                bgnPoses = self.memory.plan_3d_shots( posLst, 
+                                                      1.25*LUMP.dShot, 
+                                                      desiredAngularSeparation_rad = 60.0/180.0*np.pi,
+                                                      individual = True )
+            else:
+                bgnPoses = self.memory.plan_3d_shots( self.cheater.last_known_symbols(), 
+                                                      1.25*LUMP.dShot, 
+                                                      desiredAngularSeparation_rad = 60.0/180.0*np.pi )
 
             if not _RESPONSIVE_MODE:
                 self.memory.reset_memory()
@@ -633,6 +645,10 @@ class TaskPlanner:
                                   linAccel = env_var("_ROBOT_LIN_ACCEL" ),
                                   asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
                 self.phase_1_Perceive( Append = True, suppressDeterm = True )
+
+            self.cheater.log_beliefs( self.memory.bMem.beliefs )
+
+            
 
             if env_var("_USE_GRAPHICS"):
                 render_scan_list( self.memory.scan )
@@ -667,6 +683,7 @@ class TaskPlanner:
                 self.memory.reset_memory()
                 self.nPlnFl += 1
                 print( f"PDLS planner has FAILED {self.nPlnFl} times!" )
+                self.cheater.trouble = True
                 if self.nPlnFl >= self.lmFail:
                     print( f"HALT!: PDLS failure limit ({self.lmFail}) has been REACHED!\n>>> !END! <<<\n" )
                     break

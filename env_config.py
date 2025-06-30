@@ -237,6 +237,6 @@ def set_experiment_env():
     env_sto( "_USE_PERC_HACK" , True )
 
     env_sto( "_USE_POSE_CHEAT", True )
-    env_sto( "_CHEAT_LABEL"   , True and env_var("_USE_POSE_CHEAT") )
+    env_sto( "_CHEAT_LABEL"   , False and env_var("_USE_POSE_CHEAT") )
     env_sto( "_CHEAT_POSE"    , True and env_var("_USE_POSE_CHEAT") )
-    env_sto( "_CHEAT_LKG"     , True and env_var("_USE_POSE_CHEAT") )
+    env_sto( "_CHEAT_LKG"     , False and env_var("_USE_POSE_CHEAT") )
