@@ -45,12 +45,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/Log/2025-06-27.md",
+                "file": "za_Notes/LUMP.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "2025-06-27"
+              "title": "LUMP"
             }
           }
         ],
@@ -201,6 +201,7 @@
   },
   "active": "9a1bb40c7afbfaa1",
   "lastOpenFiles": [
+    "za_Notes/Log/2025-06-27.md",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-01-27.pkl",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-08-42.pkl",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-14-10.pkl",
@@ -211,9 +212,7 @@
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-54-35.pkl",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_15-23-05.pkl",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_15-27-55.pkl",
-    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_15-36-32.pkl",
     "za_Notes/Log/2025-06-26.md",
-    "za_Notes/Log/2025-06-27.md",
     "za_Notes/DEV_PLAN.md",
     "za_Notes/LUMP.md",
     "za_Notes/Log/2025-05-20.md",

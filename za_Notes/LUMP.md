@@ -1,4 +1,14 @@
 # [L]imited [U]R5 [M]otion [P]lanner
+## Object Search
+- [ ] Get a list of where objects **should** be
+- [ ] Plan shots that cover supposed objects
+	- [ ] Need a shortcut for obscured objects
+- [ ] Rank shots
+- [ ] Take shots one at a time
+	- [ ] Take note of where info was gained
+	- [ ] Take note of greatest confusion
+- [ ] Plan shots that would reduce existing confusion and add them to the list
+- [ ] Re-rank shots and loop until all req'd objects are found
 ## Near Term Needs
 - [x] Check if an effector pose collides with base
 - [x] Check if an effector pose collides is too close to the base

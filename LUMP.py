@@ -715,20 +715,7 @@ class LUMP:
             self.locate( obj )
 
 
-    # def verify_IK( self ):
-    #     """ Is our IK any good? """
-    #     jnts = np.array([ -1.0+2.0*random() for _ in range(6) ])
-    #     pose = self.FK( jnts )
-    #     print( f"Solve for effector pose:\n{pose}" )
-    #     soln = self.IK( pose )
-    #     if soln is not None:
-    #         sPos = self.FK( soln )
-    #         print( f"Sol'n : {soln}" )
-    #         print( f"Config: {jnts}" )
-    #         diff = euclidean_distance_between_symbols( pose, sPos )
-    #         print( f"Difference between actual and IK sol'n: {diff}" )
-    #     else:
-    #         print( "FAILED to solve!" )
+    
         
 
 
