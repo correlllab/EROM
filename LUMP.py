@@ -21,7 +21,7 @@ from magpie_control.ur5 import UR5_Interface
 from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog, extract_position
 from aspire.env_config import env_var
 
-from homog_utils import posn_from_xform, bases_from_xform, R_krot, R_z, homog_xform
+from homog_utils import posn_from_xform, bases_from_xform, R_krot, R_z, homog_xform, diff_mag
 from dh_mp import FK_DH_chain, dh_link_homog
 
 from Geometry import p_symbol_in_cam_view
@@ -402,7 +402,7 @@ def get_aabb( ptsLst ):
 
 
 ########## MOTION PLANNER ##########################################################################
-_COLLISION_NRG_PENALTY = 5.0
+_COLLISION_NRG_PENALTY = 7.5
 
 class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
@@ -670,14 +670,14 @@ class LUMP:
             # print( shots )
             vecs = [np.subtract( extract_position(shot[1]), centroid ) for shot in shots if (shot is not None)]
             vecs.append( np.array([0.0, 0.0, 1.0,]) ) # Penalize being exactly vertical
-            angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs if (vc_i != vc_f)]
+            angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs if (diff_mag( vc_i, vc_f ) > 0.0)]
             nrg  = LUMP.config_energy( qRef, q ) * _CONFIG_FACTOR
             zQ   = pose[2,3]
             nrg += max( 0.0, 1.0-zQ )*_TABLE_FACTOR # Penalize being near the table
             hit = 1.0 if self.p_collision_q( q ) else 0.0
             nrg += hit*_COLLISION_NRG_PENALTY
             nrg += np.linalg.norm( pose[0:2,3] )*_REACH_FACTOR
-            nrg += np.linalg.norm( np.subtract( qRef, q ) )/_DELTA_DIVISOR*_DELTA_FACTOR
+            nrg += (np.linalg.norm( np.subtract( qRef, q ) )/_DELTA_DIVISOR + abs(qRef[-1] - q[-1])/np.pi)*_DELTA_FACTOR
             nrg += max( 0.0, 0.75 - np.linalg.norm( extract_position( pose ) ) )/0.75*4.0
             for theta_j in angl:
                 nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )
@@ -774,7 +774,7 @@ class LUMP:
         """ Generate a list of shots that will cover as many objects as possible """
         # 1. Get minimum distance that would still fit in the camera frustum
         fovHlf = env_var("_D405_FOV_H_DEG")/180.0 * np.pi / 2.0
-        posn   = [extract_pose_as_homog( trgt ) for trgt in targets]
+        posn   = [extract_position( trgt ) for trgt in targets]
         mean   = np.mean( posn, axis = 0 )
         aabb   = get_aabb( posn )
         sHlf   = np.linalg.norm( np.subtract( aabb[1][:-1], aabb[0][:-1] ) )/2.0
@@ -805,10 +805,9 @@ class LUMP:
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
         shots    = LUMP.sample_covering_shots( targets, shotDist, Nshots = N*_MULT_FACTOR )
-        shotsW   = LUMP.wrap_shots( shots )
         ranking  = deque()
         nrgFunc  = self.get_pose_energy_func( list(), centroid )
-        for shot_i in shotsW:
+        for shot_i in shots:
             shot = LUMP.wrap_shots( shot_i )
             soln = self.IK( shot_i, suppressCache = True )
             if soln is not None:
@@ -820,7 +819,7 @@ class LUMP:
                 ranking.append( shot )
         ranking = list( ranking )
         ranking.sort( key = lambda x: x['score'] )
-        return ranking[:N]
+        return [item['pose'] for item in ranking[:N]]
 
 
         

@@ -75,6 +75,11 @@ def vec_mag( vec ):
     return np.linalg.norm( vec )
 
 
+def diff_mag( v1, v2 ):
+    """ Return the magnitude of `vec` """
+    return np.linalg.norm( np.subtract( v1, v2 ) )
+
+
 def vec_unit( vec ):
     """ Return the unit vector in the direction of `vec` """
     mag = np.linalg.norm( vec )

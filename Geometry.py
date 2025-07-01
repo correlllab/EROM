@@ -3,13 +3,14 @@
 import numpy as np
 
 from magpie_control.poses import vec_unit, repair_pose
-from magpie_control.homog_utils import R_x, R_y, posn_from_xform
+from magpie_control.homog_utils import R_x, R_y, posn_from_xform, diff_mag
 
 from aspire.env_config import env_var
 from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, )
 
 
 
+########## SENSOR PLACEMENT ########################################################################
 ########## SENSOR PLACEMENT ########################################################################
 
 def get_D405_FOV_frustum( camXform ):

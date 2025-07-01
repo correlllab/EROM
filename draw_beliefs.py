@@ -66,6 +66,7 @@ def vispy_geo_list_window( geoLst : list, robotPose = None, xtra = None ):
         rbtAxs  = scene.visuals.XYZAxis()
         # VISPY IS COLUMN-MAJOR
         rot = np.eye(4)
+        print( rot[0:3,0:3], pose[0:3,0:3] )
         rot[0:3,0:3] = pose[0:3,0:3]
         vizXfrm = transforms.linear.MatrixTransform( matrix = rot.transpose() )
         vizXfrm.scale( [0.15,0.15,0.15,] )

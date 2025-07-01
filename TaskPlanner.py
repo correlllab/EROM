@@ -641,6 +641,7 @@ class TaskPlanner:
                 self.memory.reset_memory()
 
             if env_var("_USE_GRAPHICS"):
+                print( bgnPoses )
                 render_memory_list( syms = self.cheater.symbols[-1], robotPose = bgnPoses )
 
             for bgnPose in bgnPoses:
