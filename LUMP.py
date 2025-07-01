@@ -21,8 +21,10 @@ from magpie_control.ur5 import UR5_Interface
 from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog, extract_position
 from aspire.env_config import env_var
 
-from homog_utils import posn_from_xform, bases_from_xform, R_krot
+from homog_utils import posn_from_xform, bases_from_xform, R_krot, R_z, homog_xform
 from dh_mp import FK_DH_chain, dh_link_homog
+
+from Geometry import p_symbol_in_cam_view
 
 # _RBT_BASE_BUFFER  = 0.200
 _RBT_BASE_BUFFER  = 0.300
@@ -250,6 +252,40 @@ def sample_on_sphere( center = [0.0, 0.0, 0.0,], radius = 1.0, N = 1 ):
         for _ in range(N):
             rtnLst.append( gen_pnt() )
         return np.array( list( rtnLst ) )
+    
+
+def sphere_samples_to_eff_poses( testPts, center = [0.0, 0.0, 0.0,], effXbasis = [0.0, -1.0, 0.0] ):
+    rtnPoses = deque()
+    for pnt in testPts:
+        rtnPose  = np.eye(4)
+        backupVc = np.subtract( pnt, center )
+        backupDr = vec_unit( backupVc ) 
+        xBasis   = np.array( effXbasis )
+        zBasis   = -backupDr
+        yBasis   = vec_unit( np.cross( zBasis, xBasis ) )
+        xBasis   = vec_unit( np.cross( yBasis, zBasis ) )
+        rtnPose[0:3,0] = xBasis
+        rtnPose[0:3,1] = yBasis
+        rtnPose[0:3,2] = zBasis
+        rtnPose[0:3,3] = pnt
+        rtnPoses.append( rtnPose.copy() )
+    return list( rtnPoses )
+
+
+def randf( lo = 0.0, hi = 1.0 ):
+    """ Return a random `float` between `lo` and `hi` """
+    return lo+(hi-lo)*random()
+
+
+def vary_eff_wrist_3( effPoses : list[np.ndarray], N = 3, lo = -np.pi/2.0, hi = np.pi/2.0 ):
+    """ Spin each effector post about local Z """
+    rtnPoses = deque()
+    for pose_i in effPoses:
+        for _ in range(N):
+            T      = homog_xform( rotnMatx = R_z( randf( lo, hi ) ) )
+            pose_j = pose_i.dot( T )
+            rtnPoses.append( pose_j )
+    return list( rtnPoses )
 
 
 def UR5_Jacobian( q : list | np.ndarray ):
@@ -350,6 +386,19 @@ def image_offset( image : np.ndarray, bbox : np.ndarray, zLen :float ):
     cntr2d = np.array([ ((bbox[0]+bbox[2])/2.0-clHf)/clHf, ((bbox[1]+bbox[3])/2.0-rwHf)/rwHf, ])
     
     return np.array([ cntr2d[0]*Xlen, cntr2d[1]*Ylen, zLen, ])
+
+
+def get_aabb( ptsLst ):
+    try:
+        ptsLst = np.array( ptsLst )
+        rtnBB  = np.zeros( (2,ptsLst.shape[1],) )
+        ptMin  = ptsLst.min( axis = 0 )
+        ptMax  = ptsLst.max( axis = 0 )
+        rtnBB[0,:] = ptMin
+        rtnBB[1,:] = ptMax
+    except ValueError:
+        print( f"`get_oPCD_aabb`: Array size error! {ptsLst.shape}" )
+    return rtnBB
 
 
 ########## MOTION PLANNER ##########################################################################
@@ -603,20 +652,7 @@ class LUMP:
         return rtnPath
     
 
-    def plan_3d_shots( self, objects : list[GraspObj], dBackup : float, N : int = None, 
-                             desiredAngularSeparation_rad : float = 30.0/180.0*np.pi,
-                             individual : bool = False ):
-        """ A Series of shots with some angular distance between them """
-        if N is None:
-            N = self.nextNshot
-        else:
-            self.nextNshot = N
-        centroid = None
-        if len( objects ):
-            centroid = self.symbol_centroid( objects )
-        else:
-            return None
-        shots = []
+    def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
 
         _CONFIG_FACTOR = 4.5
         _TABLE_FACTOR  = 3.0
@@ -634,7 +670,7 @@ class LUMP:
             # print( shots )
             vecs = [np.subtract( extract_position(shot[1]), centroid ) for shot in shots if (shot is not None)]
             vecs.append( np.array([0.0, 0.0, 1.0,]) ) # Penalize being exactly vertical
-            angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs]
+            angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs if (vc_i != vc_f)]
             nrg  = LUMP.config_energy( qRef, q ) * _CONFIG_FACTOR
             zQ   = pose[2,3]
             nrg += max( 0.0, 1.0-zQ )*_TABLE_FACTOR # Penalize being near the table
@@ -646,16 +682,34 @@ class LUMP:
             for theta_j in angl:
                 nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )
             return nrg
+        
+        return sep_energy
+    
+
+    def plan_3d_shots( self, objects : list[GraspObj], dBackup : float, N : int = None, 
+                             desiredAngularSeparation_rad : float = 30.0/180.0*np.pi,
+                             individual : bool = False ):
+        """ A Series of shots with some angular distance between them """
+        if N is None:
+            N = self.nextNshot
+        else:
+            self.nextNshot = N
+        centroid = None
+        if len( objects ):
+            centroid = self.symbol_centroid( objects )
+        else:
+            return None
+        shots = []
 
         if individual:
             for obj_i in objects:
-                nuShot = self.plan_3d_shot_centroid( [obj_i,], dBackup, energyFunc = sep_energy )
+                nuShot = self.plan_3d_shot_centroid( [obj_i,], dBackup, energyFunc = self.get_pose_energy_func( shots, centroid, desiredAngularSeparation_rad ) )
                 while nuShot is None:
-                    nuShot = self.plan_3d_shot_centroid( [obj_i,], dBackup, energyFunc = sep_energy )
+                    nuShot = self.plan_3d_shot_centroid( [obj_i,], dBackup, energyFunc = self.get_pose_energy_func( shots, centroid, desiredAngularSeparation_rad ) )
                 shots.append( nuShot )
         else:
             while len( shots ) < N:
-                nuShot = self.plan_3d_shot_centroid( objects, dBackup, energyFunc = sep_energy )
+                nuShot = self.plan_3d_shot_centroid( objects, dBackup, energyFunc = self.get_pose_energy_func( shots, centroid, desiredAngularSeparation_rad ) )
                 if nuShot is not None:
                     shots.append( nuShot )
 
@@ -715,7 +769,60 @@ class LUMP:
             self.locate( obj )
 
 
-    
+    @staticmethod
+    def sample_covering_shots( targets : list[GraspObj], camDist = dShot, Nshots = 10 ):
+        """ Generate a list of shots that will cover as many objects as possible """
+        # 1. Get minimum distance that would still fit in the camera frustum
+        fovHlf = env_var("_D405_FOV_H_DEG")/180.0 * np.pi / 2.0
+        posn   = [extract_pose_as_homog( trgt ) for trgt in targets]
+        mean   = np.mean( posn, axis = 0 )
+        aabb   = get_aabb( posn )
+        sHlf   = np.linalg.norm( np.subtract( aabb[1][:-1], aabb[0][:-1] ) )/2.0
+        dMin   = sHlf / np.tan( fovHlf )
+        dCam   = max( [env_var("_MIN_CAM_PCD_DIST_M"), dMin, camDist,] ) 
+        cPts   = sample_on_sphere( center = mean, radius = dCam, N = Nshots )
+        cPos   = sphere_samples_to_eff_poses( cPts, center = mean, effXbasis = [0.0, -1.0, 0.0] )
+        rPos   = vary_eff_wrist_3( cPos, N = 1, lo = -np.pi/2.0, hi = np.pi/2.0 )
+        return rPos
+
+
+    @staticmethod
+    def wrap_shots( pose ):
+        """ Put the effector `pose`(s) in a `dict` container """
+        if isinstance( pose, list ) and isinstance( pose[0], (np.ndarray, list) ):
+            return [LUMP.wrap_shots( item ) for item in pose]
+        else:
+            return {
+                'pose' : np.array( pose ),
+                'score': 0.0,
+            }
+
+
+    def plan_object_shots( self, proposedObjects : list[GraspObj], shotDist = dShot, N = 3 ):
+        """ Get ready for object search """
+        _VIEW_PENALTY =  1.0
+        _MULT_FACTOR  = 10
+        targets  = list( proposedObjects )
+        centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
+        shots    = LUMP.sample_covering_shots( targets, shotDist, Nshots = N*_MULT_FACTOR )
+        shotsW   = LUMP.wrap_shots( shots )
+        ranking  = deque()
+        nrgFunc  = self.get_pose_energy_func( list(), centroid )
+        for shot_i in shotsW:
+            shot = LUMP.wrap_shots( shot_i )
+            soln = self.IK( shot_i, suppressCache = True )
+            if soln is not None:
+                score = nrgFunc( self.q, soln )
+                for trgt in targets:
+                    if not p_symbol_in_cam_view( shot_i, trgt ):
+                        score += _VIEW_PENALTY
+                shot['score'] = score
+                ranking.append( shot )
+        ranking = list( ranking )
+        ranking.sort( key = lambda x: x['score'] )
+        return ranking[:N]
+
+
         
 
 

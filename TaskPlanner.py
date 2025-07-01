@@ -615,20 +615,27 @@ class TaskPlanner:
             # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
             # bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
             # bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot, 3, 60.0/180.0*np.pi )
-            if self.cheater.trouble:
-                posLst = list()
-                posLst.extend( self.cheater.last_known_beliefs() )
-                posLst.extend( self.cheater.last_known_symbols() )
-                posLst = [item for item in posLst if random() < 0.75]
-                posLst.extend( [item for item in self.cheater.all_past_symbols() if random() < 0.25] )
-                bgnPoses = self.memory.plan_3d_shots( posLst, 
-                                                      1.25*LUMP.dShot, 
-                                                      desiredAngularSeparation_rad = 60.0/180.0*np.pi,
-                                                      individual = True )
+
+            if 0:
+                if self.cheater.trouble:
+                    posLst = list()
+                    posLst.extend( self.cheater.last_known_beliefs() )
+                    posLst.extend( self.cheater.last_known_symbols() )
+                    posLst = [item for item in posLst if random() < 0.75]
+                    posLst.extend( [item for item in self.cheater.all_past_symbols() if random() < 0.25] )
+                    bgnPoses = self.memory.plan_3d_shots( posLst, 
+                                                        1.25*LUMP.dShot, 
+                                                        desiredAngularSeparation_rad = 60.0/180.0*np.pi,
+                                                        individual = True )
+                else:
+                    bgnPoses = self.memory.plan_3d_shots( self.cheater.last_known_symbols(), 
+                                                        1.25*LUMP.dShot, 
+                                                        desiredAngularSeparation_rad = 60.0/180.0*np.pi )
             else:
-                bgnPoses = self.memory.plan_3d_shots( self.cheater.last_known_symbols(), 
-                                                      1.25*LUMP.dShot, 
-                                                      desiredAngularSeparation_rad = 60.0/180.0*np.pi )
+                if self.cheater.trouble:
+                    bgnPoses = self.memory.mp.plan_object_shots( self.cheater.last_known_beliefs(), 1.25*LUMP.dShot, 3 )
+                else:
+                    bgnPoses = self.memory.mp.plan_object_shots( self.cheater.last_known_symbols(), 1.25*LUMP.dShot, 3 )
 
             if not _RESPONSIVE_MODE:
                 self.memory.reset_memory()
