@@ -9,9 +9,10 @@ from math import asin as asin
 from math import sqrt as sqrt
 from math import pi as pi
 
-from random import random
+from random import random, choice
 from collections import deque
 from collections.abc import Callable
+from copy import deepcopy
 
 import numpy as np
 from numpy import linalg
@@ -782,12 +783,102 @@ class LUMP:
             self.locate( obj )
 
 
+    class SearchTarget:
+        """ Container class for things we are looking for """
+        def __init__( self, thing : GraspObj = None ):
+            """ Read from symbol """
+            self.pose  = np.eye(4)
+            self.label = env_var("_NULL_NAME")
+            self.dist  = dict()
+            self.count = 0
+            if thing is not None:
+                self.pose  = extract_pose_as_homog( thing )
+                self.label = thing.label
+                self.dist  = thing.labels
+
+        def copy( self ):
+            """ Return a copy of the object """
+            rtnObj = LUMP.SearchTarget()
+            rtnObj.pose  = np.array( self.pose )
+            rtnObj.label = self.label
+            rtnObj.dist  = deepcopy( self.dist )
+            rtnObj.count = 0
+            return rtnObj
+
+        @staticmethod
+        def get_centroid( targets : list[LUMP.SearchTarget] ):
+            """ Get the centroid of a collection of targets """
+            return np.mean( [extract_position( item.pose ) for item in targets] )
+
+        @staticmethod
+        def from_GraspObj_list( things : list[GraspObj] ) -> list[LUMP.SearchTarget]:
+            """ Get a list of targets """
+            rtnLst = deque()
+            for thing in things:
+                rtnLst.append( LUMP.SearchTarget( thing ) )
+            return list( rtnLst )
+        
+        @staticmethod
+        def propose_gridded_targets( things : list[LUMP.SearchTarget], N : int = 3, gridUnit_m = 0.100 ) -> list[LUMP.SearchTarget]:
+            """ Imagine things to look for """
+            addLst  = list()
+            compass = [[gridUnit_m, 0.0,], [-gridUnit_m, 0.0,], [0.0, gridUnit_m,], [0.0, -gridUnit_m,],]
+            prob    = 0.25
+            while len( addLst ) < N:
+                for thing in things:
+                    if random() < prob:
+                        nuObj = thing.copy()
+                        drctn = choice( compass )
+                        nuObj.pose[0:2,3] += drctn
+                        addLst.append( nuObj )
+            return addLst
+        
+        @staticmethod
+        def keep_consistent( things : list[LUMP.SearchTarget], truTargets : list[LUMP.SearchTarget] ):
+            rtnLst = list()
+            for thing in things:
+                thPosn = extract_position( thing.pose )
+                found  = False
+                for target in truTargets:
+                    taPosn = extract_position( target.pose )
+                    if diff_mag( thPosn, taPosn ) <= env_var("_BLOCK_SCALE"):
+                        rtnLst.append( thing )
+                        break
+                if (not found) and (random() < 0.25):
+                    rtnLst.append( thing )
+            return rtnLst
+
+
+
+        @staticmethod
+        def reconcile( things : list[LUMP.SearchTarget], countOverlap = True ):
+            """ Merge overlapping targets """
+            rtnLst = list()
+            banSet = set([])
+            Nobj   = len( things )
+            for i in range( Nobj-1 ):
+                obj_i = things[i]
+                psn_i = extract_position( obj_i.pose )
+                for j in range( i+1, Nobj ):
+                    if j not in banSet:
+                        obj_j = things[j]
+                        psn_j = extract_position( obj_j.pose )
+                        if diff_mag( psn_i, psn_j ) < env_var("_BLOCK_SCLAE"):
+                            banSet.add(j)
+                            if countOverlap:
+                                obj_i.count += obj_j.count
+            for i in range( Nobj ):
+                if i not in banSet:
+                    rtnLst.append( things[i] )
+            return rtnLst
+
+
     @staticmethod
-    def sample_covering_shots( targets : list[GraspObj], camDist = dShot, Nshots = 10 ) -> list[np.ndarray]:
+    def sample_covering_shots( targets : list[GraspObj] | list[LUMP.SearchTarget], camDist = dShot, Nshots = 10 ) -> list[np.ndarray]:
         """ Generate a list of shots that will cover as many objects as possible """
         # 1. Get minimum distance that would still fit in the camera frustum
         fovHlf = env_var("_D405_FOV_H_DEG")/180.0 * np.pi / 2.0
-        posn   = [extract_position( trgt ) for trgt in targets]
+        posn   = [extract_position( trgt.pose ) for trgt in targets]
         mean   = np.mean( posn, axis = 0 )
         aabb   = get_aabb( posn )
         sHlf   = np.linalg.norm( np.subtract( aabb[1][:-1], aabb[0][:-1] ) )/2.0
@@ -835,53 +926,6 @@ class LUMP:
         return [item['pose'] for item in ranking[:N]]
     
 
-    class SearchTarget:
-        """ Container class for things we are looking for """
-        def __init__( self, thing : GraspObj = None ):
-            """ Read from symbol """
-            self.pose  = np.eye(4)
-            self.label = env_var("_NULL_NAME")
-            self.dist  = dict()
-            self.count = 0
-            if thing is not None:
-                self.pose  = extract_pose_as_homog( thing )
-                self.label = thing.label
-                self.dist  = thing.labels
-
-        @staticmethod
-        def get_centroid( targets : list[LUMP.SearchTarget] ):
-            """ Get the centroid of a collection of targets """
-            return np.mean( [extract_position( item.pose ) for item in targets] )
-
-        @staticmethod
-        def from_GraspObj_list( things : list[GraspObj] ) -> list[LUMP.SearchTarget]:
-            """ Get a list of targets """
-            rtnLst = deque()
-            for thing in things:
-                rtnLst.append( LUMP.SearchTarget( thing ) )
-            return list( rtnLst )
-        
-        @staticmethod
-        def propose_gridded_targets( things : list[LUMP.SearchTarget], N : int = 3, gridUnit_m = 0.100 ) -> list[LUMP.SearchTarget]:
-            """ Imagine things to look for """
-            Nadd    = 0
-            addLst  = list()
-            compass = [[gridUnit_m,0.0,], [-gridUnit_m,0.0,], [0.0,gridUnit_m,], [0.0,-gridUnit_m,], ]
-            prob    = 0.25
-            while Nadd < N:
-                for thing in things:
-                    pass
-
-        
-        @staticmethod
-        def reconcile( things : list[LUMP.SearchTarget], countOverlap = True ):
-            """ Merge overlapping targets """
-            pass
-
-
-
-    
-
     def init_object_search( self, proposedObjects : list[GraspObj], 
                                   senseCB : Callable, rMoveCB : Callable, fetchCB : Callable, checkCB : Callable ):
         """ Get ready to search """
@@ -915,7 +959,7 @@ class LUMP:
         self.ranking = LUMP.wrap_shots( self.shots )
         nuLst = deque()
         # Cmax  = max( [item.count for item in self.targets] )
-        for shot in self.ranking:
+        for shot in self.shots:
             pose = shot['pose']
             soln = self.IK( pose, suppressCache = True )
             if soln is not None:
@@ -929,12 +973,19 @@ class LUMP:
                 nuLst.append( shot )
         self.ranking = list( nuLst )
         self.ranking.sort( key = lambda x: x['score'] )
+        self.shots = [item['pose'] for item in self.ranking]
 
 
     def run_object_search( self ):
         """ Be a little more persistent until the objects are found """
         _MULT_FACTOR  = 10
         _N_SHOT_ADD   =  5
+        _N_SHOT_TOTAL = _N_SHOT_ADD*_MULT_FACTOR 
+        _N_INSPECT    =  3
+        
+        nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
+        self.targets.extend( nuTgt )
+        
         self.shots = LUMP.sample_covering_shots( self.targets, LUMP.dShot, Nshots = _N_SHOT_ADD*_MULT_FACTOR )
         self.rank_search_shots()
 
@@ -943,14 +994,27 @@ class LUMP:
             shot = self.shots[0] 
             self.mov_cb( shot )
             self.shots = self.shots[1:] # pop front
-            # 2. Gen more shots
-            beliefs = self.get_cb()
-            self.targets.extend( LUMP.SearchTarget.from_GraspObj_list( beliefs ) )
-
-
-
-
-
+            self.see_cb()
+            # 2. Gen more targets
+            beliefs = LUMP.SearchTarget.from_GraspObj_list( self.get_cb() )
+            self.targets = LUMP.SearchTarget.keep_consistent( self.targets, beliefs )
+            self.targets.extend( beliefs )
+            nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
+            self.targets.extend( nuTgt )
+            self.targets = LUMP.SearchTarget.reconcile( self.targets )
+            # 3. Gen more shots
+            bgn = 0
+            end = _N_INSPECT
+            N   = len( self.targets )
+            while bgn < N:
+                nuShots = LUMP.sample_covering_shots( self.targets[bgn:end], LUMP.dShot, Nshots = _N_SHOT_ADD )
+                self.shots.extend( nuShots )
+                bgn = end
+                end = min( end+_N_INSPECT, N )
+            # 4. Filter shots
+            self.rank_search_shots()
+            if len( self.shots ) > _N_SHOT_TOTAL:
+                self.shots = self.shots[:_N_SHOT_TOTAL]
         
 
 
