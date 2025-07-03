@@ -44,7 +44,8 @@ from OWLv2_Segment import Perception_OWLv2, _QUERIES
 from Memory import Memory, PoseCheater
 from LUMP import LUMP
 from draw_beliefs import render_memory_list, render_scan_list
-from env_config import set_experiment_env, BASE_TARGET
+from env_config import set_experiment_env
+from utils import deep_copy_memory_list
 
 
 ##### Globals #############################################################
@@ -143,9 +144,6 @@ class TaskPlanner:
         self.status = Status.INVALID # Running status
 
 
-    
-
-
     def __init__( self, noBot = False ):
         """ Create a pre-determined collection of poses and plan skeletons """
         set_blocks_env()
@@ -179,6 +177,8 @@ class TaskPlanner:
         self.lmFail = 5
 
 
+    ##### Callbacks #######################################################
+
     def move_report_cb( self ):
         """ Record where the robot is at the end of each move """
         self.memory.history.append( 
@@ -189,6 +189,37 @@ class TaskPlanner:
             }
         )
 
+    
+    def perception_cb( self ):
+        """ Trigger perception """
+        self.phase_1_Perceive( Append = True, suppressDeterm = True )
+
+
+    def cam_move_cb( self, movPose ):
+        """ Position camera for perception """
+        self.robot.moveL( _SAFE, 
+                          linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                          linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                          asynch   = False )
+        self.robot.moveL( movPose, 
+                          linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                          linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                          asynch   = False )
+
+
+    def beliefs_cb( self ):
+        """ Get current beliefs """
+        return deep_copy_memory_list( self.memory.bMem.beliefs[:] )
+    
+
+    def symbols_present_cb( self ):
+        """ Did we find all the symbols? """
+        self.phase_2_Conditions()
+        return bool( len( len( self.symPln.symbols ) ) )
+
+
+
+    ##### Utils ###########################################################
 
     def shutdown( self ):
         """ Stop the Perception Process and the UR5 connection """
@@ -295,7 +326,6 @@ class TaskPlanner:
 
         if len( self.symPln.symbols ):
             self.status = Status.RUNNING
-           
         else:
             self.status = Status.FAILURE
             if env_var("_VERBOSE"):
