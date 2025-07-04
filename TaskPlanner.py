@@ -173,6 +173,14 @@ class TaskPlanner:
         self.blcMod = BlockFunctions( self.symPln )
         
         self.robot.set_move_callback( self.move_report_cb )
+
+        self.memory.mp.init_object_search( 
+            senseCB = self.perception_cb, 
+            rMoveCB = self.cam_move_cb  , 
+            fetchCB = self.beliefs_cb   , 
+            checkCB = self.symbols_present_cb 
+        )
+
         self.nPlnFl = 0
         self.lmFail = 5
 
@@ -218,7 +226,6 @@ class TaskPlanner:
         return bool( len( len( self.symPln.symbols ) ) )
 
 
-
     ##### Utils ###########################################################
 
     def shutdown( self ):
@@ -246,10 +253,6 @@ class TaskPlanner:
         ])
         basic_BT_run( btAction )
         print( f"\nRobot returned to \n{goPose}\n" )
-
-
-    
-        
 
 
     ##### Task Planning Phases ############################################

@@ -428,6 +428,7 @@ class LUMP:
         self.nextNshot : int           = self.NshotDflt
         if isinstance( qInit, (list, np.ndarray) ):
             self.q = np.array( qInit )
+        self.searchArctive = False
 
 
     def set_state_from_robot( self ):
@@ -926,24 +927,22 @@ class LUMP:
         return [item['pose'] for item in ranking[:N]]
     
 
-    def init_object_search( self, proposedObjects : list[GraspObj], 
-                                  senseCB : Callable, rMoveCB : Callable, fetchCB : Callable, checkCB : Callable ):
+    def init_object_search( self, senseCB : Callable, rMoveCB : Callable, fetchCB : Callable, checkCB : Callable ):
         """ Get ready to search """
-        self.targets = LUMP.SearchTarget.from_GraspObj_list( proposedObjects )
         self.shots   = list()
         self.ranking = list()
         self.see_cb  = senseCB
         self.mov_cb  = rMoveCB
         self.get_cb  = fetchCB
         self.chk_cb  = checkCB
+        
 
-
-    @staticmethod
-    def p_target_in_cam_view( camXform : np.ndarray, target : LUMP.SearchTarget ):
+    def p_target_in_cam_view( self, effXform : np.ndarray, target : LUMP.SearchTarget ):
         """ Can the symbol be seen from the given perspective? """
-        bounds = get_D405_FOV_frustum( camXform )
-        qPosn  = target.pose[0:3,3]
-        blcRad = np.sqrt( 3.0 * (env_var("_BLOCK_SCALE")/2.0)**2 )
+        camXform = np.array( effXform ).dot( self.robot.camXform )
+        bounds   = get_D405_FOV_frustum( camXform )
+        qPosn    = target.pose[0:3,3]
+        blcRad   = np.sqrt( 3.0 * (env_var("_BLOCK_SCALE")/2.0)**2 )
         return p_sphere_inside_plane_list( qPosn, blcRad, bounds )
 
 
@@ -976,13 +975,16 @@ class LUMP:
         self.shots = [item['pose'] for item in self.ranking]
 
 
-    def run_object_search( self ):
+    def run_object_search( self, proposedObjects : list[GraspObj] ):
         """ Be a little more persistent until the objects are found """
         _MULT_FACTOR  = 10
         _N_SHOT_ADD   =  5
         _N_SHOT_TOTAL = _N_SHOT_ADD*_MULT_FACTOR 
         _N_INSPECT    =  3
-        
+
+        self.searchArctive = True
+
+        self.targets = LUMP.SearchTarget.from_GraspObj_list( proposedObjects )
         nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
         self.targets.extend( nuTgt )
         
@@ -1015,6 +1017,8 @@ class LUMP:
             self.rank_search_shots()
             if len( self.shots ) > _N_SHOT_TOTAL:
                 self.shots = self.shots[:_N_SHOT_TOTAL]
+
+        self.searchArctive = False
         
 
 
