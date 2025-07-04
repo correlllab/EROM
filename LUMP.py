@@ -27,9 +27,10 @@ from aspire.env_config import env_var
 from homog_utils import posn_from_xform, bases_from_xform, R_krot, R_z, homog_xform, diff_mag
 from dh_mp import FK_DH_chain, dh_link_homog
 
-from Geometry import p_symbol_in_cam_view, get_D405_FOV_frustum, p_sphere_inside_plane_list
+from Geometry import get_D405_FOV_frustum, p_sphere_inside_plane_list
+from draw_beliefs import render_memory_list
 
-from TaskPlanner import TaskPlanner
+# from TaskPlanner import TaskPlanner
 
 # _RBT_BASE_BUFFER  = 0.200
 _RBT_BASE_BUFFER  = 0.300
@@ -413,9 +414,9 @@ class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
 
     ## Problem-Specific Static Vars ##
-    ZTableCam = -0.081666 - 0.017
-    dShot     = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
-    dLoc      = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
+    ZTableCam : float = -0.081666 - 0.017
+    dShot     : float = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
+    dLoc      : float = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
 
     def __init__( self, qInit = None, robot : UR5_Interface = None ):
         """ Set params """
@@ -823,15 +824,17 @@ class LUMP:
         def propose_gridded_targets( things : list[LUMP.SearchTarget], N : int = 3, gridUnit_m = 0.100 ) -> list[LUMP.SearchTarget]:
             """ Imagine things to look for """
             addLst  = list()
-            compass = [[gridUnit_m, 0.0,], [-gridUnit_m, 0.0,], [0.0, gridUnit_m,], [0.0, -gridUnit_m,],]
+            compass = [[gridUnit_m, 0.0, 0.0,], [-gridUnit_m, 0.0, 0.0,], [0.0, gridUnit_m, 0.0,], [0.0, -gridUnit_m, 0.0,],
+                       [0.0, 0.0, -env_var("_BLOCK_SCALE"),], [0.0, 0.0, env_var("_BLOCK_SCALE"),],]
             prob    = 0.25
             while len( addLst ) < N:
                 for thing in things:
                     if random() < prob:
                         nuObj = thing.copy()
                         drctn = choice( compass )
-                        nuObj.pose[0:2,3] += drctn
-                        addLst.append( nuObj )
+                        nuObj.pose[0:3,3] += drctn
+                        if nuObj.pose[2,3] >= 0.0:
+                            addLst.append( nuObj )
             return addLst
         
         @staticmethod
@@ -845,7 +848,7 @@ class LUMP:
                     if diff_mag( thPosn, taPosn ) <= env_var("_BLOCK_SCALE"):
                         rtnLst.append( thing )
                         break
-                if (not found) and (random() < 0.25):
+                if (not found) and (random() < 0.5): # 0.25
                     rtnLst.append( thing )
             return rtnLst
 
@@ -864,7 +867,7 @@ class LUMP:
                     if j not in banSet:
                         obj_j = things[j]
                         psn_j = extract_position( obj_j.pose )
-                        if diff_mag( psn_i, psn_j ) < env_var("_BLOCK_SCLAE"):
+                        if diff_mag( psn_i, psn_j ) < env_var("_BLOCK_SCALE"):
                             banSet.add(j)
                             if countOverlap:
                                 obj_i.count += obj_j.count
@@ -892,34 +895,45 @@ class LUMP:
 
 
     @staticmethod
-    def wrap_shots( pose ) -> list[dict] | dict:
+    def wrap_shots( pose, score = None ) -> list[dict] | dict:
         """ Put the effector `pose`(s) in a `dict` container """
         if isinstance( pose, list ) and isinstance( pose[0], (np.ndarray, list, deque) ):
             return [LUMP.wrap_shots( item ) for item in pose]
         else:
             return {
                 'pose' : np.array( pose ),
-                'score': 0.0,
+                'score': score if (score is not None) else 0.0,
             }
 
 
     def plan_object_shots( self, proposedObjects : list[GraspObj], shotDist = dShot, N = 3 ) -> list[np.ndarray]:
         """ Get ready for object search """
         _VIEW_PENALTY =  1.0
+        _EDGE_PENALTY = 0.50
         _MULT_FACTOR  = 10
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
-        shots    = LUMP.sample_covering_shots( targets, shotDist, Nshots = N*_MULT_FACTOR )
-        ranking  = deque()
-        nrgFunc  = self.get_pose_energy_func( list(), centroid )
+
+        shots = list()
+        Nt    = len( targets )
+        Nsee  = 2
+        Nij   = max( int(N*_MULT_FACTOR / Nsee), 1 )
+        for i in range( Nt-1 ):
+            for j in range( i+1, Nt ):
+                shots.extend( LUMP.sample_covering_shots( [targets[i], targets[j],], shotDist, Nshots = Nij ) )
+
+        ranking = deque()
+        nrgFunc = self.get_pose_energy_func( list(), centroid )
         for shot_i in shots:
             shot = LUMP.wrap_shots( shot_i )
             soln = self.IK( shot_i, suppressCache = True )
             if soln is not None:
                 score = nrgFunc( self.q, soln )
                 for trgt in targets:
-                    if not p_symbol_in_cam_view( shot_i, trgt ):
+                    if not self.p_target_in_cam_view( shot_i, trgt ):
                         score += _VIEW_PENALTY
+                    else:
+                        score += max([abs( coord ) for coord in self.viewport_coords( shot_i, trgt )]) * _EDGE_PENALTY
                 shot['score'] = score
                 ranking.append( shot )
         ranking = list( ranking )
@@ -941,35 +955,49 @@ class LUMP:
         """ Can the symbol be seen from the given perspective? """
         camXform = np.array( effXform ).dot( self.robot.camXform )
         bounds   = get_D405_FOV_frustum( camXform )
-        qPosn    = target.pose[0:3,3]
+        while hasattr( target, 'pose' ):
+            target = target.pose
+        qPosn    = target[0:3,3]
         blcRad   = np.sqrt( 3.0 * (env_var("_BLOCK_SCALE")/2.0)**2 )
         return p_sphere_inside_plane_list( qPosn, blcRad, bounds )
+    
+
+    def viewport_coords( self, effXform : np.ndarray, target : LUMP.SearchTarget ):
+        """ Can the symbol be seen from the given perspective? """
+        camXform = np.array( effXform ).dot( self.robot.camXform )
+        while hasattr( target, 'pose' ):
+            target = target.pose
+        diff = posn_from_xform( target ) - posn_from_xform( camXform )
+        xBasis, yBasis, zBasis = bases_from_xform( camXform )
+        xCoord, yCoord, zCoord = [diff.dot( basis ) for basis in [xBasis, yBasis, zBasis]]
+        X = np.rad2deg( np.arctan2( xCoord, zCoord ) ) / env_var("_D405_FOV_H_DEG")
+        Y = np.rad2deg( np.arctan2( yCoord, zCoord ) ) / env_var("_D405_FOV_V_DEG")
+        return X, Y
 
 
     def rank_search_shots( self ):
         """ Obtain a ranking of all planned shots """
-        _EXCLUDE_PENALTY = 0.5
+        _EXCLUDE_PENALTY = 0.50
         _REPEAT_PENALTY  = 0.65
+        _EDGE_PENALTY    = 0.25
 
         self.set_state_from_robot()
         centroid = LUMP.SearchTarget.get_centroid( self.targets )
         nrgFunc  = self.get_pose_energy_func( list(), centroid )
 
-        self.ranking = LUMP.wrap_shots( self.shots )
         nuLst = deque()
-        # Cmax  = max( [item.count for item in self.targets] )
         for shot in self.shots:
-            pose = shot['pose']
-            soln = self.IK( pose, suppressCache = True )
+            soln = self.IK( shot, suppressCache = True )
             if soln is not None:
                 scor = nrgFunc( self.q, soln )
                 for trgt in self.targets:
-                    if LUMP.p_target_in_cam_view( pose, trgt ):
+                    if self.p_target_in_cam_view( shot, trgt ):
                         scor += trgt.count * _REPEAT_PENALTY
+                        scor += max([abs( coord ) for coord in self.viewport_coords( shot, trgt )]) * _EDGE_PENALTY
                     else:
                         scor += _EXCLUDE_PENALTY
-                shot['score'] = scor
-                nuLst.append( shot )
+                nuLst.append( LUMP.wrap_shots( pose = shot, score = scor ) )
+
         self.ranking = list( nuLst )
         self.ranking.sort( key = lambda x: x['score'] )
         self.shots = [item['pose'] for item in self.ranking]
@@ -981,6 +1009,7 @@ class LUMP:
         _N_SHOT_ADD   =  5
         _N_SHOT_TOTAL = _N_SHOT_ADD*_MULT_FACTOR 
         _N_INSPECT    =  3
+        _N_LOOK       =  2
 
         self.searchArctive = True
 
@@ -993,12 +1022,26 @@ class LUMP:
 
         while not self.chk_cb():
             # 1. Goto top cam shot
-            shot = self.shots[0] 
-            self.mov_cb( shot )
-            self.shots = self.shots[1:] # pop front
-            self.see_cb()
+            shots = self.shots[:_N_LOOK] 
+
+            if env_var("_USE_GRAPHICS"):
+                render_memory_list( 
+                    objs    = self.get_cb(),
+                    removed = self.targets, 
+                    robotPose = shots 
+                )
+
+            for shot in shots:
+                self.mov_cb( shot )
+                self.shots = self.shots[1:] # pop front
+                self.see_cb()
+                for trgt in self.targets:
+                    if self.p_target_in_cam_view( shot, trgt ):
+                        trgt.count += 1
             # 2. Gen more targets
             beliefs = LUMP.SearchTarget.from_GraspObj_list( self.get_cb() )
+            for bel in beliefs:
+                bel.count = 1
             self.targets = LUMP.SearchTarget.keep_consistent( self.targets, beliefs )
             self.targets.extend( beliefs )
             nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )

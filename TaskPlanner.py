@@ -42,7 +42,7 @@ from BT import ReactivePlanParser
 from OWLv2_Segment import Perception_OWLv2, _QUERIES
 
 from Memory import Memory, PoseCheater
-from LUMP import LUMP
+# from LUMP import LUMP
 from draw_beliefs import render_memory_list, render_scan_list
 from env_config import set_experiment_env
 from utils import deep_copy_memory_list
@@ -160,6 +160,7 @@ class TaskPlanner:
             self.perc.start_vision()
 
         self.memory  = Memory( self.robot ) 
+        self.lump    = self.memory.mp
         self.cheater = PoseCheater(
             fix_labels = env_var("_CHEAT_LABEL"),
             fix_poses  = env_var("_CHEAT_POSE" )
@@ -174,7 +175,7 @@ class TaskPlanner:
         
         self.robot.set_move_callback( self.move_report_cb )
 
-        self.memory.mp.init_object_search( 
+        self.lump.init_object_search( 
             senseCB = self.perception_cb, 
             rMoveCB = self.cam_move_cb  , 
             fetchCB = self.beliefs_cb   , 
@@ -223,7 +224,7 @@ class TaskPlanner:
     def symbols_present_cb( self ):
         """ Did we find all the symbols? """
         self.phase_2_Conditions()
-        return bool( len( len( self.symPln.symbols ) ) )
+        return bool( len( self.symPln.symbols ) )
 
 
     ##### Utils ###########################################################
@@ -393,7 +394,7 @@ class TaskPlanner:
             self.cheater.log_failed_action( np.eye(4), np.eye(4) )
             
             if env_var("_USE_PERC_HACK"):
-                self.memory.mp.log_failed_perc()
+                self.lump.log_failed_perc()
 
             if env_var("_USE_SPACE_HACK"):
                 self.blcMod.HACK_space_repair_plan( self.robot )
@@ -406,7 +407,7 @@ class TaskPlanner:
         elif (self.symPln.status == Status.SUCCESS):
             
             if env_var("_USE_PERC_HACK"):
-                self.memory.mp.log_success_perc()
+                self.lump.log_success_perc()
             self.status = Status.SUCCESS
             print( f"\n\nPlanner thinks we SUCCEEDED!\n\n" )
             self.memory.history.append( msg = "Annotation", datum = {
@@ -530,12 +531,12 @@ class TaskPlanner:
         else:
             if self.symPln.nxtAct is None:
                 if env_var("_USE_PERC_HACK"):
-                    self.memory.mp.log_failed_perc()
+                    self.lump.log_failed_perc()
                 print( f"\nNO plan to run!\n" )
                 return None
             else:
                 if env_var("_USE_PERC_HACK"):
-                    self.memory.mp.log_success_perc()
+                    self.lump.log_success_perc()
             btr = BT_Runner( self.symPln.nxtAct, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
             btr.setup_BT_for_running()
 
@@ -643,50 +644,32 @@ class TaskPlanner:
 
             print( f"Phase 1, {self.status} ..." )
 
-            # for bgnPose in beginPlanPose:
+            
 
-            # bgnPoses = self.memory.plan_3d_shots( beginPlanPose[0] )
-            # bgnPoses = self.memory.plan_3d_shots( extract_pose_as_homog( self.dummy_object() ) )
-            # bgnPoses = self.memory.plan_3d_shots( self.cheater.symbols[-1], 1.5*LUMP.dShot, 3, 60.0/180.0*np.pi )
-
-            if 0:
-                if self.cheater.trouble:
-                    posLst = list()
-                    posLst.extend( self.cheater.last_known_beliefs() )
-                    posLst.extend( self.cheater.last_known_symbols() )
-                    posLst = [item for item in posLst if random() < 0.75]
-                    posLst.extend( [item for item in self.cheater.all_past_symbols() if random() < 0.25] )
-                    bgnPoses = self.memory.plan_3d_shots( posLst, 
-                                                        1.25*LUMP.dShot, 
-                                                        desiredAngularSeparation_rad = 60.0/180.0*np.pi,
-                                                        individual = True )
-                else:
-                    bgnPoses = self.memory.plan_3d_shots( self.cheater.last_known_symbols(), 
-                                                        1.25*LUMP.dShot, 
-                                                        desiredAngularSeparation_rad = 60.0/180.0*np.pi )
+            if self.cheater.trouble:
+                self.lump.run_object_search( self.cheater.last_known_symbols() )
             else:
-                if self.cheater.trouble:
-                    bgnPoses = self.memory.mp.plan_object_shots( self.cheater.last_known_beliefs(), 1.25*LUMP.dShot, 3 )
-                else:
-                    bgnPoses = self.memory.mp.plan_object_shots( self.cheater.last_known_symbols(), 1.25*LUMP.dShot, 3 )
+                if not _RESPONSIVE_MODE:
+                    self.memory.reset_memory()
+                bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 3 )
+                for bgnPose in bgnPoses:
+                    self.robot.moveL( _SAFE, 
+                                      linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                                      linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                                      asynch = False )
+                    self.robot.moveL( bgnPose, 
+                                      linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                                      linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                                      asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
+                    self.phase_1_Perceive( Append = True, suppressDeterm = True )
 
-            if not _RESPONSIVE_MODE:
-                self.memory.reset_memory()
+            
 
             if env_var("_USE_GRAPHICS"):
                 # print( bgnPoses )
-                render_memory_list( syms = self.cheater.symbols[-1], robotPose = bgnPoses )
+                render_memory_list( syms = self.cheater.last_known_symbols(), robotPose = bgnPoses )
 
-            for bgnPose in bgnPoses:
-                self.robot.moveL( _SAFE, 
-                                  linSpeed = env_var("_ROBOT_FREE_SPEED"),
-                                  linAccel = env_var("_ROBOT_LIN_ACCEL" ),
-                                  asynch = False )
-                self.robot.moveL( bgnPose, 
-                                  linSpeed = env_var("_ROBOT_FREE_SPEED"),
-                                  linAccel = env_var("_ROBOT_LIN_ACCEL" ),
-                                  asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
-                self.phase_1_Perceive( Append = True, suppressDeterm = True )
+            
 
             self.cheater.log_beliefs( self.memory.bMem.beliefs )
 

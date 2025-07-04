@@ -228,8 +228,8 @@ def set_experiment_env():
     # env_sto( "_NULL_THRESH"   , 0.50 )
     # env_sto( "_NULL_THRESH"   , 0.60 )
     # env_sto( "_NULL_THRESH"   , 0.65 )
-    env_sto( "_NULL_THRESH"   , 0.75 ) # 2025-02-24: ?? WINNING PARAMS ??
-    # env_sto( "_NULL_THRESH"   , 0.95 )
+    # env_sto( "_NULL_THRESH"   , 0.75 ) # 2025-02-24: ?? WINNING PARAMS ??
+    env_sto( "_NULL_THRESH"   , 0.95 )
 
     env_sto( "_GRASP_NUDGE_M", -0.005 )
 
