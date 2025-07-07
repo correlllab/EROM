@@ -220,7 +220,7 @@ class BayesMemory:
         else:
             nuScore = env_var("_DEF_NULL_SCORE")
         for belief in self.beliefs:
-            if (not belief.visited) and self.p_symbol_in_cam_view( camXform, belief ):
+            if (not belief.visited) and p_symbol_in_cam_view( camXform, belief ):
                 self.integrate_null( belief, avgScore = nuScore )
         self.erase_dead()
         self.unvisit_beliefs()

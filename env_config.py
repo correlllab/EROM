@@ -136,7 +136,7 @@ def set_experiment_env():
     env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 2.0 )
     env_sto( "_ROBOT_LIN_ACCEL" , 0.500 * 1.5 )
 
-    env_sto( "_ACCEPT_POSN_ERR" , 0.60*env_var( "_BLOCK_SCALE" ) ) # 0.75 # 0.90
+    env_sto( "_ACCEPT_POSN_ERR" , 1.00*env_var( "_BLOCK_SCALE" ) ) # 0.60 # 0.75 # 0.90
     
     env_sto( "_GOAL_GRB" ,
         ( 'and',
@@ -228,8 +228,8 @@ def set_experiment_env():
     # env_sto( "_NULL_THRESH"   , 0.50 )
     # env_sto( "_NULL_THRESH"   , 0.60 )
     # env_sto( "_NULL_THRESH"   , 0.65 )
-    # env_sto( "_NULL_THRESH"   , 0.75 ) # 2025-02-24: ?? WINNING PARAMS ??
-    env_sto( "_NULL_THRESH"   , 0.95 )
+    env_sto( "_NULL_THRESH"   , 0.75 ) # 2025-02-24: ?? WINNING PARAMS ??
+    # env_sto( "_NULL_THRESH"   , 0.95 )
 
     env_sto( "_GRASP_NUDGE_M", -0.005 )
 

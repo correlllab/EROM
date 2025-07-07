@@ -886,11 +886,11 @@ class LUMP:
         mean   = np.mean( posn, axis = 0 )
         aabb   = get_aabb( posn )
         sHlf   = np.linalg.norm( np.subtract( aabb[1][:-1], aabb[0][:-1] ) )/2.0
-        dMin   = sHlf / np.tan( fovHlf )
+        dMin   = sHlf / np.tan( fovHlf ) * 1.25
         dCam   = max( [env_var("_MIN_CAM_PCD_DIST_M"), dMin, camDist,] ) 
         cPts   = sample_on_sphere( center = mean, radius = dCam, N = Nshots )
         cPos   = sphere_samples_to_eff_poses( cPts, center = mean, effXbasis = [0.0, -1.0, 0.0] )
-        rPos   = vary_eff_wrist_3( cPos, N = 2, lo = -np.pi/2.0, hi = np.pi/2.0 )
+        rPos   = vary_eff_wrist_3( cPos, N = 3, lo = -np.pi/2.0, hi = np.pi/2.0 )
         return rPos
 
 
@@ -979,7 +979,7 @@ class LUMP:
         """ Obtain a ranking of all planned shots """
         _EXCLUDE_PENALTY = 0.50
         _REPEAT_PENALTY  = 0.65
-        _EDGE_PENALTY    = 0.25
+        _EDGE_PENALTY    = 0.50
 
         self.set_state_from_robot()
         centroid = LUMP.SearchTarget.get_centroid( self.targets )
@@ -1013,7 +1013,9 @@ class LUMP:
 
         self.searchArctive = True
 
-        self.targets = LUMP.SearchTarget.from_GraspObj_list( proposedObjects )
+        prevSymbols = LUMP.SearchTarget.from_GraspObj_list( proposedObjects )
+
+        self.targets = prevSymbols[:]
         nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
         self.targets.extend( nuTgt )
         
@@ -1046,6 +1048,7 @@ class LUMP:
             self.targets.extend( beliefs )
             nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
             self.targets.extend( nuTgt )
+            self.targets.extend( prevSymbols )
             self.targets = LUMP.SearchTarget.reconcile( self.targets )
             # 3. Gen more shots
             bgn = 0

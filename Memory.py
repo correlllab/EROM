@@ -463,7 +463,8 @@ class KLD_Tracker:
         if len( self.history ):
             for entry in self.history[-1]:
                 if entry['label'] == sym.label:
-                    distLast = entry['labels']
+                    # distLast = entry['labels']
+                    distLast = entry['dist']
                     break
         
         return {

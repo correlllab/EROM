@@ -224,7 +224,7 @@ class TaskPlanner:
     def symbols_present_cb( self ):
         """ Did we find all the symbols? """
         self.phase_2_Conditions()
-        return bool( len( self.symPln.symbols ) )
+        return self.symPln.check_goal_objects()
 
 
     ##### Utils ###########################################################
@@ -647,7 +647,11 @@ class TaskPlanner:
             
 
             if self.cheater.trouble:
-                self.lump.run_object_search( self.cheater.last_known_symbols() )
+                symLst = self.cheater.last_known_symbols()
+                symLst.extend( self.cheater.last_known_beliefs() )
+                if not _RESPONSIVE_MODE:
+                    self.memory.reset_memory()
+                self.lump.run_object_search( symLst )
             else:
                 if not _RESPONSIVE_MODE:
                     self.memory.reset_memory()
