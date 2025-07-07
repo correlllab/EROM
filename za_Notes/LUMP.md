@@ -11,7 +11,7 @@
 	- [ ] Take note of where info was gained
 	- [ ] Take note of greatest confusion
 - [ ] Plan shots that would reduce existing confusion and add them to the list
-- [ ] Re-rank shots and loop until all req'd objects are found
+- [x] Re-rank shots and loop until all req'd objects are found
 
 ## Near Term Needs
 - [x] Check if an effector pose collides with base
