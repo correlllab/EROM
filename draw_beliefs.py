@@ -448,26 +448,31 @@ def scan_geo( sym : GraspObj ):
         return rtnGeo
     else:
         return [wf1,] 
-    
 
-def neg_geo( sym : GraspObj ):
-    if isinstance( sym, dict ):
-        sym = GraspObj.from_dict( sym )
-    objXfrm = extract_pose_as_homog( sym, noRot = True )
+
+def get_pose_attr( target ):
+    """ Dig out `pose` by name """
+    while hasattr( target, 'pose' ):
+        target = target.pose
+    return np.array( target )
+  
+
+def target_geo( sym : GraspObj, colorName : str = 'black' ):
+    objXfrm = get_pose_attr( sym )
     wf1 = wireframe_box_neg( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
-                             color = Color( "red" ) )
+                             color = Color( colorName ) )
     wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
     return [wf1,] 
 
 
-def neg_list_geo( objs : list[GraspObj], noTable = True ):
+def target_list_geo( objs : list[GraspObj], noTable = True ):
     """ Get geo for a list of symbols """
     if noTable:
         rtnGeo = list()
     else:
         rtnGeo = [table_geo(),]
     for obj in objs:
-        rtnGeo.extend( neg_geo( obj ) )
+        rtnGeo.extend( target_geo( obj ) )
     return rtnGeo
 
 
@@ -507,7 +512,7 @@ def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = Non
     if syms is not None:
         objLst.extend( symbol_list_geo( syms, noTable = (not missingTable) ) )
     if removed is not None:
-        objLst.extend( neg_list_geo( removed ) )
+        objLst.extend( target_list_geo( removed ) )
     vispy_geo_list_window( objLst, robotPose, xtra )
 
 

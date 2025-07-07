@@ -1,4 +1,6 @@
 # [L]imited [U]R5 [M]otion [P]lanner
+
+- [ ] Idea: Don't let the determinizer consider NULL!
 ## Object Search
 - [x] Get a list of where objects **should** be
 - [x] Plan shots that cover supposed objects
