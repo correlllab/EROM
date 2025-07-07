@@ -8,12 +8,13 @@
 - [x] Rank shots
 
 ## (Limited) Object Search Ideas
+- [ ] SOMETIMES POSE REPAIR IS FUCKING ME OVER, SHOULD NOT HAPPEN WHEN THERE IS TROUBLE?
+- [x] Re-rank shots and loop until all req'd objects are found
 - [ ] Need a shortcut for obscured objects
 - [ ] Take shots one at a time
 	- [ ] Take note of where info was gained
 	- [ ] Take note of greatest confusion
 - [ ] Plan shots that would reduce existing confusion and add them to the list
-- [x] Re-rank shots and loop until all req'd objects are found
 
 ## Near Term Needs
 - [x] Check if an effector pose collides with base
