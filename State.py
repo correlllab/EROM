@@ -1,6 +1,7 @@
-import datetime, os, pickle, time
+import os, pickle, time
 now = time.time 
 from collections import deque
+from datetime import datetime
 
 from utils import  deep_copy_memory_list
 from aspire.env_config import env_var
@@ -112,7 +113,10 @@ class PoseCheater:
         """ Move the symbol to where the robot moved it """
         self.trouble = False
         print( f"Moved block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
-        lastFrame = deep_copy_memory_list( self.symbols[-1] )
+
+        # lastFrame = deep_copy_memory_list( self.symbols[-1] )
+        lastFrame = deep_copy_memory_list( self.last_known_symbols() )
+
         if len( lastFrame ):
             dMin = 1e9
             sCls : GraspObj = None

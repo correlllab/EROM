@@ -163,6 +163,11 @@ class Perception_OWLv2:
         set_perc_env()
 
 
+    def scale_thresh_by_factor( self, factor ):
+        """ Adjust the threshold by some factor """
+        return self.label_vit.scale_thresh_by_factor( factor )
+
+
     def start_vision( self ):
         try:
             self.rsc = real.RealSense()

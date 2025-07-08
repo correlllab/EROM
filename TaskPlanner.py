@@ -152,7 +152,7 @@ class TaskPlanner:
         self.status  = Status.INVALID # Running status
 
         # self.perc    = Perception_OWLViT
-        self.perc = Perception_OWLv2()
+        self.perc  : Perception_OWLv2 = Perception_OWLv2()
         self.robot : UR5_Interface = UR5_Interface( provide_gripper = True ) if (not noBot) else None
         if (not noBot):
             self.robot.start()
@@ -178,7 +178,8 @@ class TaskPlanner:
             senseCB = self.perception_cb, 
             rMoveCB = self.cam_move_cb  , 
             fetchCB = self.beliefs_cb   , 
-            checkCB = self.symbols_present_cb 
+            checkCB = self.symbols_present_cb,
+            noVizCB = self.scale_vision_thresh_cb
         )
 
         self.nPlnFl = 0
@@ -224,6 +225,11 @@ class TaskPlanner:
         """ Did we find all the symbols? """
         self.phase_2_Conditions()
         return self.symPln.check_goal_objects()
+    
+
+    def scale_vision_thresh_cb( self, factor ):
+        """ Adjust thresh """
+        return self.perc.scale_thresh_by_factor( factor )
 
 
     ##### Utils ###########################################################
@@ -313,7 +319,12 @@ class TaskPlanner:
             print( f"\nBefore cheat..." )
             for obj in self.symPln.symbols:
                 print( f"\t{obj}" )
-            self.symPln.symbols = self.cheater.repair_symbol_poses( self.symPln.symbols )
+
+            if not self.cheater.trouble:
+                self.symPln.symbols = self.cheater.repair_symbol_poses( self.symPln.symbols )
+            else:
+                print( f"Cheater in TROUBLE! No nudge!", end = '    ' )
+
         else:
             print( f"No cheating allowed!", end = '    ' )
 

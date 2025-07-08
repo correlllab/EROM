@@ -50,6 +50,14 @@ global mat
 mat=np.matrix
 
 
+########## HELPER FUNCTIONS ########################################################################
+
+def euclidean_distance_between_poses( pose1, pose2 ):
+    """ Return the linear distance between two poses """
+    return diff_mag( posn_from_xform( pose1 ), posn_from_xform( pose2 ) )
+
+
+
 ########## DH PARAMETERS ###########################################################################
 
 
@@ -408,7 +416,7 @@ def get_aabb( ptsLst ):
 
 
 ########## MOTION PLANNER ##########################################################################
-_COLLISION_NRG_PENALTY = 7.5
+_COLLISION_NRG_PENALTY = 9.0
 
 class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
@@ -670,7 +678,7 @@ class LUMP:
 
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
 
-        _CONFIG_FACTOR = 4.5
+        _CONFIG_FACTOR = 5.0
         _TABLE_FACTOR  = 3.0
         _REACH_FACTOR  = 6.5
         _DELTA_FACTOR  = 1.0
@@ -909,8 +917,9 @@ class LUMP:
     def plan_object_shots( self, proposedObjects : list[GraspObj], shotDist = dShot, N = 3 ) -> list[np.ndarray]:
         """ Get ready for object search """
         _VIEW_PENALTY =  1.0
-        _EDGE_PENALTY = 0.50
+        _EDGE_PENALTY = 0.75
         _MULT_FACTOR  = 10
+        _SEP_DIST_M   =  0.150
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
 
@@ -937,18 +946,32 @@ class LUMP:
                 shot['score'] = score
                 ranking.append( shot )
         ranking = list( ranking )
+
         ranking.sort( key = lambda x: x['score'] )
+        # Re-Rank Based on Closeness #
+        topPose = ranking[0]['pose']
+        for shot in ranking[1:]:
+            pose_i = shot['pose']
+            # print(topPose, pose_i)
+            shot['score'] += _SEP_DIST_M / max( euclidean_distance_between_poses( topPose, pose_i ), 0.005 )
+        ranking.sort( key = lambda x: x['score'] )
+
         return [item['pose'] for item in ranking[:N]]
     
 
-    def init_object_search( self, senseCB : Callable, rMoveCB : Callable, fetchCB : Callable, checkCB : Callable ):
+    def init_object_search( self, senseCB : Callable, rMoveCB : Callable, fetchCB : Callable, checkCB : Callable, noVizCB : Callable ):
         """ Get ready to search """
+        # Data #
         self.shots   = list()
         self.ranking = list()
+        # Callbacks #
         self.see_cb  = senseCB
         self.mov_cb  = rMoveCB
         self.get_cb  = fetchCB
         self.chk_cb  = checkCB
+        self.viz_cb  = noVizCB
+        # Constants #
+        self._VIZ_THRESH_DOWN = 0.85
         
 
     def p_target_in_cam_view( self, effXform : np.ndarray, target : LUMP.SearchTarget ):
@@ -978,8 +1001,8 @@ class LUMP:
     def rank_search_shots( self ):
         """ Obtain a ranking of all planned shots """
         _EXCLUDE_PENALTY = 0.50
-        _REPEAT_PENALTY  = 0.65
-        _EDGE_PENALTY    = 0.50
+        _REPEAT_PENALTY  = 2.00 # 1.00 # 0.65
+        _EDGE_PENALTY    = 0.75
 
         self.set_state_from_robot()
         centroid = LUMP.SearchTarget.get_centroid( self.targets )
@@ -1023,6 +1046,10 @@ class LUMP:
         self.rank_search_shots()
 
         while not self.chk_cb():
+
+            # Lower threshold for finding things
+            self.viz_cb( self._VIZ_THRESH_DOWN )
+
             # 1. Goto top cam shot
             shots = self.shots[:_N_LOOK] 
 
@@ -1063,6 +1090,8 @@ class LUMP:
             self.rank_search_shots()
             if len( self.shots ) > _N_SHOT_TOTAL:
                 self.shots = self.shots[:_N_SHOT_TOTAL]
+
+            
 
         self.searchArctive = False
         
