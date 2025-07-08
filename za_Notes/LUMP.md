@@ -9,6 +9,8 @@
 
 ## (Limited) Object Search Ideas
 - [ ] SOMETIMES POSE REPAIR IS FUCKING ME OVER, SHOULD NOT HAPPEN WHEN THERE IS TROUBLE?
+- [ ] Idea: If we are coming up with nothing, Then lower OWLv2 Thresholds!
+- [ ] Idea: Merge Pose Cheater with LUMP? --> Circular Import?
 - [x] Re-rank shots and loop until all req'd objects are found
 - [ ] Need a shortcut for obscured objects
 - [ ] Take shots one at a time
