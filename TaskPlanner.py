@@ -41,7 +41,8 @@ from aspire.SymPlanner import SymPlanner
 from BT import ReactivePlanParser
 from OWLv2_Segment import Perception_OWLv2, _QUERIES
 
-from Memory import Memory, PoseCheater
+from State import PoseCheater
+from Memory import Memory
 # from LUMP import LUMP
 from draw_beliefs import render_memory_list, render_scan_list
 from env_config import set_experiment_env
@@ -95,7 +96,6 @@ class BTRunnerwPeriodicScan:
         self.shotCB  = shot_cb
         self.runner  = BT_Runner( rootBH, env_var("_BT_UPDATE_HZ"), env_var("_BT_ACT_TIMEOUT_S") )
         self.tSleep  = sleepTime_s
-        
 
 
     def p_pause_OK( self ):
@@ -130,7 +130,6 @@ class BTRunnerwPeriodicScan:
 
 class TaskPlanner:
     """ Basic task planning loop """
-
 
     ##### Init ############################################################
 
