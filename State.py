@@ -1,7 +1,13 @@
-import os, pickle, time
+import os, pickle, time, subprocess
 now = time.time 
 from collections import deque
 from datetime import datetime
+
+import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
+import matplotlib.patches as patches
+
+import numpy as np
 
 from utils import  deep_copy_memory_list
 from aspire.env_config import env_var
@@ -23,11 +29,12 @@ class LogPickler:
 
     def __init__( self, prefix = "Data-Log", outDir = None ):
         """ Set the file `prefix` and open a file """
-        self.prefix = str( prefix )
-        self.outDir = outDir if (outDir is not None) else '.'
-        self.log    = deque()
-        self.outFil = None
-        self.open_file()
+        self.prefix = str( prefix ) # ------------------------- String to prepend to output filename
+        self.outDir = outDir if (outDir is not None) else '.' # Root dir for saved data
+        self.log    = deque() # ------------------------------- Actual Data
+        self.outFil = None # ---------------------------------- Output file handle
+        # WARNING: NOTHING IS DONE WITH THE FILE UNTIL THE END!
+        self.open_file() # Actually create the file
 
 
     def dump_to_file( self, openNext = False ):
@@ -45,10 +52,82 @@ class LogPickler:
     def append( self, datum = None, msg = None ):
         """ Add an item to the log """
         self.log.append( {
-            't'    : now(),
-            'msg'  : msg,
-            'data' : datum,
+            't'    : now(), # Timestamp
+            'msg'  : msg, # - Datum Category, or Any string that makes this Searchable
+            'data' : datum, # The Datum
         } )
+
+
+    def visualize_last_segmentation( self ):
+        """ Overlay all the camera shots with the segmentations """
+        _SEG_TAG = 'meta'
+        _DAT_DIR = 'data'
+        NdataPts = len( self.log )
+        # 0. Fetch the actual data
+        datum = None
+        found = False
+        for i in range( NdataPts ):
+            datum = self.log[-i]
+            if datum['msg'] == _SEG_TAG:
+                found = True
+                break
+        if found:
+            vizDct = dict()
+            # 1. Copy Images
+            for k, v in datum['data']['input'].items():
+                vizDct[k] = {
+                    'img': v['image'].copy(),
+                    'seg': deque(),
+                }
+            # 2. Associate hits with images and brighten masks
+            for hit in datum['data']['hits']:
+                vizDct[ hit['shotID'] ]['seg'].append( hit )
+                img    = vizDct[ hit['shotID'] ]['img']
+                
+                if 'mask' in hit:
+                    msk = hit['mask'].copy()
+                    for i in range( img.shape[0] ):
+                        for j in range( img.shape[1] ):
+                            if not (msk[i,j] > 0.001):
+                                img[i,j,:] *= 0.25
+            # 3. Draw Images w/ BB
+            Nimg = len( vizDct )
+            Ncol = 2
+            Nrow = int( Nimg/Ncol )
+            i    = 0
+            fig, plots = plt.subplots( Nrow, Ncol, figsize = ( 4*Ncol, 3*Nrow, ) )
+            for k, v in vizDct.items():
+                img : np.ndarray = v['img']
+                ax  : Axes       = plots[i]
+                ax.imshow( img )
+
+                for hit in v['seg']:
+                    # Create a Rectangle patch
+                    x      = hit['bbox'][0]
+                    y      = hit['bbox'][1]
+                    width  = hit['bbox'][2] - x
+                    height = hit['bbox'][3] - y
+                    rect   = patches.Rectangle( (x, y), width, height, linewidth=2, 
+                                                edgecolor = hit['abbrv'][:1], 
+                                                facecolor = 'none')
+                    # Add the patch to the axes
+                    ax.add_patch( rect )
+                    
+
+                    # Add score and label text
+                    text = f"({hit['score']:.2f})"
+                    ax.text(x, y, text, color='white', bbox=dict(facecolor='red', alpha=0.5))
+
+                i += 1
+            # Draw
+            pdfPath = os.path.join( _DAT_DIR, f"Segmentations_{datum['t']}.pdf" )
+            plt.savefig( pdfPath )
+            subprocess.call( ('xdg-open', pdfPath ) ) # WARNING: IS THIS BLOCKING?
+
+        else:
+            print( f"\nCould not find segmentation data in log of {NdataPts} entries!\n" )
+
+
 
 ########## POSE CHEATER ############################################################################
 
