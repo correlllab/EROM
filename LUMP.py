@@ -38,7 +38,8 @@ from utils import get_pose_attr
 _RBT_BASE_BUFFER  = 0.300
 # _RBT_BASE_FACTOR  = 1.500
 # _RBT_TABLE_MARGIN = 0.070
-_RBT_TABLE_MARGIN = 0.140
+# _RBT_TABLE_MARGIN = 0.140
+_RBT_TABLE_MARGIN = 0.210
 _REVERSE_QUERIES  = {
     "bluBlock": {'query': "a photo of a small block", 'abbrv': "blu", },
     "ylwBlock": {'query': "a photo of a small block", 'abbrv': "ylw", },
@@ -393,6 +394,8 @@ def p_all_joints_above_point_normal_plane( joints , point, normal, margin = _RBT
 
 def angle_between_vectors_rad( vec1, vec2 ):
     """ Get the angle between vectors in radians """
+    if( diff_mag( vec1, vec2 ) < 0.001 ): 
+        return 0.0
     return np.arccos( np.dot( vec1, vec2 ) / ( np.linalg.norm( vec1 ) * np.linalg.norm( vec2 ) ) )
 
 
@@ -706,7 +709,7 @@ class LUMP:
             angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs if (diff_mag( vc_i, vc_f ) > 0.0)]
             nrg  = LUMP.config_energy( qRef, q ) * _CONFIG_FACTOR
             zQ   = pose[2,3]
-            nrg += max( 0.0, 1.0-zQ )*_TABLE_FACTOR # Penalize being near the table
+            nrg += max( 0.0, _RBT_TABLE_MARGIN/max(0.005, zQ) )*_TABLE_FACTOR # Penalize being near the table
             hit = 1.0 if self.p_collision_q( q ) else 0.0
             nrg += hit*_COLLISION_NRG_PENALTY
             nrg += np.linalg.norm( pose[0:2,3] )*_REACH_FACTOR
@@ -930,7 +933,7 @@ class LUMP:
         """ Get ready for object search """
         _VIEW_PENALTY =  1.0
         _EDGE_PENALTY = 0.75
-        _MULT_FACTOR  = 10
+        _MULT_FACTOR  = 7 #10
         
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
@@ -983,7 +986,7 @@ class LUMP:
         self.chk_cb  = checkCB
         self.viz_cb  = noVizCB
         # Constants #
-        self._VIZ_THRESH_DOWN = 0.95
+        self._VIZ_THRESH_DOWN = 0.98 # 0.85 # 0.95
         
 
     def p_target_in_cam_view( self, effXform : np.ndarray, target : LUMP.SearchTarget ):
@@ -1056,7 +1059,7 @@ class LUMP:
     def rank_search_shots( self ):
         """ Obtain a ranking of all planned shots """
         _EXCLUDE_PENALTY = 0.75
-        _REPEAT_PENALTY  = 4.0 # 2.00 # 1.00 # 0.65
+        _REPEAT_PENALTY  = 6.00 # 4.0 # 2.00 # 1.00 # 0.65
         _EDGE_PENALTY    = 0.75
 
         self.set_state_from_robot()
@@ -1093,7 +1096,7 @@ class LUMP:
 
     def run_object_search( self, proposedObjects : list[GraspObj] ):
         """ Be a little more persistent until the objects are found """
-        _MULT_FACTOR  = 15 # 10
+        _MULT_FACTOR  =  7 # 10 # 15
         _N_SHOT_ADD   =  5
         _N_SHOT_TOTAL = _N_SHOT_ADD*_MULT_FACTOR 
         _N_INSPECT    =  3
