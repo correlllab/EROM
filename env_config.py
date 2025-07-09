@@ -71,6 +71,7 @@ def set_experiment_env():
     env_sto( "_OWL2_THRESH"  ,    0.005 ) # 0.005
     env_sto( "_SEG_MAX_HITS"    , 5     ) # 10 # 50
     env_sto( "_SEG_SCORE_THRESH", 0.100 ) # 0.025 # 0.075 # 0.100
+    env_sto( "_OWL2_TOPK"       , 1     )
 
     env_sto( "_Z_SAFE", 0.350 )
 
@@ -84,6 +85,7 @@ def set_experiment_env():
     env_sto( "_VERBOSE"     , True )
     env_sto( "_USE_GRAPHICS", True )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
+    env_sto( "_SHOW_SEGMENT", True )
 
     # env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )
     # env_sto( "_Z_SNAP_BOOST" , 0.00*env_var("_BLOCK_SCALE") )

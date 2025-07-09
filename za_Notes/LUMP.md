@@ -1,6 +1,14 @@
 # [L]imited [U]R5 [M]otion [P]lanner
 
-- [ ] Idea: Don't let the determinizer consider NULL!
+
+# Expansion Ideas
+- [ ] E
+- [ ] [OMPL](https://ompl.kavrakilab.org/python.html)
+- [ ] [Flexible Collision Library](https://github.com/BerkeleyAutomation/python-fcl)
+
+# Supporting Basic Planning
+
+- [x] Idea: Don't let the determinizer consider NULL!
 ## Object Search
 - [x] Get a list of where objects **should** be
 - [x] Plan shots that cover supposed objects

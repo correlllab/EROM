@@ -688,7 +688,7 @@ class LUMP:
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
 
         _CONFIG_FACTOR = 5.0
-        _TABLE_FACTOR  = 5.0
+        _TABLE_FACTOR  = 5.5
         _REACH_FACTOR  = 6.5
         _DELTA_FACTOR  = 1.0
         _DELTA_MAX     = [np.pi for _ in range(6)]
@@ -1055,7 +1055,7 @@ class LUMP:
 
     def rank_search_shots( self ):
         """ Obtain a ranking of all planned shots """
-        _EXCLUDE_PENALTY = 0.50
+        _EXCLUDE_PENALTY = 0.75
         _REPEAT_PENALTY  = 4.0 # 2.00 # 1.00 # 0.65
         _EDGE_PENALTY    = 0.75
 

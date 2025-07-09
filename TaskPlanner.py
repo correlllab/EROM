@@ -160,6 +160,7 @@ class TaskPlanner:
 
         self.memory  = Memory( self.robot ) 
         self.lump    = self.memory.mp
+        self.logger  = self.memory.history
         self.cheater = PoseCheater(
             fix_labels = env_var("_CHEAT_LABEL"),
             fix_poses  = env_var("_CHEAT_POSE" )
@@ -197,6 +198,7 @@ class TaskPlanner:
                 'q'   : self.robot.get_joint_angles().tolist(),
             }
         )
+        self.lump.set_state_from_robot() # WARNING: WILL THIS ACTUALLY IMPROVE LUMP PERFORMANCE?
 
     
     def perception_cb( self ):
@@ -681,17 +683,17 @@ class TaskPlanner:
 
             if env_var("_USE_GRAPHICS"):
                 # print( bgnPoses )
-                render_memory_list( syms = self.cheater.last_known_symbols(), robotPose = bgnPoses )
+                render_memory_list( 
+                    objs = self.memory.bMem.beliefs,
+                    syms = self.cheater.last_known_symbols(), 
+                    robotPose = bgnPoses 
+                )
 
+            if env_var("_SHOW_SEGMENT"):
+                self.logger.visualize_last_segmentation()
             
 
             self.cheater.log_beliefs( self.memory.bMem.beliefs )
-
-            
-
-            if env_var("_USE_GRAPHICS"):
-                render_scan_list( self.memory.scan )
-
 
             ##### Phase 2 ########################
 

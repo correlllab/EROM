@@ -24,19 +24,19 @@
             }
           },
           {
-            "id": "f9dad22835caca8b",
+            "id": "e567fefb27372baf",
             "type": "leaf",
             "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/Log/2025-06-26.md",
+                "file": "za_Notes/LUMP.md",
                 "mode": "source",
                 "source": false
               },
               "pinned": true,
               "icon": "lucide-file",
-              "title": "2025-06-26"
+              "title": "LUMP"
             }
           },
           {
@@ -45,16 +45,30 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/LUMP.md",
+                "file": "za_Notes/Daydreams.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "LUMP"
+              "title": "Daydreams"
+            }
+          },
+          {
+            "id": "e179c1d45dbb71ac",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "za_Notes/Log/2025-07-09.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "2025-07-09"
             }
           }
         ],
-        "currentTab": 2
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -199,8 +213,17 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "9a1bb40c7afbfaa1",
+  "active": "e567fefb27372baf",
   "lastOpenFiles": [
+    "za_Notes/Daydreams.md",
+    "za_Notes/Log/2025-07-09.md",
+    "data/EROM-Memories_07-09-2025_15-34-00.pkl",
+    "data/EROM-Memories_07-09-2025_15-31-21.pkl",
+    "data/EROM-Memories_07-09-2025_15-27-42.pkl",
+    "data/EROM-Memories_07-09-2025_14-56-56.pkl",
+    "za_Notes/LUMP.md",
+    "za_Notes/DEV_PLAN.md",
+    "za_Notes/Log/2025-06-26.md",
     "State.py",
     "za_Notes/Log/2025-06-27.md",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-01-27.pkl",
@@ -208,14 +231,6 @@
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-14-10.pkl",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-21-34.pkl",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-28-43.pkl",
-    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-34-07.pkl",
-    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-39-11.pkl",
-    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-54-35.pkl",
-    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_15-23-05.pkl",
-    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_15-27-55.pkl",
-    "za_Notes/Log/2025-06-26.md",
-    "za_Notes/DEV_PLAN.md",
-    "za_Notes/LUMP.md",
     "za_Notes/Log/2025-05-20.md",
     "README.md",
     "za_Notes/Log/2025-05-13.md",
