@@ -81,8 +81,11 @@ def snap_z_to_nearest_block_unit_above_zero( z : float ):
     return zBloc
 
 
-
-
+def get_pose_attr( target ):
+    """ Dig out `pose` by name """
+    while hasattr( target, 'pose' ):
+        target = target.pose
+    return np.array( target )
 
 
 def deep_copy_memory_list( mem : list[GraspObj] ):

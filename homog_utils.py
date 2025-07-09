@@ -80,6 +80,11 @@ def diff_mag( v1, v2 ):
     return np.linalg.norm( np.subtract( v1, v2 ) )
 
 
+def diff_vec( v1, v2 ):
+    """ Return the magnitude of `vec` """
+    return np.subtract( v1, v2 )
+
+
 def vec_unit( vec ):
     """ Return the unit vector in the direction of `vec` """
     mag = np.linalg.norm( vec )
@@ -88,6 +93,11 @@ def vec_unit( vec ):
     else:
         return np.divide( vec, mag )
     
+
+def diff_unit( v1, v2 ):
+    """ Return the magnitude of `vec` """
+    return vec_unit( diff_vec( v1, v2 ) )
+
     
 def vec_angle_between( v1, v2 ): 
     """ Returns the angle in radians between vectors 'v1' and 'v2' """
@@ -242,6 +252,11 @@ def apply_homog_to_posn_vec( xform, posn ):
     xfmdPosn = xform.dot( position )
     return posn_from_xform( xfmdPosn )
 
+
+def apply_homog_to_direction_vec( xform, drctn ):
+    """ Transform the direction with `xform` """
+    return R_from_xform( xform ).dot( drctn )
+    
 
 
 ########## 2D GEOMETRY #############################################################################

@@ -24,11 +24,13 @@ from magpie_control.ur5 import UR5_Interface
 from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog, extract_position
 from aspire.env_config import env_var
 
-from homog_utils import posn_from_xform, bases_from_xform, R_krot, R_z, homog_xform, diff_mag
+from homog_utils import ( posn_from_xform, bases_from_xform, R_krot, R_z, homog_xform, diff_mag, apply_homog_to_direction_vec,
+                          diff_unit, )
 from dh_mp import FK_DH_chain, dh_link_homog
 
 from Geometry import get_D405_FOV_frustum, p_sphere_inside_plane_list
 from draw_beliefs import render_memory_list
+from utils import get_pose_attr
 
 # from TaskPlanner import TaskPlanner
 
@@ -55,6 +57,12 @@ mat=np.matrix
 def euclidean_distance_between_poses( pose1, pose2 ):
     """ Return the linear distance between two poses """
     return diff_mag( posn_from_xform( pose1 ), posn_from_xform( pose2 ) )
+
+
+def diff_unit_from_pose1_to_pose2( pose1, pose2 ):
+    """ Return the unit linear direction from `pose1` to `pose2` """
+    return diff_unit( posn_from_xform( pose2 ), posn_from_xform( pose1 )  )
+    
 
 
 
@@ -1000,6 +1008,49 @@ class LUMP:
         Y = np.rad2deg( np.arctan2( yCoord, zCoord ) ) / env_var("_D405_FOV_V_DEG")
         return X, Y
 
+    
+    def obscurity_list( self, effXform : np.ndarray, targets : list[LUMP.SearchTarget] ):
+        """ Get a list of the degree to which each target is obscured """
+        wHalf    = env_var("_BLOCK_SCALE") / 2.0
+        Ntrgt    = len( targets )
+        obscure  = [0.0 for _ in range( Ntrgt )]
+        camXform = np.array( effXform ).dot( self.robot.camXform )
+        for i in range( Ntrgt-1 ):
+            trgt_i = targets[i]
+            pose_i = get_pose_attr( trgt_i )
+            dist_i = euclidean_distance_between_poses( camXform, pose_i )
+            tDir_i = diff_unit_from_pose1_to_pose2( camXform, pose_i )
+            dAng_i = np.arctan( wHalf / dist_i )
+            for j in range( i+1, Ntrgt ):
+                trgt_j = targets[j]
+                pose_j = get_pose_attr( trgt_j )
+                dist_j = euclidean_distance_between_poses( camXform, pose_j )
+                tDir_j = diff_unit_from_pose1_to_pose2( camXform, pose_j )
+                dAng_j = np.arctan( wHalf / dist_j )
+
+                ang_ij = angle_between_vectors_rad( tDir_i, tDir_j )
+                if (dAng_i + dAng_j) > ang_ij:
+                    angOver = dAng_i + dAng_j - ang_ij
+                    if dist_i > dist_j:
+                        if dAng_i >= ang_ij:
+                            angOver_i  = min( ang_ij, dAng_j )
+                            angOver_i += max( 0.0, dAng_i-ang_ij )
+                        else:
+                            angOver_i = angOver
+                        obscure[i] += angOver_i / (2.0*dAng_i)
+                    else:
+                        if dAng_j >= ang_ij:
+                            angOver_j  = min( ang_ij, dAng_i )
+                            angOver_j += max( 0.0, dAng_j-ang_ij )
+                        else:
+                            angOver_j = angOver
+                        obscure[j] += angOver_j / (2.0*dAng_j)
+
+        for i in range( Ntrgt ):
+            obscure[i] = min( obscure[i], 1.0 )
+
+        return obscure
+
 
     def rank_search_shots( self ):
         """ Obtain a ranking of all planned shots """
@@ -1013,13 +1064,15 @@ class LUMP:
 
         nuLst = deque()
         for shot in self.shots:
+            obsc = self.obscurity_list( shot, self.targets )
             soln = self.IK( shot, suppressCache = True )
             if soln is not None:
                 scor = nrgFunc( self.q, soln )
-                for trgt in self.targets:
+                for i, trgt in enumerate( self.targets ):
                     if self.p_target_in_cam_view( shot, trgt ):
-                        scor += trgt.count * _REPEAT_PENALTY
+                        scor += trgt.count * (1.0 - obsc[i]) * _REPEAT_PENALTY
                         scor += max([abs( coord ) for coord in self.viewport_coords( shot, trgt )]) * _EDGE_PENALTY
+                        scor += obsc[i] * _EXCLUDE_PENALTY
                     else:
                         scor += _EXCLUDE_PENALTY
                 nuLst.append( LUMP.wrap_shots( pose = shot, score = scor ) )
@@ -1088,7 +1141,7 @@ class LUMP:
             nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
             self.targets.extend( nuTgt )
             self.targets.extend( prevSymbols )
-            self.targets = LUMP.SearchTarget.reconcile( self.targets )
+            self.targets = LUMP.SearchTarget.reconcile( self.targets, countOverlap = False )
             # 3. Gen more shots
             bgn = 0
             end = _N_INSPECT

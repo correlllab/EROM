@@ -21,7 +21,7 @@ from aspire.homog_utils import homog_xform
 from aspire.symbols import extract_pose_as_homog, GraspObj, CPCD
 
 ### Local ###
-from utils import zip_dict_sorted_by_decreasing_value
+from utils import zip_dict_sorted_by_decreasing_value, get_pose_attr
 
 _TABLE_THIC = 0.015
 
@@ -450,11 +450,7 @@ def scan_geo( sym : GraspObj ):
         return [wf1,] 
 
 
-def get_pose_attr( target ):
-    """ Dig out `pose` by name """
-    while hasattr( target, 'pose' ):
-        target = target.pose
-    return np.array( target )
+
   
 
 def target_geo( sym : GraspObj, colorName : str = 'black' ):
