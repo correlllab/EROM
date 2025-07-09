@@ -841,6 +841,9 @@ class LUMP:
                         nuObj = thing.copy()
                         drctn = choice( compass )
                         nuObj.pose[0:3,3] += drctn
+                        if random() < prob:
+                            drctn = choice( compass )
+                            nuObj.pose[0:3,3] += drctn
                         if nuObj.pose[2,3] >= 0.0:
                             addLst.append( nuObj )
             return addLst
@@ -1001,7 +1004,7 @@ class LUMP:
     def rank_search_shots( self ):
         """ Obtain a ranking of all planned shots """
         _EXCLUDE_PENALTY = 0.50
-        _REPEAT_PENALTY  = 2.00 # 1.00 # 0.65
+        _REPEAT_PENALTY  = 4.0 # 2.00 # 1.00 # 0.65
         _EDGE_PENALTY    = 0.75
 
         self.set_state_from_robot()
@@ -1042,7 +1045,16 @@ class LUMP:
         nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
         self.targets.extend( nuTgt )
         
-        self.shots = LUMP.sample_covering_shots( self.targets, LUMP.dShot, Nshots = _N_SHOT_ADD*_MULT_FACTOR )
+        self.shots = list()
+        bgn = 0
+        end = _N_INSPECT
+        N   = len( self.targets )
+        while bgn < N:
+            nuShots = LUMP.sample_covering_shots( self.targets[bgn:end], LUMP.dShot, Nshots = _N_SHOT_ADD )
+            self.shots.extend( nuShots )
+            bgn = end
+            end = min( end+_N_INSPECT, N )
+
         self.rank_search_shots()
 
         while not self.chk_cb():

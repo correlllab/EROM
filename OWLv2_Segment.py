@@ -155,16 +155,18 @@ class Perception_OWLv2:
     """ Perception service based on OWLv2 """
 
     def __init__( self ):
+        set_perc_env()
         self.rsc : real.RealSense   = None
         self.label_vit : LabelOWLv2 = None 
         self.image : np.ndarray = None
         self.depth : np.ndarray = None
         self.cloud : MPCD       = None
-        set_perc_env()
+        self._SEG_SCORE_THRESH  = env_var("_SEG_SCORE_THRESH")
 
 
     def scale_thresh_by_factor( self, factor ):
         """ Adjust the threshold by some factor """
+        self._SEG_SCORE_THRESH *= factor
         return self.label_vit.scale_thresh_by_factor( factor )
 
 
@@ -274,7 +276,7 @@ class Perception_OWLv2:
         rtnHits = list()
         imgID   = str( uuid4() )
         for i in range( len( scores ) ):
-            if (scores[i] >= env_var("_SEG_SCORE_THRESH")):
+            if (scores[i] >= self._SEG_SCORE_THRESH):
                 coords  = self.label_vit.sorted_boxes[i]
                 indices = [int(c) for c in coords]
                 rtnHits.append({

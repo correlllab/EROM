@@ -462,7 +462,16 @@ def target_geo( sym : GraspObj, colorName : str = 'black' ):
     wf1 = wireframe_box_neg( env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), env_var("_BLOCK_SCALE"), 
                              color = Color( colorName ) )
     wf1.transform = transforms.STTransform( translate = objXfrm[:3,3] )
-    return [wf1,] 
+    rtnLst = [wf1,]
+    if hasattr( sym, 'count' ):
+        txt = scene.visuals.Text(
+            text      = str( sym.count ),
+            bold      = True,
+            font_size = 16,
+            pos       = objXfrm[:3,3].tolist()
+        )
+        rtnLst.append( txt )
+    return rtnLst
 
 
 def target_list_geo( objs : list[GraspObj], noTable = True ):

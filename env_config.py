@@ -68,9 +68,9 @@ def set_experiment_env():
     env_sto( "_MIN_Y_OFFSET", -0.625 - env_var( "_SPACE_EXPAND" ) ) 
     env_sto( "_MAX_Y_OFFSET",  0.200 + env_var( "_SPACE_EXPAND" ) )
 
-    env_sto( "_OWL2_THRESH"  , 0.0025 ) # 0.005
-    env_sto( "_SEG_MAX_HITS"    , 50     ) 
-    env_sto( "_SEG_SCORE_THRESH",  0.100 ) # 0.025 # 0.075 # 0.100
+    env_sto( "_OWL2_THRESH"  ,    0.0025 ) # 0.005
+    env_sto( "_SEG_MAX_HITS"    , 5     ) # 10 # 50
+    env_sto( "_SEG_SCORE_THRESH", 0.050 ) # 0.025 # 0.075 # 0.100
 
     env_sto( "_Z_SAFE", 0.350 )
 
