@@ -430,9 +430,10 @@ class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
 
     ## Problem-Specific Static Vars ##
-    ZTableCam : float = -0.081666 - 0.017
-    dShot     : float = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
-    dLoc      : float = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
+    ZTableCam   : float = -0.081666 - 0.017
+    dShot       : float = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
+    dLoc        : float = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
+    _SEP_DIST_M : float =  0.150
 
     def __init__( self, qInit = None, robot : UR5_Interface = None ):
         """ Set params """
@@ -687,7 +688,7 @@ class LUMP:
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
 
         _CONFIG_FACTOR = 5.0
-        _TABLE_FACTOR  = 3.0
+        _TABLE_FACTOR  = 5.0
         _REACH_FACTOR  = 6.5
         _DELTA_FACTOR  = 1.0
         _DELTA_MAX     = [np.pi for _ in range(6)]
@@ -849,7 +850,7 @@ class LUMP:
                         nuObj = thing.copy()
                         drctn = choice( compass )
                         nuObj.pose[0:3,3] += drctn
-                        if random() < prob:
+                        if random() < 0.5:
                             drctn = choice( compass )
                             nuObj.pose[0:3,3] += drctn
                         if nuObj.pose[2,3] >= 0.0:
@@ -930,7 +931,7 @@ class LUMP:
         _VIEW_PENALTY =  1.0
         _EDGE_PENALTY = 0.75
         _MULT_FACTOR  = 10
-        _SEP_DIST_M   =  0.150
+        
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
 
@@ -964,7 +965,7 @@ class LUMP:
         for shot in ranking[1:]:
             pose_i = shot['pose']
             # print(topPose, pose_i)
-            shot['score'] += _SEP_DIST_M / max( euclidean_distance_between_poses( topPose, pose_i ), 0.005 )
+            shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( topPose, pose_i ), 0.005 )
         ranking.sort( key = lambda x: x['score'] )
 
         return [item['pose'] for item in ranking[:N]]
@@ -982,7 +983,7 @@ class LUMP:
         self.chk_cb  = checkCB
         self.viz_cb  = noVizCB
         # Constants #
-        self._VIZ_THRESH_DOWN = 0.85
+        self._VIZ_THRESH_DOWN = 0.95
         
 
     def p_target_in_cam_view( self, effXform : np.ndarray, target : LUMP.SearchTarget ):
@@ -1079,12 +1080,20 @@ class LUMP:
 
         self.ranking = list( nuLst )
         self.ranking.sort( key = lambda x: x['score'] )
+
+        topPose = self.ranking[0]['pose']
+        for shot in self.ranking[1:]:
+            pose_i = shot['pose']
+            # print(topPose, pose_i)
+            shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( topPose, pose_i ), 0.005 )
+        self.ranking.sort( key = lambda x: x['score'] )
+
         self.shots = [item['pose'] for item in self.ranking]
 
 
     def run_object_search( self, proposedObjects : list[GraspObj] ):
         """ Be a little more persistent until the objects are found """
-        _MULT_FACTOR  = 10
+        _MULT_FACTOR  = 15 # 10
         _N_SHOT_ADD   =  5
         _N_SHOT_TOTAL = _N_SHOT_ADD*_MULT_FACTOR 
         _N_INSPECT    =  3
