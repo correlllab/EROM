@@ -691,8 +691,8 @@ class LUMP:
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
 
         _CONFIG_FACTOR = 5.0
-        _TABLE_FACTOR  = 5.5
-        _REACH_FACTOR  = 6.5
+        _TABLE_FACTOR  = 7.5
+        _REACH_FACTOR  = 7.0
         _DELTA_FACTOR  = 1.0
         _DELTA_MAX     = [np.pi for _ in range(6)]
         _DELTA_MAX[-1] = np.pi*2.0
@@ -878,7 +878,7 @@ class LUMP:
 
 
         @staticmethod
-        def reconcile( things : list[LUMP.SearchTarget], countOverlap = True ):
+        def reconcile( things : list[LUMP.SearchTarget], countOverlap = True, decay = 0.70 ):
             """ Merge overlapping targets """
             rtnLst = list()
             banSet = set([])
@@ -895,7 +895,7 @@ class LUMP:
                             if countOverlap:
                                 obj_i.count += obj_j.count
             for i in range( Nobj ):
-                if i not in banSet:
+                if (i not in banSet) and (random() < decay):
                     rtnLst.append( things[i] )
             return rtnLst
 
@@ -1150,7 +1150,7 @@ class LUMP:
                 bel.count = 1
             self.targets = LUMP.SearchTarget.keep_consistent( self.targets, beliefs )
             self.targets.extend( beliefs )
-            nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
+            nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 4 )
             self.targets.extend( nuTgt )
             self.targets.extend( prevSymbols )
             self.targets = LUMP.SearchTarget.reconcile( self.targets, countOverlap = False )

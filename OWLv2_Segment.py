@@ -167,8 +167,8 @@ class Perception_OWLv2:
     def scale_thresh_by_factor( self, factor ):
         """ Adjust the threshold by some factor """
         self._SEG_SCORE_THRESH *= factor
-        return self._SEG_SCORE_THRESH
-        # return self.label_vit.scale_thresh_by_factor( factor )
+        # return self._SEG_SCORE_THRESH
+        return self.label_vit.scale_thresh_by_factor( factor )
 
 
     def start_vision( self ):

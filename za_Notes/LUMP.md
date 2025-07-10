@@ -2,7 +2,7 @@
 
 
 # Expansion Ideas
-- [ ] E
+- [ ] 
 - [ ] [OMPL](https://ompl.kavrakilab.org/python.html)
 - [ ] [Flexible Collision Library](https://github.com/BerkeleyAutomation/python-fcl)
 

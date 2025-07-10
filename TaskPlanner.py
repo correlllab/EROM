@@ -322,7 +322,8 @@ class TaskPlanner:
             for obj in self.symPln.symbols:
                 print( f"\t{obj}" )
 
-            if not self.cheater.trouble:
+            _always_cheat = True
+            if (not self.cheater.trouble) or _always_cheat:
                 self.symPln.symbols = self.cheater.repair_symbol_poses( self.symPln.symbols )
             else:
                 print( f"Cheater in TROUBLE! No nudge!", end = '    ' )

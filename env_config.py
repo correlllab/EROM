@@ -133,6 +133,7 @@ def set_experiment_env():
 
 
     env_sto( "_WIDE_Z_ABOVE", 1.75*env_var("_BLOCK_SCALE") )
+    env_sto( "_SMUSH_Z_ABOVE", 0.80*env_var("_BLOCK_SCALE") )
 
     env_sto( "_ROBOT_FREE_SPEED", 0.125 * 3.5 ) 
     env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 2.0 )
