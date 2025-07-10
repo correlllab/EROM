@@ -43,6 +43,24 @@ _REVERSE_QUERIES = {
 }
 
 
+########## GEOMETRY FUNCTIONS ######################################################################
+
+def closest_ray_point( A_org, A_dir, B_org, B_dir ):
+    """ Return the average point of the (closest on ray A to ray B) and (closest on ray B to ray A) """
+    # https://palitri.com/vault/stuff/maths/Rays%20closest%20point.pdf
+    c  = np.subtract( B_org, A_org )
+    aa = np.dot( A_dir, A_dir )
+    bb = np.dot( B_dir, B_dir )
+    ab = np.dot( A_dir, B_dir )
+    ac = np.dot( A_dir, c     )
+    bc = np.dot( B_dir, c     ) 
+    fA = (-ab*bc + ac*bb) / (aa*bb-ab*ab)
+    fB = ( ab*ac - bc*aa) / (aa*bb-ab*ab)
+    pA = np.add( A_org, np.multiply( A_dir, fA ) )
+    pB = np.add( B_org, np.multiply( B_dir, fB ) )
+    return (pA + pB)/2.0
+
+
 
 ########## HELPER FUNCTIONS ########################################################################
 

@@ -4,7 +4,7 @@
 import sys, gc, time, traceback, warnings
 now = time.time
 from copy import deepcopy
-from collections import defaultdict
+from collections import defaultdict, deque
 from uuid import uuid4
 
 # import torch
@@ -116,6 +116,28 @@ def bbox_to_mask( maskShape, bbox ):
     mask[ bbox[1]:bbox[3], bbox[0]:bbox[2] ] = 1.0
     return mask
 
+
+def mask_ray_realsense( bbox : np.ndarray, mask : np.ndarray = None  ):
+    """ Project a ray through the center of the mask """
+    rows   = mask.shape[0]
+    rwHf   = rows / 2
+    cols   = mask.shape[1]
+    clHf   = cols / 2
+    cntr2d = np.zeros( 2 )
+    count  = 0.0
+    Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
+    Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
+    if mask is not None:
+        for j in range( bbox[1], min(bbox[3]-1, rows) ):
+            for k in range( bbox[0], min(bbox[2]-1, cols) ):
+                # print( j,k )
+                frac_jk =  mask[j,k]
+                cntr2d  += np.array( [(k-clHf)/clHf,(j-rwHf)/rwHf] ) * frac_jk
+                count   += frac_jk
+        cntr2d /= count
+    else:
+        cntr2d = np.array( (bbox[0]+bbox[2])/2.0, (bbox[1]+bbox[3])/2.0 )
+    return vec_unit( [cntr2d[0]*Xlen, cntr2d[1]*Ylen, 1.0] )
 
 
 ########## SAM2 WRAPPER ############################################################################
@@ -249,17 +271,6 @@ class Perception_OWLv2:
         for i in range(3):
             pose_vector[i,3] = center[i]
         return pose_vector.reshape( (16,) ).tolist()
-    
-
-    # def calculate_area( self, box ):
-    #     """Calculates the area of the bounding box."""
-    #     return abs(box[3] - box[1]) * abs(box[2] - box[0])
-
-
-    # def filter_by_area( self, tolerance, box, total_area ):
-    #     """Filters the bounding box by area."""
-    #     area = self.calculate_area(box)
-    #     return abs(area / total_area) <= tolerance
 
 
     def bound( self, query, abbrevq, useCache = False ):
@@ -274,7 +285,7 @@ class Perception_OWLv2:
 
         _, _, scores, labels = self.label_vit.label( self.image, query, abbrevq, topk = True, plot = False )
 
-        rtnHits = list()
+        rtnHits = deque()
         imgID   = str( uuid4() )
         for i in range( len( scores ) ):
             if (scores[i] >= self._SEG_SCORE_THRESH):
@@ -340,7 +351,7 @@ class Perception_OWLv2:
             if pcdVol < volEps:
                 print( f"CPCD TOO SMALL: {pcdVol} < {volEps}" )
                 return None
-            return cpcd
+            return cpcd, mask_i
         else:
             return None
     
@@ -348,10 +359,10 @@ class Perception_OWLv2:
     def segment( self, queries : list[dict] ) -> tuple[list[dict], list[dict]]: 
         """ Get poses from the camera """
 
-        rtnObjs  = list()
+        rtnObjs  = deque()
         metadata = {
             'input'  : dict(),
-            'hits'   : list(),
+            'hits'   : deque(),
         }
 
         try:
@@ -389,6 +400,7 @@ class Perception_OWLv2:
                 overlap = 0.0
                 repeat  = hit_i['shotID'] == lastID
                 lastID  = hit_i['shotID']
+                
 
                 if len( rtnDict ):
                     print( f"BBox Intersection: ", end="", flush=True )
@@ -411,7 +423,7 @@ class Perception_OWLv2:
                     # img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
                     img_i = metadata['input'][ hit_i['shotID'] ]['image']
 
-                    cpcd = self.segment_cloud_w_SAM( 
+                    cpcd, mask_i = self.segment_cloud_w_SAM( 
                         img_i, 
                         bboxi_i, 
                         metadata['input'][ hit_i['shotID'] ]['mpcd'],
@@ -419,23 +431,35 @@ class Perception_OWLv2:
                     )
                     if (cpcd is not None) and len( np.asarray( cpcd.points ) ):
                         print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {bboxi_i}!" )
+                        boxRay_i  = mask_ray_realsense( hit_i['bbox'], mask_i )
+                        cloudPair = { 'points' : np.asarray( cpcd.points ).copy(),
+                                      'colors' : np.asarray( cpcd.colors ).copy(), }
+                        type_i    = 'cloud'
+                        pose_i    = self.get_pcd_pose( cpcd )
+                    else:
+                        boxRay_i  = mask_ray_realsense( hit_i['bbox'] )
+                        cloudPair = { 'points' : None,
+                                      'colors' : None, }
+                        type_i    = 'ray'
+                        pose_i    = None
 
-                        item = {
-                            ## Updated ##
-                            'Score'      : [hit_i['score'],],
-                            'Probability': defaultdict( give_0 ),
-                            'Count'      : 1,
-                            ## Frozen ##
-                            'bbox'       : hit_i['bbox'],
-                            'Pose'       : self.get_pcd_pose( cpcd ),
-                            'Time'       : now(),
-                            'CPCD'       : { 'points' : np.asarray( cpcd.points ).copy(),
-                                             'colors' : np.asarray( cpcd.colors ).copy(), },
-                            'shotID'     : hit_i['shotID'],
-                            'camRay'     : np.array([0,0,1,]),
-                        }
-                        item['Probability'][ hit_i['abbrv'] ] = hit_i['score']
-                        rtnDict[ uuid4() ] = item 
+                    item = {
+                        ## Updated ##
+                        'Score'      : [hit_i['score'],],
+                        'Probability': defaultdict( give_0 ),
+                        'Count'      : 1,
+                        ## Frozen ##
+                        'type'       : type_i,
+                        'bbox'       : hit_i['bbox'],
+                        'Pose'       : pose_i,
+                        'Time'       : now(),
+                        'CPCD'       : cloudPair,
+                        'shotID'     : hit_i['shotID'],
+                        'camRay'     : np.array([0,0,1,]),
+                        'boxRay'     : boxRay_i,
+                    }
+                    item['Probability'][ hit_i['abbrv'] ] = hit_i['score']
+                    rtnDict[ uuid4() ] = item 
 
             for rK in rtnDict.keys():
                 rtnDict[ rK ]['Probability'] = normalize_dist( rtnDict[ rK ]['Probability'] )
@@ -446,7 +470,7 @@ class Perception_OWLv2:
                 del metadata['input'][k]['rgbd']
                 del metadata['input'][k]['mpcd']
                 
-            return rtnObjs, metadata
+            return list( rtnObjs ), metadata
 
         except Exception as e:
             print(f"Error building model: {e}", flush=True, file=sys.stderr)

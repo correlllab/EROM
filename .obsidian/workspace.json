@@ -24,19 +24,19 @@
             }
           },
           {
-            "id": "e567fefb27372baf",
+            "id": "f9dad22835caca8b",
             "type": "leaf",
             "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/LUMP.md",
+                "file": "za_Notes/Log/2025-06-26.md",
                 "mode": "source",
                 "source": false
               },
               "pinned": true,
               "icon": "lucide-file",
-              "title": "LUMP"
+              "title": "2025-06-26"
             }
           },
           {
@@ -45,30 +45,16 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/Daydreams.md",
+                "file": "za_Notes/LUMP.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Daydreams"
-            }
-          },
-          {
-            "id": "e179c1d45dbb71ac",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "za_Notes/Log/2025-07-09.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "2025-07-09"
+              "title": "LUMP"
             }
           }
         ],
-        "currentTab": 1
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -213,25 +199,24 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "e567fefb27372baf",
+  "active": "9a1bb40c7afbfaa1",
   "lastOpenFiles": [
-    "data/Segmentations_1752188054.3308086.pdf",
-    "data/Segmentations_1752187847.0474713.pdf",
-    "data/Segmentations_1752187439.3695133.pdf",
-    "data/Segmentations_1752187344.4422545.pdf",
-    "data/Segmentations_1752187283.1447814.pdf",
-    "data/Segmentations_1752187093.8344824.pdf",
-    "data/Segmentations_1752187016.623467.pdf",
-    "data/Segmentations_1752186867.8410692.pdf",
-    "data/Segmentations_1752186776.6248803.pdf",
-    "data/Segmentations_1752186722.0676746.pdf",
-    "data/Segmentations_1752186656.6092508.pdf",
-    "za_Notes/Daydreams.md",
-    "za_Notes/LUMP.md",
     "za_Notes/Log/2025-07-09.md",
-    "za_Notes/DEV_PLAN.md",
-    "za_Notes/Log/2025-06-26.md",
+    "za_Notes/Daydreams.md",
+    "State.py",
     "za_Notes/Log/2025-06-27.md",
+    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-01-27.pkl",
+    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-08-42.pkl",
+    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-14-10.pkl",
+    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-21-34.pkl",
+    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-28-43.pkl",
+    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-34-07.pkl",
+    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-39-11.pkl",
+    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-54-35.pkl",
+    "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_15-23-05.pkl",
+    "za_Notes/Log/2025-06-26.md",
+    "za_Notes/DEV_PLAN.md",
+    "za_Notes/LUMP.md",
     "za_Notes/Log/2025-05-20.md",
     "README.md",
     "za_Notes/Log/2025-05-13.md",

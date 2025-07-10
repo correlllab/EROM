@@ -7,6 +7,9 @@
 - [ ] [Flexible Collision Library](https://github.com/BerkeleyAutomation/python-fcl)
 
 # Supporting Basic Planning
+- [ ] Restore the Rays
+	- [ ] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L146
+	- [ ] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L357
 
 - [x] Idea: Don't let the determinizer consider NULL!
 ## Object Search
