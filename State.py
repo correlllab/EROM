@@ -1,4 +1,4 @@
-import os, pickle, time, subprocess
+import os, pickle, time, subprocess, math
 now = time.time 
 from collections import deque
 from datetime import datetime
@@ -60,7 +60,7 @@ class LogPickler:
 
     def visualize_last_segmentation( self ):
         """ Overlay all the camera shots with the segmentations """
-        _SEG_TAG = 'meta'
+        _SEG_TAG = 'ObsMeta' # 'meta'
         _DAT_DIR = 'data'
         NdataPts = len( self.log )
         # 0. Fetch the actual data
@@ -93,12 +93,20 @@ class LogPickler:
             # 3. Draw Images w/ BB
             Nimg = len( vizDct )
             Ncol = 2
-            Nrow = int( Nimg/Ncol )
-            i    = 0
+            Nrow = max( 1, int( math.ceil( Nimg/Ncol ) ) )
+            rOne = (Nrow < 2)
+            l    = 0
             fig, plots = plt.subplots( Nrow, Ncol, figsize = ( 4*Ncol, 3*Nrow, ) )
+            print( Nimg, [Nrow,Ncol,], plots.shape )
             for k, v in vizDct.items():
+                i = int(l / Ncol)
+                j = int(l % Ncol)
+
                 img : np.ndarray = v['img']
-                ax  : Axes       = plots[i]
+                if rOne:
+                    ax  : Axes       = plots[l]
+                else:
+                    ax  : Axes       = plots[i,j]
                 ax.imshow( img )
 
                 for hit in v['seg']:
@@ -118,11 +126,11 @@ class LogPickler:
                     text = f"({hit['score']:.2f})"
                     ax.text(x, y, text, color='white', bbox=dict(facecolor='red', alpha=0.5))
 
-                i += 1
+                l += 1
             # Draw
             pdfPath = os.path.join( _DAT_DIR, f"Segmentations_{datum['t']}.pdf" )
             plt.savefig( pdfPath )
-            subprocess.call( ('xdg-open', pdfPath ) ) # WARNING: IS THIS BLOCKING?
+            # subprocess.call( ('xdg-open', pdfPath ) ) # WARNING: IS THIS BLOCKING?
 
         else:
             print( f"\nCould not find segmentation data in log of {NdataPts} entries!\n" )
@@ -161,7 +169,6 @@ class PoseCheater:
         for frame in self.symbols:
             rtnLst.extend( frame )
         return rtnLst
-
     
 
     def last_known_beliefs( self ):
@@ -229,7 +236,8 @@ class PoseCheater:
         def p_collide_return( qSym ):
             """ Did we already log a symbol at this location? """
             for rSym in rtnSym:
-                if euclidean_distance_between_symbols( qSym, rSym ) < env_var('_BLOCK_SCALE')*0.75:
+                # if euclidean_distance_between_symbols( qSym, rSym ) < env_var('_BLOCK_SCALE')*0.75:
+                if euclidean_distance_between_symbols( qSym, rSym ) < env_var('_BLOCK_SCALE')*0.65:
                     return True
             return False
 

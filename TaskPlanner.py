@@ -628,6 +628,20 @@ class TaskPlanner:
 
     def solve_task( self, maxIter, beginPlanPose ):
         """ Solve the goal """
+        tLast = now()
+
+        def report_time( msg = None ):
+            """ Cheap performance monitoring function """
+            nonlocal tLast, self
+            if msg is None:
+                msg = "`report_time`" 
+            elapsed = now() - tLast
+            status  = f"{msg} : {elapsed} [s] since last call!"
+            tLast = now()
+            print( status )
+            self.memory.history.append( msg = "Performance", datum = status )
+
+
         if not isinstance( beginPlanPose, list ):
             beginPlanPose = [beginPlanPose,]
 
@@ -645,8 +659,12 @@ class TaskPlanner:
 
         self.memory.history.append( msg = "Task Start" )
 
+        report_time( "Task solver init complete!" )
+
         while (self.status != Status.SUCCESS) and (i < maxIter): # and (not self.PANIC):
             
+            report_time( "Task BEGIN!" )
+
             self.status = Status.RUNNING
 
             print( f"\n\n### Iteration {i+1} ###" )
@@ -665,10 +683,14 @@ class TaskPlanner:
                 if not _RESPONSIVE_MODE:
                     self.memory.reset_memory()
                 self.lump.run_object_search( symLst )
+                report_time( "Object search COMPLETE!" )
             else:
                 if not _RESPONSIVE_MODE:
                     self.memory.reset_memory()
+
                 bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 3 )
+                report_time( "Perception shots PLANNED!" )
+
                 for bgnPose in bgnPoses:
                     self.robot.moveL( _SAFE, 
                                       linSpeed = env_var("_ROBOT_FREE_SPEED"),
@@ -700,6 +722,7 @@ class TaskPlanner:
 
             print( f"Phase 2, {self.status} ..." )
             self.phase_2_Conditions()
+            report_time( "Conditions GROUNDED!" )
 
             if env_var("_VERBOSE"):
                 print(f"Checking goals ...")
@@ -720,6 +743,7 @@ class TaskPlanner:
 
             print( f"Phase 3, {self.status} ..." )
             self.phase_3_Plan_Task()
+            report_time( "PDDL planning COMPLETE!" )
 
             if self.p_failed():
                 self.memory.reset_memory()
@@ -742,6 +766,7 @@ class TaskPlanner:
             print( f"Phase 4, {self.status} ..." )
 
             self.phase_4_Execute_Action()
+            report_time( "Action EXECUTED!" )
 
             if self.p_failed():
                 self.robot.open_gripper()
@@ -751,6 +776,7 @@ class TaskPlanner:
 
             print( f"Phase 5, {self.status} ..." )
             self.phase_5_Return_Home( _SAFE )
+            report_time( "Returned HOME!" )
 
             print()
 
@@ -758,6 +784,8 @@ class TaskPlanner:
             msg   = f"Task End, Succes?: {self.status}, end_symbols : {list( self.symPln.symbols )}",
             datum = list( self.symPln.symbols )
         )
+
+        report_time( "Planner EXIT!" )
 
         print( f"\n##### PLANNER END with status {self.status} after iteration {i} #####\n\n\n" )
 
@@ -790,8 +818,10 @@ def experiment_prep( beginPlanPose = None ):
     
 
 ########## MAIN ####################################################################################
+from timeit import timeit
 
 _TROUBLESHOOT = 0
+_TRACK_PERF   = 0
 
 
 _SHOT_6 = repair_pose( np.array( [[-0.07,  -0.951, -0.3 ,  -0.059],
@@ -850,7 +880,14 @@ if __name__ == "__main__":
                 [xHi    , yLo    , 0.000,],
                 [xHi-pad, yLo+pad, 0.300,],
             ] )
+
+            # if _TRACK_PERF:
+            #     timeit( 'planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSES )', number = 1 )
+            # else:
+            #     planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSES )
+
             planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSES )
+
             sleep( 2.5 )
             planner.shutdown()
             
