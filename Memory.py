@@ -70,81 +70,7 @@ def closest_ray_points( A_org, A_dir, B_org, B_dir ):
 
 def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
     """ Parse the Perception Process output struct """
-    rtnBel = deque()
-    rayItm = deque()
-    if xform is None:
-        xform = np.eye(4)
-
-    if isinstance( obs, dict ):
-        obs = list( obs.values() )
-
-    ## Stage 1: Process cloud observations and store ray observations ##
-    for item in obs:
-        dstrb = {}
-        tScan = item['Time']
-        if isinstance( item['Probability'], dict ):
-            for nam, prb in item['Probability'].items():
-                if prb > 0.0001:
-                    dstrb[ match_name( nam ) ] = prb
-                else:
-                    dstrb[ match_name( nam ) ] = env_var("_CONFUSE_PROB")
-
-            for nam in env_var("_BLOCK_NAMES"):
-                if nam not in dstrb:
-                    dstrb[ nam ] = env_var("_CONFUSE_PROB")
-                
-            dstrb = normalize_dist( dstrb )
-        else:
-            dstrb = get_uniform_prior_over_labels()
-        item['Probability'] = dstrb # Write back
-
-
-        if 'type' not in item:
-            raise ValueError( "Observation dictionaries MUST have a 'type' field!" )
-
-        # WARNING: CLASSES WITH A ZERO PRIOR WILL NOT ACCUMULATE EVIDENCE!
-        if item['type'] == 'ray':
-            # Store mask centroid ray
-            item['rayOrg'] = xform[0:3,3].reshape(3)
-            item['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
-            rayItm.append( item )
-        elif item['type'] == 'cloud':
-            
-
-            if len( item['Pose'] ) == 16:
-                objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
-
-                # # HACK: SNAP THE Z-COMPONENT DURING SCAN
-                # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
-
-                # HACK: PUSH THE BLOCK POSE INTO THE HAND
-                objPose[2,3] += env_var("_GRASP_NUDGE_M")
-
-            else:
-                raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
-            
-            # Create reading
-            rtnObj = GraspObj( 
-                labels = dstrb, 
-                pose   = ObjPose( objPose ), 
-                ts     = tScan, 
-                count  = item['Count'], 
-                score  = 0.0,
-                cpcd   = item['CPCD'],
-            )
-
-            # Transform CPCD
-            mov = xform.copy()
-            mov[2,3] += zOffset
-            rtnObj.cpcd.transform( mov )
-
-            # Store mask centroid ray
-            rtnObj.meta['rayOrg'] = xform[0:3,3].reshape(3)
-            rtnObj.meta['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
-
-            rtnBel.append( rtnObj )
-        else:
-            raise ValueError( f"UNRECOGNIZED observation type: {item['type']}" )
+    
         
     ## Stage 2: Process ray observations ##
     centers = deque()
@@ -495,7 +421,9 @@ class Memory:
 
     def reset_memory( self ):
         """ Erase memory components """
-        self.scan : deque[GraspObj] = deque()
+        self.scan : deque[dict]     = deque()
+        self.rays : deque[dict]     = deque()
+        self.gObs : deque[GraspObj] = deque()
         self.mult : bool            = False
         self.bMem : BayesMemory     = BayesMemory()
         self.klTr : KLD_Tracker     = KLD_Tracker()
@@ -581,12 +509,81 @@ class Memory:
 
     def process_observations( self, obs, xform = None, Append = False ):
         """ Integrate one noisy scan into the current beliefs """    
-        if (Append and self.mult):
-            self.scan.extend( obs )
-        else:
-            self.scan = obs[:]
-            if Append:
-                self.mult = True
+        rtnBel = deque()
+        rayItm = deque()
+        if xform is None:
+            xform = np.eye(4)
+
+        if isinstance( obs, dict ):
+            obs = list( obs.values() )
+
+        ## Stage 1: Process cloud observations and store ray observations ##
+        for item in obs:
+            dstrb = {}
+            tScan = item['Time']
+            if isinstance( item['Probability'], dict ):
+                for nam, prb in item['Probability'].items():
+                    if prb > 0.0001:
+                        dstrb[ match_name( nam ) ] = prb
+                    else:
+                        dstrb[ match_name( nam ) ] = env_var("_CONFUSE_PROB")
+
+                for nam in env_var("_BLOCK_NAMES"):
+                    if nam not in dstrb:
+                        dstrb[ nam ] = env_var("_CONFUSE_PROB")
+                    
+                dstrb = normalize_dist( dstrb )
+            else:
+                dstrb = get_uniform_prior_over_labels()
+            item['Probability'] = dstrb # Write back
+
+
+            if 'type' not in item:
+                raise ValueError( "Observation dictionaries MUST have a 'type' field!" )
+
+            # WARNING: CLASSES WITH A ZERO PRIOR WILL NOT ACCUMULATE EVIDENCE!
+            if item['type'] == 'ray':
+                # Store mask centroid ray
+                item['rayOrg'] = xform[0:3,3].reshape(3)
+                item['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+                rayItm.append( item )
+            elif item['type'] == 'cloud':
+                
+
+                if len( item['Pose'] ) == 16:
+                    objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
+
+                    # # HACK: SNAP THE Z-COMPONENT DURING SCAN
+                    # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
+
+                    # HACK: PUSH THE BLOCK POSE INTO THE HAND
+                    objPose[2,3] += env_var("_GRASP_NUDGE_M")
+
+                else:
+                    raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
+                
+                # Create reading
+                rtnObj = GraspObj( 
+                    labels = dstrb, 
+                    pose   = ObjPose( objPose ), 
+                    ts     = tScan, 
+                    count  = item['Count'], 
+                    score  = 0.0,
+                    cpcd   = item['CPCD'],
+                )
+
+                # Transform CPCD
+                mov = xform.copy()
+                mov[2,3] += zOffset
+                rtnObj.cpcd.transform( mov )
+
+                # Store mask centroid ray
+                rtnObj.meta['rayOrg'] = xform[0:3,3].reshape(3)
+                rtnObj.meta['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+
+                rtnBel.append( rtnObj )
+            else:
+                raise ValueError( f"UNRECOGNIZED observation type: {item['type']}" )
 
         if not Append:
 
