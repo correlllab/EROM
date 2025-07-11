@@ -2,14 +2,15 @@
 
 
 # Expansion Ideas
-- [ ] 
+- [ ] **Grasp Planner**!
 - [ ] [OMPL](https://ompl.kavrakilab.org/python.html)
 - [ ] [Flexible Collision Library](https://github.com/BerkeleyAutomation/python-fcl)
 
 # Supporting Basic Planning
 - [ ] Restore the Rays
-	- [ ] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L146
+	- [x] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L146
 	- [ ] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L357
+- [ ] Pose Repair should also straighten out stacked blocks?
 
 - [x] Idea: Don't let the determinizer consider NULL!
 ## Object Search
@@ -22,6 +23,7 @@
 - [x] SOMETIMES POSE REPAIR IS FUCKING ME OVER, SHOULD NOT HAPPEN WHEN THERE IS TROUBLE?
 - [x] Idea: If we are coming up with nothing, Then lower OWLv2 Thresholds!
 - [ ] Idea: Merge Pose Cheater with LUMP? --> Circular Import?
+	- --> No, LUMP is already 1k lines
 - [x] Re-rank shots and loop until all req'd objects are found
 - [x] Need a shortcut for obscured objects
 - [ ] Take shots one at a time

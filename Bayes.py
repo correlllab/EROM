@@ -55,6 +55,21 @@ def exp_filter( lastVal, nextVal, rate01 ):
     return (nextVal * rate01) + (lastVal * (1.0 - rate01))
 
 
+def posterior_dict_from_prior_and_evidence( priorDist : GraspObj | dict, evidence : GraspObj | dict ):
+    """ Perform a multiclass Bayesian update on named distributions """
+    evdnc = extract_class_dist_in_order( evidence  )
+    prior = extract_class_dist_in_order( priorDist )
+    keys  = env_var("_BLOCK_NAMES")
+    pstrr = multiclass_Bayesian_belief_update( 
+        get_confusion_matx( env_var("_N_CLASSES"), confuseProb = env_var("_CONFUSE_PROB") ), 
+        prior, 
+        evdnc 
+    )
+    nuLabels = dict()
+    for i, key in enumerate( keys ):
+        nuLabels[ key ] = pstrr[i]
+    return nuLabels
+
 
 ########## BELIEFS #################################################################################
 
@@ -87,18 +102,8 @@ class BayesMemory:
             updPose[0:3,3] = updPosn
             objUpdate.pose  = ObjPose( updPose )
 
-        evdnc = extract_class_dist_in_order( evidence )
-        prior = extract_class_dist_in_order( belief   )
-        keys  = env_var("_BLOCK_NAMES")
-        pstrr = multiclass_Bayesian_belief_update( 
-            get_confusion_matx( env_var("_N_CLASSES"), confuseProb = env_var("_CONFUSE_PROB") ), 
-            prior, 
-            evdnc 
-        )
-        nuLabels = dict()
-        for i, key in enumerate( keys ):
-            nuLabels[ key ] = pstrr[i]
-        belief.labels = nuLabels
+        
+        belief.labels = posterior_dict_from_prior_and_evidence( belief, evidence )
         belief.cpcd.merge( evidence.cpcd )
         belief.add_source( evidence )
 

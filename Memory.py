@@ -23,8 +23,9 @@ from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog, euclidean
 
 from utils import ( zip_dict_sorted_by_decreasing_value, deep_copy_memory_list, )
 from State import LogPickler
-from Bayes import BayesMemory
+from Bayes import BayesMemory, posterior_dict_from_prior_and_evidence
 from LUMP import LUMP
+from homog_utils import diff_mag
 
 
 ##### Constants #####
@@ -45,8 +46,8 @@ _REVERSE_QUERIES = {
 
 ########## GEOMETRY FUNCTIONS ######################################################################
 
-def closest_ray_point( A_org, A_dir, B_org, B_dir ):
-    """ Return the average point of the (closest on ray A to ray B) and (closest on ray B to ray A) """
+def closest_ray_points( A_org, A_dir, B_org, B_dir ):
+    """ Return (closest on ray A to ray B), (closest on ray B to ray A), and their mean point """
     # https://palitri.com/vault/stuff/maths/Rays%20closest%20point.pdf
     c  = np.subtract( B_org, A_org )
     aa = np.dot( A_dir, A_dir )
@@ -58,7 +59,7 @@ def closest_ray_point( A_org, A_dir, B_org, B_dir ):
     fB = ( ab*ac - bc*aa) / (aa*bb-ab*ab)
     pA = np.add( A_org, np.multiply( A_dir, fA ) )
     pB = np.add( B_org, np.multiply( B_dir, fB ) )
-    return (pA + pB)/2.0
+    return pA, pB, (pA + pB)/2.0
 
 
 
@@ -66,19 +67,18 @@ def closest_ray_point( A_org, A_dir, B_org, B_dir ):
 
 def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
     """ Parse the Perception Process output struct """
-    rtnBel = []
+    rtnBel = deque()
+    rayItm = deque()
     if xform is None:
         xform = np.eye(4)
 
     if isinstance( obs, dict ):
         obs = list( obs.values() )
 
+    ## Stage 1: Process cloud observations and store ray observations ##
     for item in obs:
         dstrb = {}
         tScan = item['Time']
-
-        # WARNING: CLASSES WITH A ZERO PRIOR WILL NOT ACCUMULATE EVIDENCE!
-
         if isinstance( item['Probability'], dict ):
             for nam, prb in item['Probability'].items():
                 if prb > 0.0001:
@@ -91,40 +91,124 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
                     dstrb[ nam ] = env_var("_CONFUSE_PROB")
                 
             dstrb = normalize_dist( dstrb )
-
-        if len( item['Pose'] ) == 16:
-            objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
-
-            # # HACK: SNAP THE Z-COMPONENT DURING SCAN
-            # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
-
-            # HACK: PUSH THE BLOCK POSE INTO THE HAND
-            objPose[2,3] += env_var("_GRASP_NUDGE_M")
-
         else:
-            raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
+            dstrb = get_uniform_prior_over_labels()
+        item['Probability'] = dstrb # Write back
+
+
+        if 'type' not in item:
+            raise ValueError( "Observation dictionaries MUST have a 'type' field!" )
+
+        # WARNING: CLASSES WITH A ZERO PRIOR WILL NOT ACCUMULATE EVIDENCE!
+        if item['type'] == 'ray':
+            # Store mask centroid ray
+            item['rayOrg'] = xform[0:3,3].reshape(3)
+            item['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+            rayItm.append( item )
+        elif item['type'] == 'cloud':
+            
+
+            if len( item['Pose'] ) == 16:
+                objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
+
+                # # HACK: SNAP THE Z-COMPONENT DURING SCAN
+                # objPose[2,3] = snap_z_to_nearest_block_unit_above_zero( objPose[2,3] )
+
+                # HACK: PUSH THE BLOCK POSE INTO THE HAND
+                objPose[2,3] += env_var("_GRASP_NUDGE_M")
+
+            else:
+                raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
+            
+            # Create reading
+            rtnObj = GraspObj( 
+                labels = dstrb, 
+                pose   = ObjPose( objPose ), 
+                ts     = tScan, 
+                count  = item['Count'], 
+                score  = 0.0,
+                cpcd   = item['CPCD'],
+            )
+
+            # Transform CPCD
+            mov = xform.copy()
+            mov[2,3] += zOffset
+            rtnObj.cpcd.transform( mov )
+
+            # Store mask centroid ray
+            rtnObj.meta['rayOrg'] = xform[0:3,3].reshape(3)
+            rtnObj.meta['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+
+            rtnBel.append( rtnObj )
+        else:
+            raise ValueError( f"UNRECOGNIZED observation type: {item['type']}" )
         
-        # Create reading
-        rtnObj = GraspObj( 
-            labels = dstrb, 
-            pose   = ObjPose( objPose ), 
-            ts     = tScan, 
-            count  = item['Count'], 
-            score  = 0.0,
-            cpcd   = item['CPCD'],
-        )
+    ## Stage 2: Process ray observations ##
+    centers = deque()
 
-        # Transform CPCD
-        mov = xform.copy()
-        mov[2,3] += zOffset
-        rtnObj.cpcd.transform( mov )
+    def center_index( q ):
+        """ Find the index of the closest matching center """
+        nonlocal centers
+        rtnIdx = -5.5
+        dMin   = 1e9
+        for i, center in enumerate( centers ):
+            ctr  = center['point']
+            dSep = diff_mag( q, ctr )
+            if dSep < dMin:
+                dMin = dSep
+                if dSep <= env_var("_BLOCK_SCALE")*0.80:
+                    rtnIdx = i
+        return rtnIdx
 
-        # Store mask centroid ray
-        rtnObj.meta['rayOrg'] = xform[0:3,3].reshape(3)
-        rtnObj.meta['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+    rayItm = list( rayItm )
+    Nrays  = len( rayItm )
+    for i in range( Nrays-1 ):
+        item_i = rayItm[i]
+        for j in range( i+1, Nrays ):
+            item_j = rayItm[j]
+            pnt_ij, pnt_ji, center = closest_ray_points( 
+                item_i['rayOrg'], 
+                item_i['rayDir'], 
+                item_j['rayOrg'], 
+                item_j['rayDir'], 
+            )
+            if diff_mag( pnt_ij, pnt_ji ) <= env_var("_BLOCK_SCALE"):
+                idx_ij  = center_index( center )
+                pair_ij = [item_i, item_j,]
+                if idx_ij > -1:
+                    centers[ idx_ij ]['point'] = np.add( centers[ idx_ij ]['point'], center ) / 2.0
+                    centers[ idx_ij ]['obs'].extend( pair_ij )
+                else:
+                    centers.append( {
+                        'point' : np.array( center ),
+                        'obs'   : deque( pair_ij ),
+                    } )
 
-        rtnBel.append( rtnObj )
-    return rtnBel
+    for ctrDct in centers:
+        pnt_i    = ctrDct['point']
+        objPose  = np.eye(4)
+        objPose[0:3,3] = pnt_i
+        obsDqu_i = ctrDct['obs']
+        if len( obsDqu_i ):
+            obsLst = list( obsDqu_i )
+            obsOrg = obsLst[0]
+            tScan  = obsOrg['Time']
+            obsRem = obsLst[1:]
+            for obs_j in obsRem:
+                obsOrg['Probability'] = posterior_dict_from_prior_and_evidence( obsOrg['Probability'], obs_j['Probability'] )
+                obsOrg['Count']      += obs_j['Count']
+            # Create reading
+            rtnObj = GraspObj( 
+                labels = obsOrg['Probability'], 
+                pose   = ObjPose( objPose ), 
+                ts     = tScan, 
+                count  = obsOrg['Count'], 
+                score  = 0.0,
+                cpcd   = None,
+            )
+            rtnBel.append( rtnObj )
+
+    return list( rtnBel )
 
 
 def most_likely_objects( objList : list[GraspObj], method : str | list = "sufficient" ):
