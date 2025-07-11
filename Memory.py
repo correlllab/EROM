@@ -55,8 +55,11 @@ def closest_ray_points( A_org, A_dir, B_org, B_dir ):
     ab = np.dot( A_dir, B_dir )
     ac = np.dot( A_dir, c     )
     bc = np.dot( B_dir, c     ) 
-    fA = (-ab*bc + ac*bb) / (aa*bb-ab*ab)
-    fB = ( ab*ac - bc*aa) / (aa*bb-ab*ab)
+    dv = (aa*bb-ab*ab)
+    if abs( dv ) < 0.001:
+        return None, None, None
+    fA = (-ab*bc + ac*bb) / dv
+    fB = ( ab*ac - bc*aa) / dv
     pA = np.add( A_org, np.multiply( A_dir, fA ) )
     pB = np.add( B_org, np.multiply( B_dir, fB ) )
     return pA, pB, (pA + pB)/2.0
@@ -172,6 +175,8 @@ def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
                 item_j['rayOrg'], 
                 item_j['rayDir'], 
             )
+            if center is None:
+                continue
             if diff_mag( pnt_ij, pnt_ji ) <= env_var("_BLOCK_SCALE"):
                 idx_ij  = center_index( center )
                 pair_ij = [item_i, item_j,]
@@ -490,10 +495,10 @@ class Memory:
 
     def reset_memory( self ):
         """ Erase memory components """
-        self.scan : list[GraspObj] = list()
-        self.mult : bool           = False
-        self.bMem : BayesMemory    = BayesMemory()
-        self.klTr : KLD_Tracker    = KLD_Tracker()
+        self.scan : deque[GraspObj] = deque()
+        self.mult : bool            = False
+        self.bMem : BayesMemory     = BayesMemory()
+        self.klTr : KLD_Tracker     = KLD_Tracker()
         print( "`Memory` initialized ..." )
         
         
@@ -575,33 +580,31 @@ class Memory:
 
 
     def process_observations( self, obs, xform = None, Append = False ):
-        """ Integrate one noisy scan into the current beliefs """
-        gObs = list()
-        if len( obs ):
-            if isinstance( obs[0], GraspObj ):
-                gObs = obs[:]
-            else:
-                gObs = observation_to_readings( obs, xform )
-            
+        """ Integrate one noisy scan into the current beliefs """    
         if (Append and self.mult):
-            self.scan.extend( gObs )
+            self.scan.extend( obs )
         else:
-            self.scan = gObs[:]
+            self.scan = obs[:]
             if Append:
                 self.mult = True
 
-        rtnBad = self.bMem.belief_update( gObs, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
+        if not Append:
 
-        if self.record:
-            self.history.append( 
-                datum = {
-                    "scan"   : deep_copy_memory_list( self.scan ),
-                    "beliefs": deep_copy_memory_list( self.bMem.beliefs ),
-                },
-                msg = "memory" 
-            )
-        
-        return rtnBad
+            if isinstance( self.scan[0], dict ):
+                self.scan = observation_to_readings(  )
+
+            rtnBad = self.bMem.belief_update( gObs, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
+
+            if self.record:
+                self.history.append( 
+                    datum = {
+                        "scan"   : deep_copy_memory_list( self.scan ),
+                        "beliefs": deep_copy_memory_list( self.bMem.beliefs ),
+                    },
+                    msg = "memory" 
+                )
+            
+            return rtnBad
     
 
     ##### Symbol Grounding #######################

@@ -119,24 +119,24 @@ def bbox_to_mask( maskShape, bbox ):
 
 def mask_ray_realsense( bbox : np.ndarray, mask : np.ndarray = None  ):
     """ Project a ray through the center of the mask """
-    rows   = mask.shape[0]
-    rwHf   = rows / 2
-    cols   = mask.shape[1]
-    clHf   = cols / 2
     cntr2d = np.zeros( 2 )
     count  = 0.0
     Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
     Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
     if mask is not None:
+        rows = mask.shape[0]
+        rwHf = rows / 2
+        cols = mask.shape[1]
+        clHf = cols / 2
         for j in range( bbox[1], min(bbox[3]-1, rows) ):
             for k in range( bbox[0], min(bbox[2]-1, cols) ):
                 # print( j,k )
-                frac_jk =  mask[j,k]
-                cntr2d  += np.array( [(k-clHf)/clHf,(j-rwHf)/rwHf] ) * frac_jk
-                count   += frac_jk
+                frac_jk = mask[j,k]
+                cntr2d += np.array( [(k-clHf)/clHf,(j-rwHf)/rwHf] ) * frac_jk
+                count  += frac_jk
         cntr2d /= count
     else:
-        cntr2d = np.array( (bbox[0]+bbox[2])/2.0, (bbox[1]+bbox[3])/2.0 )
+        cntr2d = np.array( [(bbox[0]+bbox[2])/2.0, (bbox[1]+bbox[3])/2.0,] )
     return vec_unit( [cntr2d[0]*Xlen, cntr2d[1]*Ylen, 1.0] )
 
 
@@ -339,7 +339,7 @@ class Perception_OWLv2:
 
         if (hiCount < smCount) or (smCount < loCount):
             print( "MASK ERROR" )
-            return None
+            return None, None
 
         cpcd = mpcd.get_masked_cpcd( mask_i, NB = _NB_CLUST )
         if len( cpcd.points ):
@@ -347,13 +347,14 @@ class Perception_OWLv2:
 
             if pcdVol > volThresh:
                 print( f"CPCD TOO BIG: {pcdVol} > {volThresh}" )
-                return None
+                return None, None
             if pcdVol < volEps:
                 print( f"CPCD TOO SMALL: {pcdVol} < {volEps}" )
-                return None
+                return None, None
             return cpcd, mask_i
         else:
-            return None
+            print( "CLOUD EMPTY" )
+            return None, None
     
     
     def segment( self, queries : list[dict] ) -> tuple[list[dict], list[dict]]: 
@@ -431,13 +432,13 @@ class Perception_OWLv2:
                     )
                     if (cpcd is not None) and len( np.asarray( cpcd.points ) ):
                         print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {bboxi_i}!" )
-                        boxRay_i  = mask_ray_realsense( hit_i['bbox'], mask_i )
+                        boxRay_i  = mask_ray_realsense( hit_i['bboxi'], mask_i )
                         cloudPair = { 'points' : np.asarray( cpcd.points ).copy(),
                                       'colors' : np.asarray( cpcd.colors ).copy(), }
                         type_i    = 'cloud'
                         pose_i    = self.get_pcd_pose( cpcd )
                     else:
-                        boxRay_i  = mask_ray_realsense( hit_i['bbox'] )
+                        boxRay_i  = mask_ray_realsense( hit_i['bboxi'] )
                         cloudPair = { 'points' : None,
                                       'colors' : None, }
                         type_i    = 'ray'

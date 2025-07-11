@@ -691,7 +691,8 @@ class TaskPlanner:
                 bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 3 )
                 report_time( "Perception shots PLANNED!" )
 
-                for bgnPose in bgnPoses:
+                Npose = len( bgnPoses )
+                for i, bgnPose in enumerate( bgnPoses ):
                     self.robot.moveL( _SAFE, 
                                       linSpeed = env_var("_ROBOT_FREE_SPEED"),
                                       linAccel = env_var("_ROBOT_LIN_ACCEL" ),
@@ -699,8 +700,11 @@ class TaskPlanner:
                     self.robot.moveL( bgnPose, 
                                       linSpeed = env_var("_ROBOT_FREE_SPEED"),
                                       linAccel = env_var("_ROBOT_LIN_ACCEL" ),
-                                      asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE            
-                    self.phase_1_Perceive( Append = True, suppressDeterm = True )
+                                      asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE    
+                    if i < (Npose-1):
+                        self.phase_1_Perceive( Append = True , suppressDeterm = True )
+                    else:
+                        self.phase_1_Perceive( Append = False, suppressDeterm = True )
 
             
 

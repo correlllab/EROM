@@ -65,13 +65,17 @@ class LogPickler:
         NdataPts = len( self.log )
         # 0. Fetch the actual data
         datum = None
-        found = False
         for i in range( NdataPts ):
-            datum = self.log[-i]
-            if datum['msg'] == _SEG_TAG:
-                found = True
+            datum_i = self.log[-i]
+            if datum_i['msg'] == _SEG_TAG:
+                if datum is None:
+                    datum = datum_i
+                else:
+                    datum['data']['input'].update( datum_i['data']['input'] )
+            elif (datum_i['msg'] != 'RobotState') and (datum is not None):
                 break
-        if found:
+
+        if datum is not None:
             vizDct = dict()
             # 1. Copy Images
             for k, v in datum['data']['input'].items():
