@@ -201,9 +201,12 @@ class TaskPlanner:
         self.lump.set_state_from_robot() # WARNING: WILL THIS ACTUALLY IMPROVE LUMP PERFORMANCE?
 
     
-    def perception_cb( self ):
+    def perception_cb( self, idx, tot ):
         """ Trigger perception """
-        self.phase_1_Perceive( Append = True, suppressDeterm = True )
+        if idx < (tot-1):
+            self.phase_1_Perceive( Append = True, suppressDeterm = True  )
+        else:
+            self.phase_1_Perceive( Append = True, suppressDeterm = False )
 
 
     def cam_move_cb( self, movPose ):
@@ -271,7 +274,7 @@ class TaskPlanner:
     def phase_1_Perceive( self, Append = False, suppressDeterm = False ):
         """ Take in evidence and form beliefs """
 
-        camPose  = self.robot.get_cam_pose()
+        camPose = self.robot.get_cam_pose()
 
         obsrv, metadata = self.perc.segment( _QUERIES )
 
@@ -282,7 +285,8 @@ class TaskPlanner:
         self.memory.process_observations( 
             obsrv,
             camPose,
-            Append
+            Append    = Append,
+            integrate = (not suppressDeterm)
         ) 
 
         if not suppressDeterm:
@@ -630,6 +634,11 @@ class TaskPlanner:
         """ Solve the goal """
         tLast = now()
 
+        self.robot.moveL( _SAFE, 
+                          linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                          linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                          asynch   = False )
+
         def report_time( msg = None ):
             """ Cheap performance monitoring function """
             nonlocal tLast, self
@@ -688,7 +697,8 @@ class TaskPlanner:
                 if not _RESPONSIVE_MODE:
                     self.memory.reset_memory()
 
-                bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 3 )
+                # bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 3 )
+                bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 4 )
                 report_time( "Perception shots PLANNED!" )
 
                 Npose = len( bgnPoses )
@@ -704,7 +714,7 @@ class TaskPlanner:
                     if i < (Npose-1):
                         self.phase_1_Perceive( Append = True , suppressDeterm = True )
                     else:
-                        self.phase_1_Perceive( Append = False, suppressDeterm = True )
+                        self.phase_1_Perceive( Append = False, suppressDeterm = False )
 
             
 

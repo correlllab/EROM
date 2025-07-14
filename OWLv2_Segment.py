@@ -147,6 +147,7 @@ class SAM2:
 
     def __init__( self ):
         self.sam_predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-large")
+        # self.sam_predictor.
 
     def predict( self, img, bbox, useCache = False ):
         # Suppress warnings during the prediction step
@@ -316,12 +317,14 @@ class Perception_OWLv2:
 
     def segment_cloud_w_SAM( self, img : np.ndarray, imgBBoxInt : list[list[int]], mpcd : MPCD,
                              loCount = 100, hiCount = 50000,
-                             volEps = 7.5e-07, volThresh = None, useCache = False ):
+                             volEps = None, volThresh = None, useCache = False ):
         if (mpcd is None) or (not len( mpcd )):
             print( "`segment_cloud_w_SAM`: `mpcd` is None!" )
             return None
+        if volEps is None:
+            volEps    = 0.125 * env_var("_BLOCK_VOLUME")
         if volThresh is None:
-            volThresh = 2.0 * env_var("_BLOCK_VOLUME")
+            volThresh = 3.0 * env_var("_BLOCK_VOLUME")
 
         sam_mask, _, _ = self.sam_predictor.predict( 
             img, 
@@ -329,17 +332,17 @@ class Perception_OWLv2:
             useCache
         )
         samCount = (sam_mask > 0.1).sum()
-        
-        if loCount < samCount < hiCount:
-            mask_i = sam_mask.copy()
-        else:
-            mask_i = bbox_to_mask( img.shape, imgBBoxInt )
+        mask_i = sam_mask.copy()
+        # if loCount < samCount < hiCount:
+        #     mask_i = sam_mask.copy()
+        # else:
+        #     mask_i = bbox_to_mask( img.shape, imgBBoxInt )
 
         smCount = np.sum( mask_i )
 
-        if (hiCount < smCount) or (smCount < loCount):
-            print( "MASK ERROR" )
-            return None, None
+        # if (hiCount < smCount) or (smCount < loCount):
+        #     print( "MASK ERROR" )
+        #     return None, None
 
         cpcd = mpcd.get_masked_cpcd( mask_i, NB = _NB_CLUST )
         if len( cpcd.points ):
@@ -398,28 +401,27 @@ class Perception_OWLv2:
                 bbox_i  = hit_i['bbox']
                 match   = False
                 mtchKey = None
-                overlap = 0.0
                 repeat  = hit_i['shotID'] == lastID
                 lastID  = hit_i['shotID']
+                intMax  = 0.0
                 
-
                 if len( rtnDict ):
                     print( f"BBox Intersection: ", end="", flush=True )
+                    
                     for rK, rV in rtnDict.items():
                         bbox_j  = rV['bbox']
                         intrsct = bb_intersection_over_union( bbox_i, bbox_j )
                         print( f"{intrsct}, ", end="", flush=True )
-                        overlap = max( overlap, intrsct )
-                        if intrsct > 0.5: # WARNING: ASSUMED PARAM!
+                        if (intrsct > 0.5) and (intrsct > intMax): # WARNING: ASSUMED PARAM!
+                            intMax  = intrsct
                             match   = True
                             mtchKey = rK
-                            break
                     print()
                 if match:
                     rtnDict[ mtchKey ]['Probability'][ hit_i['abbrv'] ] += hit_i['score']
-                    print( f"Merge hit {mtchKey}, Overlap: {overlap}, Dist: {rtnDict[ mtchKey ]['Probability']}" )
+                    print( f"Merge hit {mtchKey}, Overlap: {intMax}, Dist: {rtnDict[ mtchKey ]['Probability']}" )
                 else:
-                    print( f"No merge for max overlap {overlap} of bbox {bboxi_i}" )
+                    print( f"No merge for max overlap {intMax} of bbox {bboxi_i}" )
 
                     # img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
                     img_i = metadata['input'][ hit_i['shotID'] ]['image']

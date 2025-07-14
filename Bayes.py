@@ -104,7 +104,8 @@ class BayesMemory:
 
         
         belief.labels = posterior_dict_from_prior_and_evidence( belief, evidence )
-        belief.cpcd.merge( evidence.cpcd )
+        if len( evidence.cpcd ):
+            belief.cpcd.merge( evidence.cpcd )
         belief.add_source( evidence )
 
         ## Update Pose ##
