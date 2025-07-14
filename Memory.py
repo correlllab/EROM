@@ -68,79 +68,6 @@ def closest_ray_points( A_org, A_dir, B_org, B_dir ):
 
 ########## HELPER FUNCTIONS ########################################################################
 
-def observation_to_readings( obs, xform = None, zOffset = 0.0 ):
-    """ Parse the Perception Process output struct """
-    
-        
-    ## Stage 2: Process ray observations ##
-    centers = deque()
-
-    def center_index( q ):
-        """ Find the index of the closest matching center """
-        nonlocal centers
-        rtnIdx = -5.5
-        dMin   = 1e9
-        for i, center in enumerate( centers ):
-            ctr  = center['point']
-            dSep = diff_mag( q, ctr )
-            if dSep < dMin:
-                dMin = dSep
-                if dSep <= env_var("_BLOCK_SCALE")*0.80:
-                    rtnIdx = i
-        return rtnIdx
-
-    rayItm = list( rayItm )
-    Nrays  = len( rayItm )
-    for i in range( Nrays-1 ):
-        item_i = rayItm[i]
-        for j in range( i+1, Nrays ):
-            item_j = rayItm[j]
-            pnt_ij, pnt_ji, center = closest_ray_points( 
-                item_i['rayOrg'], 
-                item_i['rayDir'], 
-                item_j['rayOrg'], 
-                item_j['rayDir'], 
-            )
-            if center is None:
-                continue
-            if diff_mag( pnt_ij, pnt_ji ) <= env_var("_BLOCK_SCALE"):
-                idx_ij  = center_index( center )
-                pair_ij = [item_i, item_j,]
-                if idx_ij > -1:
-                    centers[ idx_ij ]['point'] = np.add( centers[ idx_ij ]['point'], center ) / 2.0
-                    centers[ idx_ij ]['obs'].extend( pair_ij )
-                else:
-                    centers.append( {
-                        'point' : np.array( center ),
-                        'obs'   : deque( pair_ij ),
-                    } )
-
-    for ctrDct in centers:
-        pnt_i    = ctrDct['point']
-        objPose  = np.eye(4)
-        objPose[0:3,3] = pnt_i
-        obsDqu_i = ctrDct['obs']
-        if len( obsDqu_i ):
-            obsLst = list( obsDqu_i )
-            obsOrg = obsLst[0]
-            tScan  = obsOrg['Time']
-            obsRem = obsLst[1:]
-            for obs_j in obsRem:
-                obsOrg['Probability'] = posterior_dict_from_prior_and_evidence( obsOrg['Probability'], obs_j['Probability'] )
-                obsOrg['Count']      += obs_j['Count']
-            # Create reading
-            rtnObj = GraspObj( 
-                labels = obsOrg['Probability'], 
-                pose   = ObjPose( objPose ), 
-                ts     = tScan, 
-                count  = obsOrg['Count'], 
-                score  = 0.0,
-                cpcd   = None,
-            )
-            rtnBel.append( rtnObj )
-
-    return list( rtnBel )
-
 
 def most_likely_objects( objList : list[GraspObj], method : str | list = "sufficient" ):
     """ Get the `N` most likely combinations of object classes """
@@ -417,8 +344,6 @@ class KLD_Tracker:
 class Memory:
     """ Object Memory """
 
-    ##### KL-Divergence Tracking #################
-
     def reset_memory( self ):
         """ Erase memory components """
         self.scan : deque[dict]     = deque()
@@ -428,7 +353,8 @@ class Memory:
         self.bMem : BayesMemory     = BayesMemory()
         self.klTr : KLD_Tracker     = KLD_Tracker()
         print( "`Memory` initialized ..." )
-        
+
+    ##### KL-Divergence Tracking #################
         
     def plot_KL_history_for_all_obj( self ):
         """ Simple plot of the KL divergence for each symbol """
@@ -507,7 +433,100 @@ class Memory:
         self.mp.locate_all( objLst )
 
 
-    def process_observations( self, obs, xform = None, Append = False ):
+    def process_cloud_obs( self, zOffset : float = 0.0 ):
+        rtnGobs = deque()
+        for item in self.scan:
+            # Create reading
+            rtnObj = GraspObj( 
+                labels = item['Probability'], 
+                pose   = ObjPose( item['Pose'] ), 
+                ts     = item['Time'], 
+                count  = item['Count'], 
+                score  = 0.0,
+                cpcd   = item['CPCD'],
+            )
+            rtnObj.meta['CamXform'] = np.array( item['CamXform'] )
+            # Transform CPCD
+            mov = np.array( item['CamXform'] )
+            mov[2,3] += zOffset
+            rtnObj.cpcd.transform( mov )
+            rtnGobs.append( rtnObj )
+        return list( rtnGobs )
+
+
+    def process_ray_obs( self ):
+        """ Stage 2: Process ray observations """
+        rtnGobs = deque()
+        centers = deque()
+
+        def center_index( q ):
+            """ Find the index of the closest matching center """
+            nonlocal centers
+            rtnIdx = -5.5
+            dMin   = 1e9
+            for i, center in enumerate( centers ):
+                ctr  = center['point']
+                dSep = diff_mag( q, ctr )
+                if dSep < dMin:
+                    dMin = dSep
+                    if dSep <= env_var("_BLOCK_SCALE")*0.80:
+                        rtnIdx = i
+            return rtnIdx
+
+        rayItm = list( rayItm )
+        Nrays  = len( rayItm )
+        for i in range( Nrays-1 ):
+            item_i = rayItm[i]
+            for j in range( i+1, Nrays ):
+                item_j = rayItm[j]
+                pnt_ij, pnt_ji, center = closest_ray_points( 
+                    item_i['rayOrg'], 
+                    item_i['rayDir'], 
+                    item_j['rayOrg'], 
+                    item_j['rayDir'], 
+                )
+                if center is None:
+                    continue
+                if diff_mag( pnt_ij, pnt_ji ) <= env_var("_BLOCK_SCALE"):
+                    idx_ij  = center_index( center )
+                    pair_ij = [item_i, item_j,]
+                    if idx_ij > -1:
+                        centers[ idx_ij ]['point'] = np.add( centers[ idx_ij ]['point'], center ) / 2.0
+                        centers[ idx_ij ]['obs'].extend( pair_ij )
+                    else:
+                        centers.append( {
+                            'point' : np.array( center ),
+                            'obs'   : deque( pair_ij ),
+                        } )
+
+        for ctrDct in centers:
+            pnt_i    = ctrDct['point']
+            objPose  = np.eye(4)
+            objPose[0:3,3] = pnt_i
+            obsDqu_i = ctrDct['obs']
+            if len( obsDqu_i ):
+                obsLst = list( obsDqu_i )
+                obsOrg = obsLst[0]
+                tScan  = obsOrg['Time']
+                obsRem = obsLst[1:]
+                for obs_j in obsRem:
+                    obsOrg['Probability'] = posterior_dict_from_prior_and_evidence( obsOrg['Probability'], obs_j['Probability'] )
+                    obsOrg['Count']      += obs_j['Count']
+                # Create reading
+                rtnObj = GraspObj( 
+                    labels = obsOrg['Probability'], 
+                    pose   = ObjPose( objPose ), 
+                    ts     = tScan, 
+                    count  = obsOrg['Count'], 
+                    score  = 0.0,
+                    cpcd   = None,
+                )
+                rtnGobs.append( rtnObj )
+
+        return list( rtnGobs )
+
+
+    def process_observations( self, obs : list[dict], xform : np.ndarray = None, Append : bool = False, integrate : bool = True ):
         """ Integrate one noisy scan into the current beliefs """    
         rtnBel = deque()
         rayItm = deque()
@@ -520,7 +539,6 @@ class Memory:
         ## Stage 1: Process cloud observations and store ray observations ##
         for item in obs:
             dstrb = {}
-            tScan = item['Time']
             if isinstance( item['Probability'], dict ):
                 for nam, prb in item['Probability'].items():
                     if prb > 0.0001:
@@ -536,7 +554,7 @@ class Memory:
             else:
                 dstrb = get_uniform_prior_over_labels()
             item['Probability'] = dstrb # Write back
-
+            item['CamXform'   ] = np.array( xform ) if (xform is not None) else np.eye(4)
 
             if 'type' not in item:
                 raise ValueError( "Observation dictionaries MUST have a 'type' field!" )
@@ -549,7 +567,6 @@ class Memory:
                 rayItm.append( item )
             elif item['type'] == 'cloud':
                 
-
                 if len( item['Pose'] ) == 16:
                     objPose = xform.dot( np.array( item['Pose'] ).reshape( (4,4,) ) ) 
 
@@ -559,43 +576,38 @@ class Memory:
                     # HACK: PUSH THE BLOCK POSE INTO THE HAND
                     objPose[2,3] += env_var("_GRASP_NUDGE_M")
 
+                    item['Pose'] = objPose
+
                 else:
                     raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
                 
-                # Create reading
-                rtnObj = GraspObj( 
-                    labels = dstrb, 
-                    pose   = ObjPose( objPose ), 
-                    ts     = tScan, 
-                    count  = item['Count'], 
-                    score  = 0.0,
-                    cpcd   = item['CPCD'],
-                )
-
-                # Transform CPCD
-                mov = xform.copy()
-                mov[2,3] += zOffset
-                rtnObj.cpcd.transform( mov )
-
                 # Store mask centroid ray
-                rtnObj.meta['rayOrg'] = xform[0:3,3].reshape(3)
-                rtnObj.meta['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+                item['rayOrg'] = xform[0:3,3].reshape(3)
+                item['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
 
-                rtnBel.append( rtnObj )
+                rtnBel.append( item )
             else:
                 raise ValueError( f"UNRECOGNIZED observation type: {item['type']}" )
 
-        if not Append:
 
-            if isinstance( self.scan[0], dict ):
-                self.scan = observation_to_readings(  )
+        if Append:
+            self.scan.extend( rtnBel )
+            self.rays.extend( rayItm )
+        else:
+            self.scan = deque( rtnBel )
+            self.rays = deque( rayItm )
 
-            rtnBad = self.bMem.belief_update( gObs, xform, maxRadius = env_var("_BAYES_RAD_L2_M") )
+        if integrate:
+            totBel = deque()
+            totBel.extend( self.process_cloud_obs() )
+            totBel.extend( self.process_ray_obs()   )
+
+            rtnBad = self.bMem.belief_update( totBel, maxRadius = env_var("_BAYES_RAD_L2_M") )
 
             if self.record:
                 self.history.append( 
                     datum = {
-                        "scan"   : deep_copy_memory_list( self.scan ),
+                        "scan"   : deep_copy_memory_list( totBel ),
                         "beliefs": deep_copy_memory_list( self.bMem.beliefs ),
                     },
                     msg = "memory" 

@@ -298,7 +298,7 @@ class BayesMemory:
         return rtnBad
 
 
-    def belief_update( self, evdncLst : list[GraspObj], camXform : np.ndarray, maxRadius : float = 3.0*env_var("_BLOCK_SCALE") ):
+    def belief_update( self, evdncLst : list[GraspObj], maxRadius : float = 3.0*env_var("_BLOCK_SCALE") ):
         """ Gather and aggregate evidence """
         rtnBad = list()
 
@@ -308,8 +308,8 @@ class BayesMemory:
         self.unvisit_beliefs()
 
         for objEv in evdncLst:
+            camXform = objEv.meta['CamXform'] if ('CamXform' in objEv.meta) else None
             if self.integrate_one_reading( objEv, camXform, maxRadius = maxRadius ):
-            # if self.integrate_one_to_many( objEv, camXform, maxRadius = maxRadius ):
                 cIn += 1
             else:
                 cNu += 1
