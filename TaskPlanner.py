@@ -588,11 +588,13 @@ class TaskPlanner:
 
                 if env_var("_USE_POSE_CHEAT"):
                     self.cheater.log_failed_action( srcPose, dstPose )
+
                 self.memory.bMem.action_failure_update( srcPose, dstPose )
             elif (btr.status == Status.SUCCESS):
                 
                 if env_var("_USE_POSE_CHEAT"):
                     self.cheater.log_successful_action( srcPose, dstPose )
+
                 self.memory.bMem.action_success_update( srcPose, dstPose )
 
                 self.memory.history.append( msg = f"Action Success: {btr.msg}, {now()}" )
@@ -689,8 +691,7 @@ class TaskPlanner:
             if self.cheater.trouble:
                 symLst = self.cheater.last_known_symbols()
                 symLst.extend( self.cheater.last_known_beliefs() )
-                if not _RESPONSIVE_MODE:
-                    self.memory.reset_memory()
+                self.memory.reset_memory()
                 self.lump.run_object_search( symLst )
                 report_time( "Object search COMPLETE!" )
             else:
@@ -712,9 +713,9 @@ class TaskPlanner:
                                       linAccel = env_var("_ROBOT_LIN_ACCEL" ),
                                       asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE    
                     if i < (Npose-1):
-                        self.phase_1_Perceive( Append = True , suppressDeterm = True )
+                        self.phase_1_Perceive( Append = True, suppressDeterm = True )
                     else:
-                        self.phase_1_Perceive( Append = False, suppressDeterm = False )
+                        self.phase_1_Perceive( Append = True, suppressDeterm = False )
 
             
 

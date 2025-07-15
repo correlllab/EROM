@@ -204,7 +204,6 @@ class PoseCheater:
         self.trouble = False
         print( f"Moved block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
 
-        # lastFrame = deep_copy_memory_list( self.symbols[-1] )
         lastFrame = deep_copy_memory_list( self.last_known_symbols() )
 
         if len( lastFrame ):
@@ -216,6 +215,9 @@ class PoseCheater:
                     dMin = d
                     sCls = sym
             sCls.pose = ObjPose( poseEnd )
+
+            # lastFrame = self.repair_symbol_poses( lastFrame )
+
             self.symbols.append( lastFrame[:] )
         
 
@@ -276,7 +278,8 @@ class PoseCheater:
                     cSet.add( rSym.label )
                     rSym.pose = sMin.pose
                     dlta = True
-                rtnSym.append( rSym )
+                if not p_collide_return( rSym ):
+                    rtnSym.append( rSym )
 
             if env_var("_CHEAT_LKG"):
                 for j, lSym in enumerate( lastFrame ):

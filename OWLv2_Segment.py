@@ -433,12 +433,13 @@ class Perception_OWLv2:
                         useCache = repeat
                     )
                     if (cpcd is not None) and len( np.asarray( cpcd.points ) ):
-                        print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {bboxi_i}!" )
+                        pose_i    = self.get_pcd_pose( cpcd )
+                        print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {bboxi_i} @ {np.array(pose_i).reshape((4,4,))[0:3,3].reshape((3,))}!" )
                         boxRay_i  = mask_ray_realsense( hit_i['bboxi'], mask_i )
                         cloudPair = { 'points' : np.asarray( cpcd.points ).copy(),
                                       'colors' : np.asarray( cpcd.colors ).copy(), }
                         type_i    = 'cloud'
-                        pose_i    = self.get_pcd_pose( cpcd )
+                        
                     else:
                         boxRay_i  = mask_ray_realsense( hit_i['bboxi'] )
                         cloudPair = { 'points' : None,
