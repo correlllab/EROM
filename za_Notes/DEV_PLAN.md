@@ -12,12 +12,12 @@
 - [x] Push an empty cheat frame when an action fails
 - [x] Better shot planning
 	- [x] Don't allow poses too close to the robot
-- [ ] If the problem is insoluble --> Run search of environment with <--- $W$  
-	- [ ] More views
-	- [ ] Wider area
-	- [ ] Accounting of Last Best Object Locations
-		- [ ] Keep count of how many views were needed last time
-		- [ ] Keep track of where objects were found last time --> More views there!
+- [x] If the problem is insoluble --> Run search of environment with <--- $W$  
+	- [x] More views
+	- [x] Wider area
+	- [x] Accounting of Last Best Object Locations
+		- [x] Keep count of how many views were needed last time
+		- [x] Keep track of where objects were found last time --> More views there!
 - TODO: 
 	- [ ] Let the robot reset the scene --> Possible confusion?
 		- [ ] Let the planner do this?

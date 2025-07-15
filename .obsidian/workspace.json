@@ -42,15 +42,17 @@
           {
             "id": "9a1bb40c7afbfaa1",
             "type": "leaf",
+            "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/LUMP.md",
+                "file": "za_Notes/OWLv2 Vision Pipeline.md",
                 "mode": "source",
                 "source": false
               },
+              "pinned": true,
               "icon": "lucide-file",
-              "title": "LUMP"
+              "title": "OWLv2 Vision Pipeline"
             }
           }
         ],
@@ -201,8 +203,11 @@
   },
   "active": "9a1bb40c7afbfaa1",
   "lastOpenFiles": [
-    "za_Notes/Log/2025-07-09.md",
+    "za_Notes/DEV_PLAN.md",
     "za_Notes/Daydreams.md",
+    "za_Notes/OWLv2 Vision Pipeline.md",
+    "za_Notes/LUMP.md",
+    "za_Notes/Log/2025-07-09.md",
     "State.py",
     "za_Notes/Log/2025-06-27.md",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-01-27.pkl",
@@ -215,8 +220,6 @@
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_14-54-35.pkl",
     "data/2025-06-27_Known-Class_Known-Pose/EROM-Memories_06-27-2025_15-23-05.pkl",
     "za_Notes/Log/2025-06-26.md",
-    "za_Notes/DEV_PLAN.md",
-    "za_Notes/LUMP.md",
     "za_Notes/Log/2025-05-20.md",
     "README.md",
     "za_Notes/Log/2025-05-13.md",
