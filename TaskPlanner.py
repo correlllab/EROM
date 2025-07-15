@@ -697,8 +697,8 @@ class TaskPlanner:
                 if not _RESPONSIVE_MODE:
                     self.memory.reset_memory()
 
-                # bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 3 )
-                bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 4 )
+                bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 3 )
+                # bgnPoses = self.lump.plan_object_shots( self.cheater.last_known_symbols(), 1.25*self.lump.dShot, 4 )
                 report_time( "Perception shots PLANNED!" )
 
                 Npose = len( bgnPoses )
