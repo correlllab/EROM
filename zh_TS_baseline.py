@@ -180,7 +180,8 @@ if _TS_DETERM:
                         removed = bMem.process_observations( 
                             scan,
                             camPose,
-                            False
+                            Append    = False,
+                            integrate = True
                         ) 
 
                         if _MEM_GRAPHICS:

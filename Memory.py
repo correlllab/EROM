@@ -127,6 +127,8 @@ def most_likely_objects( objList : list[GraspObj], method : str | list = "suffic
 
     def p_enough_labels( objs : list[GraspObj] ):
         """ Return true if there are as many classes as there are objects """
+        if not len(objs):
+            return False
         lbls = set([sym.label for sym in objs])
         return len( lbls ) >= (len( objs[0].labels )-1)
 
@@ -435,6 +437,7 @@ class Memory:
 
     def process_cloud_obs( self, zOffset : float = 0.0 ):
         rtnGobs = deque()
+        print( f"There are {len(self.scan)} CLOUD observations" )
         for item in self.scan:
             # Create reading
             rtnObj = GraspObj( 
@@ -458,6 +461,7 @@ class Memory:
         """ Stage 2: Process ray observations """
         rtnGobs = deque()
         centers = deque()
+        print( f"There are {len(self.rays)} RAY observations" )
 
         def center_index( q ):
             """ Find the index of the closest matching center """
@@ -473,8 +477,8 @@ class Memory:
                         rtnIdx = i
             return rtnIdx
 
-        rayItm = list( rayItm )
-        Nrays  = len( rayItm )
+        rayItm = list( self.rays )
+        Nrays  = len( self.rays )
         for i in range( Nrays-1 ):
             item_i = rayItm[i]
             for j in range( i+1, Nrays ):
@@ -486,8 +490,24 @@ class Memory:
                     item_j['rayDir'], 
                 )
                 if center is None:
+                    print( "NO intersection!" )
                     continue
-                if diff_mag( pnt_ij, pnt_ji ) <= env_var("_BLOCK_SCALE"):
+                elif (diff_mag( center, item_i['rayOrg'] ) <= env_var("_BLOCK_SCALE")*1.25) and (diff_mag( item_j['rayOrg'], center ) <= env_var("_BLOCK_SCALE")*1.25):
+                    print( "Intersection at ORIGIN!" )
+                    continue
+
+                print( 
+                    [i,j,],
+                    item_i['rayOrg'], 
+                    item_i['rayDir'], 
+                    item_j['rayOrg'], 
+                    item_j['rayDir']
+                )
+
+                crit_m = env_var("_BLOCK_SCALE")*1.50
+
+                if diff_mag( pnt_ij, pnt_ji ) <= crit_m:
+                    print( f"Log center {center} for separation {diff_mag( pnt_ij, pnt_ji )}" )
                     idx_ij  = center_index( center )
                     pair_ij = [item_i, item_j,]
                     if idx_ij > -1:
@@ -498,7 +518,9 @@ class Memory:
                             'point' : np.array( center ),
                             'obs'   : deque( pair_ij ),
                         } )
-
+                else:
+                    print( f"NO intersection for separation of {diff_mag( pnt_ij, pnt_ji )}/{crit_m}" )
+        print( f"There {len(centers)} loci to evaluate!" )
         for ctrDct in centers:
             pnt_i    = ctrDct['point']
             objPose  = np.eye(4)
@@ -530,8 +552,9 @@ class Memory:
         """ Integrate one noisy scan into the current beliefs """    
         rtnBel = deque()
         rayItm = deque()
-        if xform is None:
-            xform = np.eye(4)
+
+        # if xform is None:
+        #     xform = np.eye(4)
 
         if isinstance( obs, dict ):
             obs = list( obs.values() )
@@ -554,7 +577,7 @@ class Memory:
             else:
                 dstrb = get_uniform_prior_over_labels()
             item['Probability'] = dstrb # Write back
-            item['CamXform'   ] = np.array( xform ) if (xform is not None) else np.eye(4)
+            item['CamXform'   ] = np.array( xform ) if (xform is not None) else None
 
             if 'type' not in item:
                 raise ValueError( "Observation dictionaries MUST have a 'type' field!" )
@@ -562,8 +585,10 @@ class Memory:
             # WARNING: CLASSES WITH A ZERO PRIOR WILL NOT ACCUMULATE EVIDENCE!
             if item['type'] == 'ray':
                 # Store mask centroid ray
-                item['rayOrg'] = xform[0:3,3].reshape(3)
-                item['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+                if xform is not None:
+                    item['rayOrg'] = xform[0:3,3].reshape(3)
+                    # item['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+                    item['rayDir'] = np.dot( xform[0:3,0:3], item['boxRay'].reshape( (3,1,) ) ).reshape(3)
                 rayItm.append( item )
             elif item['type'] == 'cloud':
                 
@@ -582,8 +607,9 @@ class Memory:
                     raise ValueError( f"`observation_to_readings`: BAD POSE FORMAT!\n{item['Pose']}" )
                 
                 # Store mask centroid ray
-                item['rayOrg'] = xform[0:3,3].reshape(3)
-                item['rayDir'] = np.dot( xform[0:3,0:3], item['camRay'].reshape( (3,1,) ) ).reshape(3)
+                if xform is not None:
+                    item['rayOrg'] = xform[0:3,3].reshape(3)
+                    item['rayDir'] = np.dot( xform[0:3,0:3], item['boxRay'].reshape( (3,1,) ) ).reshape(3)
 
                 rtnBel.append( item )
             else:
@@ -599,10 +625,18 @@ class Memory:
 
         if integrate:
             totBel = deque()
+            print( "Phase 1 Beliefs ...." )
             totBel.extend( self.process_cloud_obs() )
-            totBel.extend( self.process_ray_obs()   )
 
-            rtnBad = self.bMem.belief_update( totBel, maxRadius = env_var("_BAYES_RAD_L2_M") )
+            if 0:
+                print( "Phase 2 Beliefs ...." )
+                totBel.extend( self.process_ray_obs()   )
+            
+            self.gObs = list( totBel )
+            print( f"There are {len(totBel)} readings to process!" )
+
+            print( "Gather evidence ...." )
+            rtnBad = self.bMem.belief_update( list( totBel ), maxRadius = env_var("_BAYES_RAD_L2_M") )
 
             if self.record:
                 self.history.append( 
@@ -612,6 +646,9 @@ class Memory:
                     },
                     msg = "memory" 
                 )
+
+            # exit(200)
+            print( "Beliefs INTEGRATED!" )
             
             return rtnBad
     

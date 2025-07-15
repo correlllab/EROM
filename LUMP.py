@@ -1100,7 +1100,7 @@ class LUMP:
         _N_SHOT_ADD   =  5
         _N_SHOT_TOTAL = _N_SHOT_ADD*_MULT_FACTOR 
         _N_INSPECT    =  3
-        _N_LOOK       =  2
+        _N_LOOK       =  3
 
         self.searchArctive = True
 
@@ -1137,10 +1137,10 @@ class LUMP:
                     robotPose = shots 
                 )
 
-            for shot in shots:
+            for i, shot in enumerate( shots ):
                 self.mov_cb( shot )
                 self.shots = self.shots[1:] # pop front
-                self.see_cb()
+                self.see_cb( i , len( shots ) )
                 for trgt in self.targets:
                     if self.p_target_in_cam_view( shot, trgt ):
                         trgt.count += 1

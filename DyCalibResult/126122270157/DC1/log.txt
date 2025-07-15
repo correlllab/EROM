@@ -1,0 +1,19 @@
+
+Result folder: DyCalibResult/126122270157/DC1
+Serial number: 126122270157
+Device name: Intel RealSense D405
+Device PID: 0B5B
+FW version: 05.16.00.01
+USB Type: 3.2
+Calibration Type: Targeted
+Auto Exposure: On
+IR setpoint: 1000, (min: 0, max: 4095, default: 1000)
+AE SetPoint: Auto
+Streamming Resolution: 1280x720 at 30(fps)
+initialize dynamic calibration parameters ...
+Start Initialize device ...
+Start rectification ...
+Start scale calibration
+Computed rotational correction angles in degrees: <rx, ry, rz> = <-0.012, 0.004, -0.000>
+Calibration completed, results updated to device successfully!
+
