@@ -163,7 +163,8 @@ class PoseCheater:
             while ((not len( rtnSym )) and (index <= len( self.symbols ))):
                 rtnSym = self.symbols[ -index ]
                 index += 1
-            return rtnSym
+            return rtnSym 
+            # return self.clean_frame( rtnSym )
         else:
             return list()
         
@@ -230,6 +231,44 @@ class PoseCheater:
         print( f"Could NOT move block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )
 
 
+    def clean_frame( self, objLst : list[GraspObj] ):
+        """ Return a version of `objLst` with dupes removed """
+        rtnLst = list()
+        Nobj   = len( objLst )
+
+        def p_collide_indices( qSym ):
+            """ Did we already log a symbol at this location? """
+            nonlocal rtnLst
+            rtnDex = list()
+            for i, rSym in enumerate( rtnLst ):
+                d = euclidean_distance_between_symbols( qSym, rSym )
+                if d < env_var('_BLOCK_SCALE')*0.65:
+                    rtnDex.append(i)
+            return rtnDex
+
+        for i in range( Nobj-1 ):
+            obj_i = objLst[i]
+            cnflc = [obj_i,]
+            for j in range( i+1, Nobj ):
+                obj_j = objLst[j]
+                if euclidean_distance_between_symbols( obj_i, obj_j ) < env_var('_BLOCK_SCALE')*0.65:
+                    cnflc.append( obj_j )
+            # WARNING: THIS ASSUMES THAT THE OLDEST SYMBOL WILL COLLIDE THE LEAST
+            tCon = [obj.ts for obj in cnflc]
+            tMin = min( tCon )
+            mnDx = tCon.index( tMin )
+            mnOb = cnflc[ mnDx ]
+            cDcs = p_collide_indices( mnOb )
+            if not len( cDcs ):
+                rtnLst.append( mnOb )
+            elif len( cDcs ) == 1:
+                cObj = rtnLst[ cDcs[0] ]
+                # WARNING: THIS ASSUMES THAT THE OLDEST SYMBOL WILL COLLIDE THE LEAST
+                if mnOb.ts < cObj.ts:
+                    rtnLst[ cDcs[0] ] = mnOb
+        return rtnLst
+
+
     # def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ):
     def repair_symbol_poses( self, symLst : list[GraspObj], maxDiff = None ) -> list[GraspObj]:
         """ Adjust the positions of symbols to their last """
@@ -270,7 +309,8 @@ class PoseCheater:
                 dMin = 1e9
                 for j, lSym in enumerate( lastFrame ):
                     d_ij = euclidean_distance_between_symbols( rSym, lSym )
-                    if (d_ij <= maxDiff) and (d_ij < dMin) and (not p_collide_return( lSym )):
+                    # if (d_ij <= maxDiff) and (d_ij < dMin) and (not p_collide_return( lSym )):
+                    if (d_ij > 0.0) and (d_ij <= maxDiff) and (d_ij < dMin) and (not p_collide_return( lSym )):
                         dMin = d_ij
                         sMin = lSym
                 if sMin is not None:
