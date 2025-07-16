@@ -178,11 +178,14 @@ class SAM2:
 class Perception_OWLv2:
     """ Perception service based on OWLv2 """
     _UNDISTORT = True
+    _ADD_CONTR = True
+    _DRW_EDGES = False
 
     def __init__( self ):
         set_perc_env()
         self.rsc : real.RealSense   = None
         self.label_vit : LabelOWLv2 = None 
+        self.imgID : str        = None
         self.image : np.ndarray = None
         self.imgUD : np.ndarray = None
         self.depth : np.ndarray = None
@@ -209,7 +212,43 @@ class Perception_OWLv2:
         else:
             return np.asarray( cv2.undistort( imgArr, self.matx, self.coef, None, self.nMtx ) )
             
-        
+    
+    def contrastify( self, alpha : float = 1.5 ):
+        """ Attempt to add contrast to the image """
+        brighten = 0.0
+        self.imgUD = np.asarray( cv2.convertScaleAbs( self.imgUD, alpha = alpha, beta = brighten ) )
+
+
+    def get_Hough_edges( self ):
+        """ Identify and mark straight edges in the image """
+        # Convert to grayscale for edge detection
+        gray = cv2.cvtColor( self.imgUD, cv2.COLOR_BGR2GRAY )
+        # Apply Gaussian blur to reduce noise
+        blurred = cv2.GaussianBlur( gray, (5, 5), 0 )
+        # Edge detection using Canny
+        edges = cv2.Canny( blurred, 50, 150, apertureSize = 3 )
+        # Hough Line Transform
+        lines = cv2.HoughLinesP(
+            edges,
+            rho=1,              # Distance resolution in pixels
+            theta=np.pi/180,    # Angle resolution in radians
+            threshold=100,      # Minimum number of votes
+            minLineLength=50,   # Minimum line length
+            maxLineGap=10       # Maximum gap between line segments
+        )
+        # List to store edge endpoints
+        edge_endpoints = deque()
+        if lines is not None:
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                
+                # Draw the line on the result image
+                cv2.line( self.imgUD, (x1, y1), (x2, y2), (0, 0, 0), 2)
+                
+                # Add endpoint pair to the list
+                edge_endpoints.append( ((x1, y1,), (x2, y2,),) )
+        return list( edge_endpoints )
+
 
     def scale_thresh_by_factor( self, factor ):
         """ Adjust the threshold by some factor """
@@ -303,22 +342,28 @@ class Perception_OWLv2:
         """Bounds the given query with the OWLViT model."""
 
         if not useCache:
+            self.imgID = str( uuid4() )
             self.cloud = self.rsc.getPCD_alt()
             rgbd_image = self.cloud.rgbd
             self.image = np.array( rgbd_image.color )
             self.depth = np.array( rgbd_image.depth )
             if self._UNDISTORT:
                 self.undistort()
+            if self._ADD_CONTR:
+                self.contrastify( 1.75 ) # 1.5 # 2.0
+            if self._DRW_EDGES:
+                self.get_Hough_edges()
+
         else:
             rgbd_image = self.cloud.rgbd
 
-        if self._UNDISTORT:
+        if (self._UNDISTORT or self._ADD_CONTR):
             _, _, scores, labels = self.label_vit.label( self.imgUD, query, abbrevq, topk = True, plot = False )
         else:
             _, _, scores, labels = self.label_vit.label( self.image, query, abbrevq, topk = True, plot = False )
 
         rtnHits = deque()
-        imgID   = str( uuid4() )
+        
         for i in range( len( scores ) ):
             if (scores[i] >= self._SEG_SCORE_THRESH):
                 coords  = self.label_vit.sorted_boxes[i]
@@ -331,15 +376,15 @@ class Perception_OWLv2:
                     'image'  : self.image[indices[1]:indices[3], indices[0]:indices[2]].copy(),
                     'query'  : query,
                     'abbrv'  : abbrevq,
-                    'shotID' : imgID,
+                    'shotID' : self.imgID,
                 })
             if len( rtnHits ) >= env_var("_SEG_MAX_HITS"):
                 break
 
         return {
-            'id'    : imgID,
+            'id'    : self.imgID,
             'rgbd'  : rgbd_image,
-            'image' : self.imgUD.copy() if self._UNDISTORT else self.image.copy(),
+            'image' : self.imgUD.copy() if (self._UNDISTORT or self._ADD_CONTR) else self.image.copy(),
             'depth' : self.depth.copy(),
             'mpcd'  : self.cloud,
             'hits'  : rtnHits,
@@ -408,7 +453,8 @@ class Perception_OWLv2:
 
                 query  = q['query']
                 abbrv  = q['abbrv']
-                result = self.bound( query, abbrv, useCache = (i>0) )
+                # result = self.bound( query, abbrv, useCache = (i>0) )
+                result = self.bound( query, abbrv, useCache = False )
                 mpcd   = result['mpcd'] if ('mpcd' in result) else None
 
                 metadata['input'][ result['id'] ] = {
@@ -443,7 +489,8 @@ class Perception_OWLv2:
                         bbox_j  = rV['bbox']
                         intrsct = bb_intersection_over_union( bbox_i, bbox_j )
                         print( f"{intrsct}, ", end="", flush=True )
-                        if (intrsct > 0.5) and (intrsct > intMax): # WARNING: ASSUMED PARAM!
+                        # if (intrsct > 0.5) and (intrsct > intMax): # WARNING: ASSUMED PARAM!
+                        if (intrsct > 0.75) and (intrsct > intMax): # WARNING: ASSUMED PARAM!
                             intMax  = intrsct
                             match   = True
                             mtchKey = rK
@@ -454,14 +501,15 @@ class Perception_OWLv2:
                 else:
                     print( f"No merge for max overlap {intMax} of bbox {bboxi_i}" )
 
-                    # img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
-                    img_i = metadata['input'][ hit_i['shotID'] ]['image']
+                    img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
+                    # img_i = metadata['input'][ hit_i['shotID'] ]['image']
 
                     cpcd, mask_i = self.segment_cloud_w_SAM( 
                         img_i, 
                         bboxi_i, 
                         metadata['input'][ hit_i['shotID'] ]['mpcd'],
-                        useCache = repeat
+                        # useCache = repeat
+                        useCache = False
                     )
                     if (cpcd is not None) and len( np.asarray( cpcd.points ) ):
                         pose_i    = self.get_pcd_pose( cpcd )

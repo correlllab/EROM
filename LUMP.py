@@ -930,7 +930,7 @@ class LUMP:
             }
 
 
-    def plan_object_shots( self, proposedObjects : list[GraspObj], shotDist = dShot, N = 3 ) -> list[np.ndarray]:
+    def plan_object_shots( self, proposedObjects : list[GraspObj], shotDist = dShot, N = env_var("_N_PERC_SHOTS") ) -> list[np.ndarray]:
         """ Get ready for object search """
         _VIEW_PENALTY =  1.0
         _EDGE_PENALTY = 0.75
@@ -1109,7 +1109,7 @@ class LUMP:
         _N_SHOT_ADD   =  5
         _N_SHOT_TOTAL = _N_SHOT_ADD*_MULT_FACTOR 
         _N_INSPECT    =  3
-        _N_LOOK       =  3
+        _N_LOOK       =  env_var("_N_SEARCH_SHOTS")
 
         self.searchActive = True
         self.shotHist     = deque()
