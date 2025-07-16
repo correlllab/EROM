@@ -449,7 +449,8 @@ class LUMP:
         self.nextNshot : int           = self.NshotDflt
         if isinstance( qInit, (list, np.ndarray) ):
             self.q = np.array( qInit )
-        self.searchArctive = False
+        self.searchActive = False
+        self.shotHist      = deque()
 
 
     def set_state_from_robot( self ):
@@ -934,6 +935,7 @@ class LUMP:
         _VIEW_PENALTY =  1.0
         _EDGE_PENALTY = 0.75
         _MULT_FACTOR  = 7 #10
+        _NEAR_SHOT_PEN   = 2.50
         
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
@@ -968,7 +970,7 @@ class LUMP:
         for shot in ranking[1:]:
             pose_i = shot['pose']
             # print(topPose, pose_i)
-            shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( topPose, pose_i ), 0.005 )
+            shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( topPose, pose_i ), 0.005 ) * _NEAR_SHOT_PEN
         ranking.sort( key = lambda x: x['score'] )
 
         return [item['pose'] for item in ranking[:N]]
@@ -1061,6 +1063,7 @@ class LUMP:
         _EXCLUDE_PENALTY = 0.75
         _REPEAT_PENALTY  = 6.00 # 4.0 # 2.00 # 1.00 # 0.65
         _EDGE_PENALTY    = 0.75
+        _NEAR_SHOT_PEN   = 2.00
 
         self.set_state_from_robot()
         centroid = LUMP.SearchTarget.get_centroid( self.targets )
@@ -1087,8 +1090,14 @@ class LUMP:
         topPose = self.ranking[0]['pose']
         for shot in self.ranking[1:]:
             pose_i = shot['pose']
-            # print(topPose, pose_i)
-            shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( topPose, pose_i ), 0.005 )
+            shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( topPose, pose_i ), 0.005 ) * _NEAR_SHOT_PEN
+
+        for shot in self.ranking:
+            pose_i = shot['pose']
+            for pose_j in self.shotHist:
+                shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( pose_j, pose_i ), 0.005 ) * _NEAR_SHOT_PEN
+
+
         self.ranking.sort( key = lambda x: x['score'] )
 
         self.shots = [item['pose'] for item in self.ranking]
@@ -1102,9 +1111,11 @@ class LUMP:
         _N_INSPECT    =  3
         _N_LOOK       =  3
 
-        self.searchArctive = True
+        self.searchActive = True
+        self.shotHist     = deque()
 
         prevSymbols = LUMP.SearchTarget.from_GraspObj_list( proposedObjects )
+        
 
         self.targets = prevSymbols[:]
         nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
@@ -1170,7 +1181,7 @@ class LUMP:
 
             
 
-        self.searchArctive = False
+        self.searchActive = False
         
 
 

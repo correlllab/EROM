@@ -284,6 +284,7 @@ class PoseCheater:
 
         def p_collide_return( qSym ):
             """ Did we already log a symbol at this location? """
+            nonlocal rtnSym
             for rSym in rtnSym:
                 # if euclidean_distance_between_symbols( qSym, rSym ) < env_var('_BLOCK_SCALE')*0.75:
                 if euclidean_distance_between_symbols( qSym, rSym ) < env_var('_BLOCK_SCALE')*0.65:
@@ -322,8 +323,8 @@ class PoseCheater:
                     cSet.add( rSym.label )
                     rSym.pose = sMin.pose
                     dlta = True
-                if not p_collide_return( rSym ):
-                    rtnSym.append( rSym )
+                # if not p_collide_return( rSym ):
+                rtnSym.append( rSym )
 
             if env_var("_CHEAT_LKG"):
                 for j, lSym in enumerate( lastFrame ):

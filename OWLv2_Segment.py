@@ -17,6 +17,7 @@ from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 ### Special ###
 import numpy as np
+import cv2
 
 ### MAGPIE ###
 from magpie_control.poses import vec_unit
@@ -176,16 +177,39 @@ class SAM2:
 
 class Perception_OWLv2:
     """ Perception service based on OWLv2 """
+    _UNDISTORT = True
 
     def __init__( self ):
         set_perc_env()
         self.rsc : real.RealSense   = None
         self.label_vit : LabelOWLv2 = None 
         self.image : np.ndarray = None
+        self.imgUD : np.ndarray = None
         self.depth : np.ndarray = None
         self.cloud : MPCD       = None
         self._SEG_SCORE_THRESH  = env_var("_SEG_SCORE_THRESH")
+        
 
+    def fetch_camera_model( self ):
+        """ Get all the info we need to undistort """
+        matx, coef, dims = self.rsc.getPinholeInstrinsics( distortion = True )
+        self.matx = cv2.Mat( matx.intrinsic_matrix ) 
+        self.coef = cv2.Mat( np.array( coef ) )
+        self.dims = dims
+        # https://claude.ai/public/artifacts/889c4ece-eaad-47ba-a193-f850f49a9a16
+        new_camera_matrix, _ = cv2.getOptimalNewCameraMatrix( self.matx, self.coef, self.dims, 1, self.dims )
+        self.nMtx = new_camera_matrix
+
+
+    def undistort( self, imgArr = None ):
+        """ Use camera params to undistort the image """
+        if imgArr is None:
+            self.imgUD = np.asarray( cv2.undistort( self.image, self.matx, self.coef, None, self.nMtx ) )
+            return self.imgUD
+        else:
+            return np.asarray( cv2.undistort( imgArr, self.matx, self.coef, None, self.nMtx ) )
+            
+        
 
     def scale_thresh_by_factor( self, factor ):
         """ Adjust the threshold by some factor """
@@ -198,6 +222,7 @@ class Perception_OWLv2:
         try:
             self.rsc = real.RealSense()
             self.rsc.initConnection()
+            self.fetch_camera_model()
             if _VERBOSE:
                 print( f"RealSense camera CONNECTED", flush=True, file=sys.stderr )
         except Exception as e:
@@ -276,15 +301,21 @@ class Perception_OWLv2:
 
     def bound( self, query, abbrevq, useCache = False ):
         """Bounds the given query with the OWLViT model."""
+
         if not useCache:
             self.cloud = self.rsc.getPCD_alt()
             rgbd_image = self.cloud.rgbd
             self.image = np.array( rgbd_image.color )
             self.depth = np.array( rgbd_image.depth )
+            if self._UNDISTORT:
+                self.undistort()
         else:
             rgbd_image = self.cloud.rgbd
 
-        _, _, scores, labels = self.label_vit.label( self.image, query, abbrevq, topk = True, plot = False )
+        if self._UNDISTORT:
+            _, _, scores, labels = self.label_vit.label( self.imgUD, query, abbrevq, topk = True, plot = False )
+        else:
+            _, _, scores, labels = self.label_vit.label( self.image, query, abbrevq, topk = True, plot = False )
 
         rtnHits = deque()
         imgID   = str( uuid4() )
@@ -308,7 +339,7 @@ class Perception_OWLv2:
         return {
             'id'    : imgID,
             'rgbd'  : rgbd_image,
-            'image' : self.image.copy(),
+            'image' : self.imgUD.copy() if self._UNDISTORT else self.image.copy(),
             'depth' : self.depth.copy(),
             'mpcd'  : self.cloud,
             'hits'  : rtnHits,
@@ -316,7 +347,7 @@ class Perception_OWLv2:
     
 
     def segment_cloud_w_SAM( self, img : np.ndarray, imgBBoxInt : list[list[int]], mpcd : MPCD,
-                             loCount = 100, hiCount = 50000,
+                            #  loCount = 100, hiCount = 50000,
                              volEps = None, volThresh = None, useCache = False ):
         if (mpcd is None) or (not len( mpcd )):
             print( "`segment_cloud_w_SAM`: `mpcd` is None!" )
