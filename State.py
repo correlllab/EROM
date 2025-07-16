@@ -58,21 +58,25 @@ class LogPickler:
         } )
 
 
-    def visualize_last_segmentation( self ):
+    def visualize_last_segmentation( self, Nlast = None ):
         """ Overlay all the camera shots with the segmentations """
         _SEG_TAG = 'ObsMeta' # 'meta'
         _DAT_DIR = 'data'
         NdataPts = len( self.log )
+        if Nlast is None:
+            Nlast = min( env_var("_N_PERC_SHOTS"), env_var("_N_SEARCH_SHOTS") )
         # 0. Fetch the actual data
         datum = None
+        count = 0
         for i in range( NdataPts ):
             datum_i = self.log[-i]
             if datum_i['msg'] == _SEG_TAG:
+                count += 1
                 if datum is None:
                     datum = datum_i
                 else:
                     datum['data']['input'].update( datum_i['data']['input'] )
-            elif (datum_i['msg'] != 'RobotState') and (datum is not None):
+            if count >= Nlast:
                 break
 
         if datum is not None:
