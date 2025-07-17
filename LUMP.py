@@ -930,8 +930,10 @@ class LUMP:
             }
 
 
-    def plan_object_shots( self, proposedObjects : list[GraspObj], shotDist = dShot, N = env_var("_N_PERC_SHOTS") ) -> list[np.ndarray]:
+    def plan_object_shots( self, proposedObjects : list[GraspObj], shotDist = dShot, N = None ) -> list[np.ndarray]:
         """ Get ready for object search """
+        if N is None:
+            N = env_var("_N_PERC_SHOTS")
         _VIEW_PENALTY =  1.0
         _EDGE_PENALTY = 0.75
         _MULT_FACTOR  = 7 #10
