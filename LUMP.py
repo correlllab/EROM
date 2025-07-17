@@ -1123,7 +1123,8 @@ class LUMP:
     def effector_pose_from_camera_pose( self, camPose : np.ndarray ):
         """ Get the effector pose from the `camPose` """
         invCamPose = np.linalg.inv( self.robot.camXform )
-        return invCamPose.dot( camPose )
+        # return invCamPose.dot( camPose )
+        return camPose.dot( invCamPose )
 
 
     def effector_lookAt_pose( self, cenPosn : np.ndarray, camPosn : np.ndarray, camXbasis = [1.0, 0.0, 0.0,] ):
@@ -1142,14 +1143,15 @@ class LUMP:
         hiCntr[2]  = zHi
         loCntr[:2] = centerXY
         loCntr[2]  = zLo
-        hiPnts = grid_points_on_plane( hiCntr, [0.0,0.0,1.0,], 0.100, [0.0, -1.0, 0.0,], 3 )
-        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], 0.100, [0.0, -1.0, 0.0,], 3 )
+        hiPnts = grid_points_on_plane( hiCntr, [0.0,0.0,1.0,], 0.050, [1.0, 0.0, 0.0,], 3 )
+        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], 0.050, [1.0, 0.0, 0.0,], 3 )
         Npoint = hiPnts.shape[0]
+        # print( hiPnts.shape )
         eyePts = [ np.array( hiPnts[ choice( list( range( Npoint ) ) ) ] ) for _ in range( Nshots ) ]
         lukPts = [ np.array( loPnts[ choice( list( range( Npoint ) ) ) ] ) for _ in range( Nshots ) ]
         efPose = deque()
         for i in range( Nshots ):
-            efPose.append(  self.effector_lookAt_pose( lukPts[i], eyePts[i], camXbasis = [1.0, 0.0, 0.0,] )  )
+            efPose.append(  self.effector_lookAt_pose( lukPts[i], eyePts[i], camXbasis = [0.0, -1.0, 0.0,] )  )
 
         if env_var("_USE_GRAPHICS"):
             render_memory_list( 
@@ -1175,10 +1177,11 @@ class LUMP:
 
         ## Run init scan and return early if we found the objects ##
         if self.run_birds_eye_search( 
-            centerXY = [ env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
-                         env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, ], 
+            # centerXY = [ env_var("_MIN_X_OFFSET"), 
+            #              env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, ], 
+            centerXY = [ -0.340, -0.130, ], 
             zLo      = 0.0, 
-            zHi      = env_var("_Z_SAFE") + _FINGER_LEN_M, 
+            zHi      = env_var("_Z_SAFE"), 
             Nshots   = env_var("_N_SEARCH_SHOTS")+1
         ):
             return True

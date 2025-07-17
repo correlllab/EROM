@@ -694,7 +694,9 @@ class TaskPlanner:
                 self.memory.reset_memory()
                 self.lump.run_object_search( symLst )
                 report_time( "Object search COMPLETE!" )
+                self.cheater.log_recovery( self.memory.get_current_most_likely( self.symPln.get_goal_objects() ) )
             else:
+
                 if not _RESPONSIVE_MODE:
                     self.memory.reset_memory()
 
@@ -705,13 +707,13 @@ class TaskPlanner:
                 Npose = len( bgnPoses )
                 for i, bgnPose in enumerate( bgnPoses ):
                     self.robot.moveL( _SAFE, 
-                                      linSpeed = env_var("_ROBOT_FREE_SPEED"),
-                                      linAccel = env_var("_ROBOT_LIN_ACCEL" ),
-                                      asynch = False )
+                                    linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                                    linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                                    asynch = False )
                     self.robot.moveL( bgnPose, 
-                                      linSpeed = env_var("_ROBOT_FREE_SPEED"),
-                                      linAccel = env_var("_ROBOT_LIN_ACCEL" ),
-                                      asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE    
+                                    linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                                    linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                                    asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE    
                     if i < (Npose-1):
                         self.phase_1_Perceive( Append = True, suppressDeterm = True )
                     else:
@@ -833,7 +835,7 @@ def experiment_prep( beginPlanPose = None ):
     
 
 ########## MAIN ####################################################################################
-from timeit import timeit
+# from timeit import timeit
 
 _TROUBLESHOOT = 0
 _TRACK_PERF   = 0

@@ -87,13 +87,21 @@ def grid_points_on_plane( center : np.ndarray, normal : np.ndarray, unit_m : flo
     """ Create a regular square grid of 3D points on a plane """
     center = np.array( center )
     xBasis, yBasis, _ = bases_from_xB_zB( xBasis, normal )
+    print( "Bases:", xBasis, yBasis )
     N      = Nhalf*2+1
     rtnArr = np.zeros( (N**2,3,) )
     k      = 0
+
+    def rm_neg_zero( vec : np.ndarray ):
+        """ Remove negative zeros """
+        rntLst = vec.tolist()
+        return np.array( [elem if abs(elem) > 0.0001 else 0.0 for elem in rntLst] )
+
     for i in range( -Nhalf, Nhalf+1 ):
-        Xi = np.multiply( xBasis, i*unit_m )
+        Xi = rm_neg_zero( np.multiply( xBasis, i*unit_m ) )
         for j in range( -Nhalf, Nhalf+1 ):
-            Yj = np.multiply( yBasis, j*unit_m )
+            Yj = rm_neg_zero( np.multiply( yBasis, j*unit_m ) )
+            # print( f"\t{center}  +  {Xi}  +  {Yj}  =  {center + Xi + Yj}" )
             rtnArr[k,:] = center + Xi + Yj
             k += 1
     return rtnArr

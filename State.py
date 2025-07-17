@@ -157,6 +157,7 @@ class PoseCheater:
         self.symbols  = deque( [startSymbols,] ) if isinstance( startSymbols, list ) else deque()
         self.beliefs  = deque() # WARNING: STATE LEAKAGE
         self.trouble  = False # WARNING: STATE LEAKAGE
+        self.recover  = False # WARNING: STATE LEAKAGE
 
 
     def last_known_symbols( self ):
@@ -202,6 +203,14 @@ class PoseCheater:
     def log_beliefs( self, symLst ):
         """ Store the most recent symbols """
         self.beliefs.append( deep_copy_memory_list( symLst ) )
+
+
+    def log_recovery( self, symLst = None ):
+        """ It's all good now """
+        self.trouble = False
+        self.recover = True
+        if symLst is not None:
+            self.log_symbols( symLst )
 
 
     def log_successful_action( self, poseBgn, poseEnd ):

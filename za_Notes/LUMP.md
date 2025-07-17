@@ -4,7 +4,7 @@
 
 ## Search is PAINFUL!
 - [x] Begin the search with a Bird's Eye View!
-- [ ] TEST Bird's Eye Init Search!
+- [x] TEST Bird's Eye Init Search!
 ## COLLISIONS!
 ### Level 0
 - [ ] Check frames 4-6 against the base
@@ -21,6 +21,7 @@
 		- --> Many spurious edges!
 	- [x] Put edges in space
 		- --> Many spurious edges!
+	- [ ] Actually LOOK at the PCD, it might be usable now!
 	- [ ] Plan Grasp
 - [ ] [OMPL](https://ompl.kavrakilab.org/python.html) --> [Install](https://ompl.kavrakilab.org/core/installation.html)
 - [ ] [Flexible Collision Library](https://github.com/BerkeleyAutomation/python-fcl)
