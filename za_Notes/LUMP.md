@@ -1,23 +1,38 @@
 # [L]imited [U]R5 [M]otion [P]lanner
 
 # 2025-07-16, PROBLEMS
+
+## Search is PAINFUL!
+- [x] Begin the search with a Bird's Eye View!
+- [ ] TEST Bird's Eye Init Search!
+## COLLISIONS!
+### Level 0
 - [ ] Check frames 4-6 against the base
-- [ ] Begin the search with a Bird's Eye View!
+### Level 1, [FCL](https://github.com/BerkeleyAutomation/python-fcl)
+- [ ] Use a sphere to represent the Hand
+- [ ] Use 2 triangles to represent the Table!
+- [ ] Get Cylinders from Graphics Project
+
 
 
 # Expansion Ideas
 - [ ] **Grasp Planner**!
-	- [ ] Locate edges
-	- [ ] Put edges in space
+	- [x] Locate edges
+		- --> Many spurious edges!
+	- [x] Put edges in space
+		- --> Many spurious edges!
 	- [ ] Plan Grasp
-- [ ] [OMPL](https://ompl.kavrakilab.org/python.html)
+- [ ] [OMPL](https://ompl.kavrakilab.org/python.html) --> [Install](https://ompl.kavrakilab.org/core/installation.html)
 - [ ] [Flexible Collision Library](https://github.com/BerkeleyAutomation/python-fcl)
 
 # Supporting Basic Planning
-- [ ] Restore the Rays
+- [x] Restore the Rays
 	- [x] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L146
-	- [ ] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L357
-- [ ] Pose Repair should also straighten out stacked blocks?
+	- [x] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L357
+	- --> This resulted in MANY false readings!
+- [ ] HAX
+	- [ ] Pose Repair should also straighten out stacked blocks?
+	- [ ] Pose Repair should also quantize Z coord?
 
 - [x] Idea: Don't let the determinizer consider NULL!
 ## Object Search

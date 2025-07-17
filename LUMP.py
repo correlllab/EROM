@@ -28,7 +28,7 @@ from homog_utils import ( posn_from_xform, bases_from_xform, R_krot, R_z, homog_
                           diff_unit, )
 from dh_mp import FK_DH_chain, dh_link_homog
 
-from Geometry import get_D405_FOV_frustum, p_sphere_inside_plane_list
+from Geometry import get_D405_FOV_frustum, p_sphere_inside_plane_list, grid_points_on_plane, bases_from_xB_zB
 from draw_beliefs import render_memory_list
 from utils import get_pose_attr
 
@@ -1115,10 +1115,53 @@ class LUMP:
             for pose_j in self.shotHist:
                 shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( pose_j, pose_i ), 0.005 ) * _NEAR_SHOT_PEN
 
-
         self.ranking.sort( key = lambda x: x['score'] )
 
         self.shots = [item['pose'] for item in self.ranking]
+
+
+    def effector_pose_from_camera_pose( self, camPose : np.ndarray ):
+        """ Get the effector pose from the `camPose` """
+        invCamPose = np.linalg.inv( self.robot.camXform )
+        return invCamPose.dot( camPose )
+
+
+    def effector_lookAt_pose( self, cenPosn : np.ndarray, camPosn : np.ndarray, camXbasis = [1.0, 0.0, 0.0,] ):
+        """ Construct a camera pose that looks at `cenPosn` """
+        lookDir = vec_unit( np.subtract( cenPosn, camPosn ) )
+        Rmatrix = bases_from_xB_zB( camXbasis, lookDir, asRotMtx = True )
+        camPose = homog_xform( Rmatrix, camPosn )
+        return self.effector_pose_from_camera_pose( camPose )
+
+
+    def run_birds_eye_search( self, centerXY : np.ndarray, zLo : float, zHi : float, Nshots : int = 3 ):
+        """ Look at random spots from random points, and return True if we found all the things! """
+        hiCntr = np.zeros( (3,) )
+        loCntr = np.zeros( (3,) )
+        hiCntr[:2] = centerXY
+        hiCntr[2]  = zHi
+        loCntr[:2] = centerXY
+        loCntr[2]  = zLo
+        hiPnts = grid_points_on_plane( hiCntr, [0.0,0.0,1.0,], 0.100, [0.0, -1.0, 0.0,], 3 )
+        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], 0.100, [0.0, -1.0, 0.0,], 3 )
+        Npoint = hiPnts.shape[0]
+        eyePts = [ np.array( hiPnts[ choice( list( range( Npoint ) ) ) ] ) for _ in range( Nshots ) ]
+        lukPts = [ np.array( loPnts[ choice( list( range( Npoint ) ) ) ] ) for _ in range( Nshots ) ]
+        efPose = deque()
+        for i in range( Nshots ):
+            efPose.append(  self.effector_lookAt_pose( lukPts[i], eyePts[i], camXbasis = [1.0, 0.0, 0.0,] )  )
+
+        if env_var("_USE_GRAPHICS"):
+            render_memory_list( 
+                objs      = self.get_cb(),
+                robotPose = list( efPose )
+            )
+
+        for i, robotPose in enumerate( efPose ):
+            self.mov_cb( robotPose )
+            self.see_cb( i , Nshots )
+
+        return self.chk_cb()
 
 
     def run_object_search( self, proposedObjects : list[GraspObj] ):
@@ -1128,13 +1171,23 @@ class LUMP:
         _N_SHOT_TOTAL = _N_SHOT_ADD*_MULT_FACTOR 
         _N_INSPECT    =  3
         _N_LOOK       =  env_var("_N_SEARCH_SHOTS")
+        _FINGER_LEN_M = 0.100
+
+        ## Run init scan and return early if we found the objects ##
+        if self.run_birds_eye_search( 
+            centerXY = [ env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
+                         env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, ], 
+            zLo      = 0.0, 
+            zHi      = env_var("_Z_SAFE") + _FINGER_LEN_M, 
+            Nshots   = env_var("_N_SEARCH_SHOTS")+1
+        ):
+            return True
 
         self.searchActive = True
         self.shotHist     = deque()
 
         prevSymbols = LUMP.SearchTarget.from_GraspObj_list( proposedObjects )
         
-
         self.targets = prevSymbols[:]
         nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, env_var("_N_GRID_EXPAND") )
         self.targets.extend( nuTgt )

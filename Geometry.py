@@ -65,3 +65,35 @@ def p_symbol_in_cam_view( camXform : np.ndarray, symbol : GraspObj ):
     qPosn  = extract_pose_as_homog( symbol )[0:3,3]
     blcRad = np.sqrt( 3.0 * (env_var("_BLOCK_SCALE")/2.0)**2 )
     return p_sphere_inside_plane_list( qPosn, blcRad, bounds )
+
+
+def bases_from_xB_zB( xBasis : np.ndarray, zBasis : np.ndarray, asRotMtx = False ):
+    """ Get basis vectors from a defined `zBasis` and a preferred `xBasis` """
+    zBasis = vec_unit( zBasis )
+    xBasis = vec_unit( xBasis )
+    yBasis = vec_unit( np.cross( zBasis, xBasis ) )
+    xBasis = vec_unit( np.cross( yBasis, zBasis ) )
+    rBases = xBasis, yBasis, zBasis
+    if asRotMtx:
+        rtnMtx = np.zeros( (3,3,) )
+        for i, basis in enumerate( rBases ):
+            rtnMtx[:,i] = basis
+        return rtnMtx
+    else:
+        return rBases
+
+
+def grid_points_on_plane( center : np.ndarray, normal : np.ndarray, unit_m : float, xBasis : np.ndarray, Nhalf : int ) -> np.ndarray:
+    """ Create a regular square grid of 3D points on a plane """
+    center = np.array( center )
+    xBasis, yBasis, _ = bases_from_xB_zB( xBasis, normal )
+    N      = Nhalf*2+1
+    rtnArr = np.zeros( (N**2,3,) )
+    k      = 0
+    for i in range( -Nhalf, Nhalf+1 ):
+        Xi = np.multiply( xBasis, i*unit_m )
+        for j in range( -Nhalf, Nhalf+1 ):
+            Yj = np.multiply( yBasis, j*unit_m )
+            rtnArr[k,:] = center + Xi + Yj
+            k += 1
+    return rtnArr
