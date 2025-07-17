@@ -350,7 +350,7 @@ class Perception_OWLv2:
             if self._UNDISTORT:
                 self.undistort()
             if self._ADD_CONTR:
-                self.contrastify( 1.75 ) # 1.5 # 2.0
+                self.contrastify( 1.25 ) # 1.5 # 1.75 # 2.0
             if self._DRW_EDGES:
                 self.get_Hough_edges()
 

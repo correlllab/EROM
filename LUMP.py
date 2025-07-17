@@ -428,6 +428,7 @@ def get_aabb( ptsLst ):
 
 ########## MOTION PLANNER ##########################################################################
 _COLLISION_NRG_PENALTY = 9.0
+_JOINT_Q_MARGIN        = np.pi/8.0
 
 class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
@@ -450,8 +451,11 @@ class LUMP:
         if isinstance( qInit, (list, np.ndarray) ):
             self.q = np.array( qInit )
         self.searchActive = False
-        self.shotHist      = deque()
-
+        self.shotHist     = deque()
+        self.qLimLo       = [-np.pi for _ in range(6)]
+        self.qLimHi       = [ np.pi for _ in range(6)]
+        self.qLimLo[5]   -= np.pi
+        self.qLimHi[5]   += np.pi
 
     def set_state_from_robot( self ):
         if isinstance( self.robot, UR5_Interface ):
@@ -501,6 +505,16 @@ class LUMP:
         return ((effPose[2,3] - margin) >= 0.0)
     
 
+    def p_q_within_limits( self, q, margin = _JOINT_Q_MARGIN ):
+        """ Check if `q` is within joint limits, including margin """
+        for i, q_i in enumerate(q):
+            if (q_i-margin) < self.qLimLo[i]:
+                return False
+            if (q_i+margin) > self.qLimHi[i]:
+                return False
+        return True
+    
+
     def register_aabb_obstacle( self, aabb ):
         """ Add an Axis-Aligned Boudning Box that the robot should avoid """
         self.obstacles.append({ 'type': "aabb", 'geo' : np.array( aabb ) })
@@ -523,6 +537,8 @@ class LUMP:
 
     def p_collision_q( self, q, margin = _RBT_TABLE_MARGIN ):
         """ Return true if the `q` would put the robot in collision """
+        if not self.p_q_within_limits(q):
+            return True
         for obstacle in self.obstacles:
             if obstacle["type"] == "aabb":
                 aabb   = obstacle["geo"]
@@ -934,10 +950,10 @@ class LUMP:
         """ Get ready for object search """
         if N is None:
             N = env_var("_N_PERC_SHOTS")
-        _VIEW_PENALTY =  1.0
-        _EDGE_PENALTY = 0.75
-        _MULT_FACTOR  = 7 #10
-        _NEAR_SHOT_PEN   = 2.50
+        _VIEW_PENALTY  = 1.0
+        _EDGE_PENALTY  = 0.75
+        _MULT_FACTOR   = 7 #10
+        _NEAR_SHOT_PEN = 1.75
         
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
@@ -990,7 +1006,7 @@ class LUMP:
         self.chk_cb  = checkCB
         self.viz_cb  = noVizCB
         # Constants #
-        self._VIZ_THRESH_DOWN = 0.98 # 0.85 # 0.95
+        self._VIZ_THRESH_DOWN = 0.99 #0.98 # 0.85 # 0.95
         
 
     def p_target_in_cam_view( self, effXform : np.ndarray, target : LUMP.SearchTarget ):
@@ -1120,7 +1136,7 @@ class LUMP:
         
 
         self.targets = prevSymbols[:]
-        nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, 2 )
+        nuTgt = LUMP.SearchTarget.propose_gridded_targets( self.targets, env_var("_N_GRID_EXPAND") )
         self.targets.extend( nuTgt )
         
         self.shots = list()

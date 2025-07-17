@@ -229,7 +229,8 @@ class PoseCheater:
     def log_failed_action( self, poseBgn, poseEnd ):
         """ We done goofed, Erase symbol """
         self.trouble = True
-        self.symbols.append( list() )
+        # self.symbols.append( list() )
+        self.symbols = deque()
         # if (len( self.beliefs ) > 1):
         #     self.beliefs.pop()
         print( f"Could NOT move block by {euclidean_distance_between_symbols( poseBgn, poseEnd )}" )

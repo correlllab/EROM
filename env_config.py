@@ -249,3 +249,4 @@ def set_experiment_env():
 
     env_sto( "_N_PERC_SHOTS"  , 3 )
     env_sto( "_N_SEARCH_SHOTS", 3 )
+    env_sto( "_N_GRID_EXPAND" , 3 )

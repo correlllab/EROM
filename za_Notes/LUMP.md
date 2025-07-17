@@ -1,5 +1,9 @@
 # [L]imited [U]R5 [M]otion [P]lanner
 
+# 2025-07-16, PROBLEMS
+- [ ] Check frames 4-6 against the base
+- [ ] Begin the search with a Bird's Eye View!
+
 
 # Expansion Ideas
 - [ ] **Grasp Planner**!
