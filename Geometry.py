@@ -87,7 +87,7 @@ def grid_points_on_plane( center : np.ndarray, normal : np.ndarray, unit_m : flo
     """ Create a regular square grid of 3D points on a plane """
     center = np.array( center )
     xBasis, yBasis, _ = bases_from_xB_zB( xBasis, normal )
-    print( "Bases:", xBasis, yBasis )
+    # print( "Bases:", xBasis, yBasis )
     N      = Nhalf*2+1
     rtnArr = np.zeros( (N**2,3,) )
     k      = 0

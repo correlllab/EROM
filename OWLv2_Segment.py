@@ -473,13 +473,11 @@ class Perception_OWLv2:
             rtnDict = dict()
             lastID  = None
 
-            for i, hit_i in enumerate( metadata['hits'] ):
+            for hit_i in metadata['hits']:
                 bboxi_i = hit_i['bboxi']
                 bbox_i  = hit_i['bbox']
                 match   = False
                 mtchKey = None
-                repeat  = hit_i['shotID'] == lastID
-                lastID  = hit_i['shotID']
                 intMax  = 0.0
                 
                 if len( rtnDict ):
@@ -498,6 +496,31 @@ class Perception_OWLv2:
                 if match:
                     rtnDict[ mtchKey ]['Probability'][ hit_i['abbrv'] ] += hit_i['score']
                     print( f"Merge hit {mtchKey}, Overlap: {intMax}, Dist: {rtnDict[ mtchKey ]['Probability']}" )
+                    if (rtnDict[ mtchKey ]['type'] == 'ray'):
+                        img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
+                        print( "Match MISSING cloud!" )
+                        cpcd, mask_i = self.segment_cloud_w_SAM( 
+                            img_i, 
+                            bboxi_i, 
+                            metadata['input'][ hit_i['shotID'] ]['mpcd'],
+                            useCache = False
+                        )
+                        if (cpcd is not None) and len( np.asarray( cpcd.points ) ):
+                            print( "RECOVERED cloud!" )
+                            pose_i    = self.get_pcd_pose( cpcd )
+                            print( f"About to store PCD of {len( np.asarray( cpcd.points ) )} points from bbox {bboxi_i} @ {np.array(pose_i).reshape((4,4,))[0:3,3].reshape((3,))}!" )
+                            boxRay_i  = mask_ray_realsense( hit_i['bboxi'], mask_i )
+                            cloudPair = { 'points' : np.asarray( cpcd.points ).copy(),
+                                        'colors' : np.asarray( cpcd.colors ).copy(), }
+                            type_i    = 'cloud'
+                            rtnDict[ mtchKey ]['type'] = type_i
+                            rtnDict[ mtchKey ]['bbox'] = hit_i['bbox']
+                            rtnDict[ mtchKey ]['Pose'] = pose_i
+                            rtnDict[ mtchKey ]['CPCD'] = cloudPair
+                        else:
+                            print( "NO cloud!" )
+
+
                 else:
                     print( f"No merge for max overlap {intMax} of bbox {bboxi_i}" )
 
@@ -518,6 +541,7 @@ class Perception_OWLv2:
                         cloudPair = { 'points' : np.asarray( cpcd.points ).copy(),
                                       'colors' : np.asarray( cpcd.colors ).copy(), }
                         type_i    = 'cloud'
+                        
                         
                     else:
                         boxRay_i  = mask_ray_realsense( hit_i['bboxi'] )

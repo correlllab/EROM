@@ -5,6 +5,9 @@
 ## Search is PAINFUL!
 - [x] Begin the search with a Bird's Eye View!
 - [x] TEST Bird's Eye Init Search!
+- [ ] There are two reasons for object search
+	- [ ] Action Failure: Erase cache
+	- [ ] Determ Failure: Retain Cache
 ## COLLISIONS!
 ### Level 0
 - [ ] Check frames 4-6 against the base

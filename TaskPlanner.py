@@ -656,7 +656,7 @@ class TaskPlanner:
         if not isinstance( beginPlanPose, list ):
             beginPlanPose = [beginPlanPose,]
 
-        i = 0
+        ii = 0
 
         print( "\n\n\n##### TASK BEGIN #####\n" )
 
@@ -672,15 +672,15 @@ class TaskPlanner:
 
         report_time( "Task solver init complete!" )
 
-        while (self.status != Status.SUCCESS) and (i < maxIter): # and (not self.PANIC):
+        while (self.status != Status.SUCCESS) and (ii < maxIter): # and (not self.PANIC):
             
             report_time( "Task BEGIN!" )
 
             self.status = Status.RUNNING
 
-            print( f"\n\n### Iteration {i+1} ###" )
+            print( f"\n\n### Iteration {ii+1} ###" )
             
-            i += 1
+            ii += 1
 
             ##### Phase 1 ########################
 

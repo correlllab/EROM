@@ -953,7 +953,7 @@ class LUMP:
         _VIEW_PENALTY  = 1.0
         _EDGE_PENALTY  = 0.75
         _MULT_FACTOR   = 7 #10
-        _NEAR_SHOT_PEN = 1.75
+        _NEAR_SHOT_PEN = 1.25
         
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
@@ -1081,7 +1081,7 @@ class LUMP:
         _EXCLUDE_PENALTY = 0.75
         _REPEAT_PENALTY  = 6.00 # 4.0 # 2.00 # 1.00 # 0.65
         _EDGE_PENALTY    = 0.75
-        _NEAR_SHOT_PEN   = 2.00
+        _NEAR_SHOT_PEN   = 1.50
 
         self.set_state_from_robot()
         centroid = LUMP.SearchTarget.get_centroid( self.targets )
@@ -1179,7 +1179,7 @@ class LUMP:
         if self.run_birds_eye_search( 
             # centerXY = [ env_var("_MIN_X_OFFSET"), 
             #              env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, ], 
-            centerXY = [ -0.340, -0.130, ], 
+            centerXY = [ -0.340-0.100, -0.130-0.100, ], 
             zLo      = 0.0, 
             zHi      = env_var("_Z_SAFE"), 
             Nshots   = env_var("_N_SEARCH_SHOTS")+1
