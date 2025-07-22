@@ -1178,9 +1178,9 @@ class LUMP:
 
         ## Run init scan and return early if we found the objects ##
         if self.run_birds_eye_search( 
-            # centerXY = [ env_var("_MIN_X_OFFSET"), 
-            #              env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, ], 
-            centerXY = [ -0.340-0.100, -0.130-0.100, ], 
+            centerXY = [ env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
+                         env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, ], 
+            # centerXY = [ -0.340-0.100, -0.130-0.100, ], 
             zLo      = 0.0, 
             zHi      = env_var("_Z_SAFE"), 
             Nshots   = env_var("_N_SEARCH_SHOTS")+1

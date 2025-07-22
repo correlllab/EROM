@@ -745,8 +745,8 @@ class TaskPlanner:
                 print(f"Checking goals ...")
 
             if self.symPln.validate_goal_noisy( self.symPln.goal ):
-                self.memory.history.append( msg = f"Believe Success, Iteration {i}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
-                print( f"!!! Noisy success at iteration {i} !!!" )
+                self.memory.history.append( msg = f"Believe Success, Iteration {ii}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
+                print( f"!!! Noisy success at iteration {ii} !!!" )
                 self.status = Status.SUCCESS
 
             if self.status in (Status.SUCCESS, Status.FAILURE):
