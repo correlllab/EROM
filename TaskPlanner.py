@@ -804,7 +804,7 @@ class TaskPlanner:
 
         report_time( "Planner EXIT!" )
 
-        print( f"\n##### PLANNER END with status {self.status} after iteration {i} #####\n\n\n" )
+        print( f"\n##### PLANNER END with status {self.status} after iteration {ii} #####\n\n\n" )
 
 
 

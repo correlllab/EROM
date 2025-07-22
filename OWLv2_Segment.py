@@ -143,12 +143,51 @@ def mask_ray_realsense( bbox : np.ndarray, mask : np.ndarray = None  ):
 
 ########## SAM2 WRAPPER ############################################################################
 
+_BBOX_GAUSS_DIV = 4.0 # 3.5
+
+
+# def sample_vec_normal_int( center, scale ) -> np.ndarray:
+#     """ Sample independent normal coordinates """
+#     Ndim      = len( center )
+#     rtnCoords = [0 for _ in range(Ndim)]
+#     for i in range( Ndim ):
+#         rtnCoords[i] = int( np.random.normal( center[i], scale[i] ) )
+#     return rtnCoords
+
+
+# def sample_box_normal_int( bbox : list | np.ndarray, M : int = 1 ) -> np.ndarray:
+#     """ Sample independent normal coordinates in a boudning box """
+#     bbox   = np.array( bbox )
+#     if len( bbox.shape ) < 2: # If we got the linear format, Convert to 2-row format
+#         bbox = bbox.reshape( 2, -1 )
+#     N      = bbox.shape[1]
+#     center = [0 for _ in range(N)]
+#     scale  = [0 for _ in range(N)]
+#     for i in range(N):
+#         center[i] = (bbox[1,i] + bbox[0,i]) / 2.0
+#         scale[i]  = abs(bbox[1,i] - bbox[0,i]) / _BBOX_GAUSS_DIV
+#     if M < 2:
+#         return sample_vec_normal_int( center, scale )
+#     else:
+#         rtnArr = np.zeros( (M,N,) )
+#         for i in range(M):
+#             rtnArr[i] = sample_vec_normal_int( center, scale )
+#         return rtnArr
+
+def bbox_center( bbox : list | np.ndarray ) -> np.ndarray:
+    """ Sample independent normal coordinates in a boudning box """
+    bbox   = np.array( bbox )
+    if len( bbox.shape ) < 2: # If we got the linear format, Convert to 2-row format
+        bbox = bbox.reshape( 2, -1 )
+    ctr = np.sum( bbox, axis = 0 )/2.0
+    return [int(elem) for elem in ctr.tolist()]
+
 class SAM2:
     """ Simplest SAM2 wrapper for bbox prompts """
 
     def __init__( self ):
         self.sam_predictor = SAM2ImagePredictor.from_pretrained("facebook/sam2-hiera-large")
-        # self.sam_predictor.
+        self.NsamplePts    = 3
 
     def predict( self, img, bbox, useCache = False ):
         # Suppress warnings during the prediction step
@@ -159,7 +198,11 @@ class SAM2:
         sam_logits = None
         with warnings.catch_warnings():
             warnings.simplefilter( "ignore", category = UserWarning )
-            sam_mask, sam_scores, sam_logits = self.sam_predictor.predict(box = bbox)
+            sam_mask, sam_scores, sam_logits = self.sam_predictor.predict( 
+                box = bbox,
+                point_coords = [bbox_center( bbox ),],
+                point_labels = np.ones( (1,) )
+            )
         sam_mask = np.all( sam_mask, axis = 0 )
         return sam_mask, sam_scores, sam_logits
     
@@ -496,7 +539,7 @@ class Perception_OWLv2:
                 if match:
                     rtnDict[ mtchKey ]['Probability'][ hit_i['abbrv'] ] += hit_i['score']
                     print( f"Merge hit {mtchKey}, Overlap: {intMax}, Dist: {rtnDict[ mtchKey ]['Probability']}" )
-                    if (rtnDict[ mtchKey ]['type'] == 'ray'):
+                    if (rtnDict[ mtchKey ]['type'] == 'ray') and env_var("_RETRY_CLOUDS"):
                         img_i = metadata['input'][ hit_i['shotID'] ]['image'].copy()
                         print( "Match MISSING cloud!" )
                         cpcd, mask_i = self.segment_cloud_w_SAM( 
