@@ -190,7 +190,7 @@ def indexatize_arr_as_list( arr : np.ndarray | list ) -> list:
 
 def bbox_samples( bbox : list | np.ndarray ) -> np.ndarray:
     """ Get sample points for SAM2, WARNING: ASSUMES OBJECT TAKES UP MOST OF BBOX """
-    _SCALE_DIV = 4.0 # 8.0
+    _SCALE_DIV = 2.0 # 4.0 # 8.0
     bbox   = np.array( bbox )
     if len( bbox.shape ) < 2: # If we got the linear format, Convert to 2-row format
         bbox = bbox.reshape( 2, -1 )

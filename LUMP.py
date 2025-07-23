@@ -427,7 +427,7 @@ def get_aabb( ptsLst ):
 
 
 ########## MOTION PLANNER ##########################################################################
-_COLLISION_NRG_PENALTY = 9.0
+_COLLISION_NRG_PENALTY = 11.0
 _JOINT_Q_MARGIN        = np.pi/8.0
 
 class LUMP:
