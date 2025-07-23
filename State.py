@@ -332,10 +332,13 @@ class PoseCheater:
                     lSet.add( id( lSym ) )
                     cSet.add( rSym.label )
 
-                    # WARNING: HACK
-                    nuPose = extract_pose_as_homog( sMin )
-                    nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
-                    rSym.pose.pose = nuPose
+                    if env_var("_USE_Z_SNAP"):
+                        # WARNING: HACK
+                        nuPose = extract_pose_as_homog( sMin )
+                        nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
+                        rSym.pose.pose = nuPose
+                    else:
+                        rSym.pose = sMin.pose
 
                     dlta = True
                 # if not p_collide_return( rSym ):

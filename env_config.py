@@ -75,6 +75,8 @@ def set_experiment_env():
     env_sto( "_SEG_SCORE_THRESH", 0.100*_THRESH_FACTOR ) # 0.025 # 0.075 # 0.100
     env_sto( "_OWL2_TOPK"       , 1     )
 
+    env_sto( "_USE_SAM2_SAMPLES", False )
+
     env_sto( "_Z_SAFE", 0.350 )
 
      # 3D Printed Blocks
@@ -88,6 +90,8 @@ def set_experiment_env():
     env_sto( "_USE_GRAPHICS", False )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
     env_sto( "_SHOW_SEGMENT", False )
+
+    env_sto( "_USE_Z_SNAP" , False )
 
     # env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )
     # env_sto( "_Z_SNAP_BOOST" , 0.00*env_var("_BLOCK_SCALE") )
@@ -241,13 +245,16 @@ def set_experiment_env():
     env_sto( "_USE_SPACE_HACK", False )
     env_sto( "_USE_PERC_HACK" , True )
 
+    
+
     env_sto( "_USE_POSE_CHEAT", True )
     env_sto( "_CHEAT_LABEL"   , False and env_var("_USE_POSE_CHEAT") )
     env_sto( "_CHEAT_POSE"    , True and env_var("_USE_POSE_CHEAT") )
     env_sto( "_CHEAT_LKG"     , False and env_var("_USE_POSE_CHEAT") )
 
 
-    env_sto( "_N_PERC_SHOTS"  , 3 )
-    env_sto( "_N_SEARCH_SHOTS", 3 )
-    env_sto( "_N_GRID_EXPAND" , 3 )
-    env_sto( "_RETRY_CLOUDS"  , True )
+    env_sto( "_N_PERC_SHOTS"   , 3 )
+    env_sto( "_N_SEARCH_SHOTS" , 3 )
+    env_sto( "_N_GRID_EXPAND"  , 3 )
+    env_sto( "_N_GRID_HALF_PTS", 2 )
+    env_sto( "_RETRY_CLOUDS"   , True )

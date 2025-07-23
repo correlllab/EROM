@@ -1137,15 +1137,15 @@ class LUMP:
 
     def run_birds_eye_search( self, centerXY : np.ndarray, zLo : float, zHi : float, Nshots : int = 3 ):
         """ Look at random spots from random points, and return True if we found all the things! """
-        _GRID_HALF_PTS = 1
+        # _GRID_HALF_PTS = 1
         hiCntr = np.zeros( (3,) )
         loCntr = np.zeros( (3,) )
         hiCntr[:2] = centerXY
         hiCntr[2]  = zHi
         loCntr[:2] = centerXY
         loCntr[2]  = zLo
-        hiPnts = grid_points_on_plane( hiCntr, [0.0,0.0,1.0,], 0.050, [1.0, 0.0, 0.0,], _GRID_HALF_PTS )
-        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], 0.050, [1.0, 0.0, 0.0,], _GRID_HALF_PTS )
+        hiPnts = grid_points_on_plane( hiCntr, [0.0,0.0,1.0,], 0.050, [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS") )
+        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], 0.050, [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS") )
         Npoint = hiPnts.shape[0]
         # print( hiPnts.shape )
         eyePts = [ np.array( hiPnts[ choice( list( range( Npoint ) ) ) ] ) for _ in range( Nshots ) ]
@@ -1183,7 +1183,8 @@ class LUMP:
             # centerXY = [ -0.340-0.100, -0.130-0.100, ], 
             zLo      = 0.0, 
             zHi      = env_var("_Z_SAFE"), 
-            Nshots   = env_var("_N_SEARCH_SHOTS")+1
+            # Nshots   = env_var("_N_SEARCH_SHOTS")+1
+            Nshots   = env_var("_N_SEARCH_SHOTS")
         ):
             return True
 

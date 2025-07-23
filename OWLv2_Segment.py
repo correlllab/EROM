@@ -190,7 +190,7 @@ def indexatize_arr_as_list( arr : np.ndarray | list ) -> list:
 
 def bbox_samples( bbox : list | np.ndarray ) -> np.ndarray:
     """ Get sample points for SAM2, WARNING: ASSUMES OBJECT TAKES UP MOST OF BBOX """
-    _SCALE_DIV = 2.0 # 4.0 # 8.0
+    _SCALE_DIV = 4.0 # 2.0 # 4.0 # 8.0
     bbox   = np.array( bbox )
     if len( bbox.shape ) < 2: # If we got the linear format, Convert to 2-row format
         bbox = bbox.reshape( 2, -1 )
@@ -220,14 +220,22 @@ class SAM2:
         sam_mask = None
         sam_scores = None
         sam_logits = None
-        with warnings.catch_warnings():
-            warnings.simplefilter( "ignore", category = UserWarning )
-            pnts, lbls = bbox_samples( bbox )
-            sam_mask, sam_scores, sam_logits = self.sam_predictor.predict( 
-                box          = bbox,
-                point_coords = pnts,
-                point_labels = lbls
-            )
+        if env_var("_USE_SAM2_SAMPLES"):
+            with warnings.catch_warnings():
+                warnings.simplefilter( "ignore", category = UserWarning )
+                pnts, lbls = bbox_samples( bbox )
+                sam_mask, sam_scores, sam_logits = self.sam_predictor.predict( 
+                    box          = bbox,
+                    point_coords = pnts,
+                    point_labels = lbls
+                )
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter( "ignore", category = UserWarning )
+                pnts, lbls = bbox_samples( bbox )
+                sam_mask, sam_scores, sam_logits = self.sam_predictor.predict( 
+                    box = bbox
+                )
         sam_mask = np.all( sam_mask, axis = 0 )
         return sam_mask, sam_scores, sam_logits
     
