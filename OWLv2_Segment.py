@@ -182,6 +182,22 @@ def bbox_center( bbox : list | np.ndarray ) -> np.ndarray:
     ctr = np.sum( bbox, axis = 0 )/2.0
     return [int(elem) for elem in ctr.tolist()]
 
+
+def bbox_samples( bbox : list | np.ndarray ) -> np.ndarray:
+    """ Sample independent normal coordinates in a bounding box """
+    bbox   = np.array( bbox )
+    if len( bbox.shape ) < 2: # If we got the linear format, Convert to 2-row format
+        bbox = bbox.reshape( 2, -1 )
+    dif = np.subtract( bbox[1], bbox[0] )
+    scl = np.linalg.norm( dif ) / 8.0
+    drc = vec_unit( dif )
+    ctr = np.sum( bbox, axis = 0 )/2.0
+    pt1 = ctr + drc * scl
+    pt2 = bbox[0] + drc * (-scl)
+    pt3 = bbox[1] + drc * scl
+    return [ctr, pt1, pt2, pt3,], [1,1,0,0,]
+
+
 class SAM2:
     """ Simplest SAM2 wrapper for bbox prompts """
 
@@ -198,10 +214,11 @@ class SAM2:
         sam_logits = None
         with warnings.catch_warnings():
             warnings.simplefilter( "ignore", category = UserWarning )
+            pnts, lbls = bbox_samples( bbox )
             sam_mask, sam_scores, sam_logits = self.sam_predictor.predict( 
-                box = bbox,
-                point_coords = [bbox_center( bbox ),],
-                point_labels = np.ones( (1,) )
+                box          = bbox,
+                point_coords = pnts,
+                point_labels = lbls
             )
         sam_mask = np.all( sam_mask, axis = 0 )
         return sam_mask, sam_scores, sam_logits
