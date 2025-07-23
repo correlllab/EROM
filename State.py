@@ -9,9 +9,9 @@ import matplotlib.patches as patches
 
 import numpy as np
 
-from utils import  deep_copy_memory_list
+from utils import deep_copy_memory_list, snap_z_to_nearest_block_unit_above_zero
 from aspire.env_config import env_var
-from aspire.symbols import ( ObjPose, GraspObj, euclidean_distance_between_symbols )
+from aspire.symbols import ( ObjPose, GraspObj, euclidean_distance_between_symbols, extract_pose_as_homog )
 
 ########## LOGGER ##################################################################################
 
@@ -331,7 +331,12 @@ class PoseCheater:
                 if sMin is not None:
                     lSet.add( id( lSym ) )
                     cSet.add( rSym.label )
-                    rSym.pose = sMin.pose
+
+                    # WARNING: HACK
+                    nuPose = extract_pose_as_homog( sMin )
+                    nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
+                    rSym.pose.pose = nuPose
+
                     dlta = True
                 # if not p_collide_return( rSym ):
                 rtnSym.append( rSym )

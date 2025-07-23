@@ -174,27 +174,35 @@ _BBOX_GAUSS_DIV = 4.0 # 3.5
 #             rtnArr[i] = sample_vec_normal_int( center, scale )
 #         return rtnArr
 
-def bbox_center( bbox : list | np.ndarray ) -> np.ndarray:
-    """ Sample independent normal coordinates in a boudning box """
-    bbox   = np.array( bbox )
-    if len( bbox.shape ) < 2: # If we got the linear format, Convert to 2-row format
-        bbox = bbox.reshape( 2, -1 )
-    ctr = np.sum( bbox, axis = 0 )/2.0
-    return [int(elem) for elem in ctr.tolist()]
+def indexatize_arr_as_list( arr : np.ndarray | list ) -> list:
+    """ Make the multi-dim `arr` suitable to use as indices """
+    rtnArr = deque()
+    if isinstance( arr, np.ndarray ):
+        arr = arr.tolist()
+    for elem in arr:
+        if isinstance( elem, (np.ndarray, list,) ):
+            rtnArr.append( indexatize_arr_as_list( elem ) )
+        else:
+            rtnArr.append( int(elem) )
+    return list( rtnArr )
+    
 
 
 def bbox_samples( bbox : list | np.ndarray ) -> np.ndarray:
-    """ Sample independent normal coordinates in a bounding box """
+    """ Get sample points for SAM2, WARNING: ASSUMES OBJECT TAKES UP MOST OF BBOX """
+    _SCALE_DIV = 4.0 # 8.0
     bbox   = np.array( bbox )
     if len( bbox.shape ) < 2: # If we got the linear format, Convert to 2-row format
         bbox = bbox.reshape( 2, -1 )
     dif = np.subtract( bbox[1], bbox[0] )
-    scl = np.linalg.norm( dif ) / 8.0
+    scl = np.linalg.norm( dif ) / _SCALE_DIV
     drc = vec_unit( dif )
-    ctr = np.sum( bbox, axis = 0 )/2.0
-    pt1 = ctr + drc * scl
-    pt2 = bbox[0] + drc * (-scl)
-    pt3 = bbox[1] + drc * scl
+    # Inside Points #
+    ctr = indexatize_arr_as_list( np.sum( bbox, axis = 0 )/2.0 )
+    pt1 = indexatize_arr_as_list( ctr + drc * scl )
+    # Outside Points #
+    pt2 = indexatize_arr_as_list( bbox[0] + drc * (-scl) )
+    pt3 = indexatize_arr_as_list( bbox[1] + drc * scl )
     return [ctr, pt1, pt2, pt3,], [1,1,0,0,]
 
 
