@@ -1133,6 +1133,29 @@ class LUMP:
         Rmatrix = bases_from_xB_zB( camXbasis, lookDir, asRotMtx = True )
         camPose = homog_xform( Rmatrix, camPosn )
         return self.effector_pose_from_camera_pose( camPose )
+    
+
+    def promising_shots_from_history( self, histDQue : deque, dNudge_m : float = 0.070 ):
+        """ Look for shots that segmented the blocks, but did not result in PCDs """
+        Ndqu     = len( histDQue )
+        srch     = True
+        idx      = -1
+        oldShots = deque()
+
+        while srch:
+            datum = None
+            while idx > -Ndqu:
+                datum = histDQue[ idx ]
+                idx  -= 1
+                if datum['msg'] == "ObsMeta":
+                    break
+            for hit_i in datum['data']['hits']:
+                pass
+
+                
+
+
+        
 
 
     def run_birds_eye_search( self, centerXY : np.ndarray, zLo : float, zHi : float, Nshots : int = 3 ):

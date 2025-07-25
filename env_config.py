@@ -89,7 +89,7 @@ def set_experiment_env():
     env_sto( "_VERBOSE"     , True )
     env_sto( "_USE_GRAPHICS", False )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
-    env_sto( "_SHOW_SEGMENT", False )
+    env_sto( "_SHOW_SEGMENT", True )
 
     env_sto( "_USE_Z_SNAP" , False )
 
@@ -101,7 +101,7 @@ def set_experiment_env():
     env_sto( "_Z_STACK_BOOST", 0.00*env_var("_BLOCK_SCALE") )
     # env_sto( "_Z_STACK_BOOST", 0.125*env_var("_BLOCK_SCALE") )
 
-    env_sto( "_N_INTAKE_SCANS"   ,   1     )
+    env_sto( "_N_INTAKE_SCANS", 1 )
 
     env_sto( "_N_XTRA_SPOTS",   3     )
     env_sto( "_N_REQD_OBJS" ,   3     )
@@ -138,12 +138,12 @@ def set_experiment_env():
     env_sto( "_WIDE_PLACEMENT" , 3.000*env_var("_BLOCK_SCALE") ) # 2025-02-25: ?? WINNING PARAMS ??
 
 
-    env_sto( "_WIDE_Z_ABOVE", 1.75*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_Z_ABOVE" , 1.75*env_var("_BLOCK_SCALE") )
     env_sto( "_SMUSH_Z_ABOVE", 0.80*env_var("_BLOCK_SCALE") )
 
-    env_sto( "_ROBOT_FREE_SPEED", 0.125 * 3.5 ) 
-    env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 2.0 )
-    env_sto( "_ROBOT_LIN_ACCEL" , 0.500 * 1.5 )
+    env_sto( "_ROBOT_FREE_SPEED", 0.125 * 3.50 ) 
+    env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 2.00 )
+    env_sto( "_ROBOT_LIN_ACCEL" , 0.500 * 1.25 )
 
     env_sto( "_ACCEPT_POSN_ERR" , 1.00*env_var( "_BLOCK_SCALE" ) ) # 0.60 # 0.75 # 0.90
     

@@ -324,6 +324,35 @@ class Perception_OWLv2:
                 # Add endpoint pair to the list
                 edge_endpoints.append( ((x1, y1,), (x2, y2,),) )
         return list( edge_endpoints )
+    
+
+    def alt_detect_edges( self ):
+        """ Identify and mark straight edges in the image """
+        # Convert to grayscale for edge detection
+        gray = cv2.cvtColor( self.imgUD, cv2.COLOR_BGR2GRAY )
+
+        # Preprocessing: reduce noise while preserving edges
+        # Bilateral filter reduces noise but keeps edges sharp
+        filtered = cv2.bilateralFilter( gray, 9, 75, 75 )
+        
+        # Adaptive histogram equalization for better contrast
+        clahe    = cv2.createCLAHE( clipLimit = 2.0, tileGridSize = (8,8))
+        enhanced = clahe.apply( filtered )
+        
+        # Edge detection with Canny
+        # edges = cv2.Canny( enhanced, 100, 300, apertureSize = 3 )
+        # edges = cv2.Canny( enhanced,  90, 270, apertureSize = 3 )
+        edges = cv2.Canny( enhanced,  80, 240, apertureSize = 3 )
+
+        # Morphological operations to connect broken edges
+        kernel = np.ones( (3,3), np.uint8 )
+        edges = cv2.morphologyEx( edges, cv2.MORPH_CLOSE, kernel )
+        
+        # Find contours
+        contours, _ = cv2.findContours( edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE )
+
+        # Draw contours on result image
+        cv2.drawContours( self.imgUD, contours, -1, (0, 0, 0), 3 )
 
 
     def scale_thresh_by_factor( self, factor ):
@@ -428,7 +457,8 @@ class Perception_OWLv2:
             if self._ADD_CONTR:
                 self.contrastify( 1.25 ) # 1.5 # 1.75 # 2.0
             if self._DRW_EDGES:
-                self.get_Hough_edges()
+                # self.get_Hough_edges()
+                self.alt_detect_edges()
 
         else:
             rgbd_image = self.cloud.rgbd
