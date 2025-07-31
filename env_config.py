@@ -75,7 +75,8 @@ def set_experiment_env():
     env_sto( "_SEG_SCORE_THRESH", 0.100*_THRESH_FACTOR ) # 0.025 # 0.075 # 0.100
     env_sto( "_OWL2_TOPK"       , 1     )
 
-    env_sto( "_USE_SAM2_SAMPLES", False )
+    env_sto( "_USE_SAM2_SAMPLES", False ) 
+    # env_sto( "_USE_SAM2_SAMPLES", True ) # 2025-07-31: ?? BAD ??
 
     env_sto( "_Z_SAFE", 0.350 )
 
@@ -89,7 +90,8 @@ def set_experiment_env():
     env_sto( "_VERBOSE"     , True )
     env_sto( "_USE_GRAPHICS", False )
     env_sto( "_SCAN_ALPHA"  , 0.35  )
-    env_sto( "_SHOW_SEGMENT", True )
+    # env_sto( "_SHOW_SEGMENT", True )
+    env_sto( "_SHOW_SEGMENT", False )
 
     env_sto( "_USE_Z_SNAP" , False )
 
@@ -141,9 +143,9 @@ def set_experiment_env():
     env_sto( "_WIDE_Z_ABOVE" , 1.75*env_var("_BLOCK_SCALE") )
     env_sto( "_SMUSH_Z_ABOVE", 0.80*env_var("_BLOCK_SCALE") )
 
-    env_sto( "_ROBOT_FREE_SPEED", 0.125 * 3.50 ) 
-    env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 2.00 )
-    env_sto( "_ROBOT_LIN_ACCEL" , 0.500 * 1.25 )
+    env_sto( "_ROBOT_FREE_SPEED", 0.125 * 2.00 ) # 2.00 # 2.50 # 3.00 # 3.50
+    env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 1.50 ) # 1.50 # 2.00
+    env_sto( "_ROBOT_LIN_ACCEL" , 0.500 * 1.00 ) # 0.75 # 1.00 # 1.25 # 1.50
 
     env_sto( "_ACCEPT_POSN_ERR" , 1.00*env_var( "_BLOCK_SCALE" ) ) # 0.60 # 0.75 # 0.90
     

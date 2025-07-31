@@ -707,13 +707,15 @@ class LUMP:
 
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
 
-        _CONFIG_FACTOR = 10.0
-        _TABLE_FACTOR  = 10.0
-        _REACH_FACTOR  =  7.0
-        _DELTA_FACTOR  =  2.0
-        _DELTA_MAX     = [np.pi for _ in range(6)]
-        _DELTA_MAX[-1] = np.pi*2.0
-        _DELTA_DIVISOR = np.linalg.norm( _DELTA_MAX )
+        _CONFIG_FACTOR     = 10.0
+        _TABLE_FACTOR      = 10.0
+        _REACH_FACTOR      =  7.0
+        _CLOSE_FACTOR      = 14.0
+        _DELTA_FACTOR      =  2.0
+        _DELTA_MAX         = [np.pi for _ in range(6)]
+        _DELTA_MAX[-1]     = np.pi*2.0
+        _DELTA_DIVISOR     = np.linalg.norm( _DELTA_MAX )
+        _ABOVE_BASE_BUFFER = 0.200
 
         def sep_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
             """ Compute badness based on angle between this and existing shots """
@@ -729,7 +731,10 @@ class LUMP:
             nrg += max( 0.0, _RBT_TABLE_MARGIN/max(0.005, zQ) )*_TABLE_FACTOR # Penalize being near the table
             hit = 1.0 if self.p_collision_q( q ) else 0.0
             nrg += hit*_COLLISION_NRG_PENALTY
-            nrg += np.linalg.norm( pose[0:2,3] )*_REACH_FACTOR
+
+            dXY  = np.linalg.norm( pose[0:2,3] )
+            nrg += (_ABOVE_BASE_BUFFER / max( 0.005, dXY ))*_CLOSE_FACTOR + dXY*_REACH_FACTOR
+            
             nrg += (np.linalg.norm( np.subtract( qRef, q ) )/_DELTA_DIVISOR + abs(qRef[-1] - q[-1])/np.pi)*_DELTA_FACTOR
             nrg += max( 0.0, 0.75 - np.linalg.norm( extract_position( pose ) ) )/0.75*4.0
             for theta_j in angl:

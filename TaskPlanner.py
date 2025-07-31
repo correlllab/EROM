@@ -911,17 +911,24 @@ if __name__ == "__main__":
 
         except KeyboardInterrupt:
             # User Panic: Attempt to shut down gracefully
-            print( f"\nSystem SHUTDOWN initiated by user!, Planner Status: {planner.status}\n" )
+            try:
+                planner.shutdown()
+                print( f"\nSystem SHUTDOWN initiated by user!, Planner Status: {planner.status}\n" )
+            except NameError as e:
+                print( f"Planner never instantiated!\n{e}" )
             print_exc()
             print()
-            planner.shutdown()
+            
 
         except Exception as e:
             # Bad Thing: Attempt to shut down gracefully
             print( f"Something BAD happened!: {e}" )
             print_exc()
             print()
-            planner.shutdown()
+            try:
+                planner.shutdown()
+            except NameError as e:
+                print( f"Planner never instantiated!\n{e}" )
 
     os.system( 'kill %d' % os.getpid() ) 
 
