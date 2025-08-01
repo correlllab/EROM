@@ -8,7 +8,12 @@
 - [ ] There are two reasons for object search
 	- [ ] Action Failure: Erase cache
 	- [ ] Determ Failure: Retain Cache
-## COLLISIONS!
+## COLLISIONS && SINGULARITIES!
+- [ ] Add planar collision object type
+- [ ] Add table collision plane
+- [ ] Add collision plane through robot base + margin
+
+
 ### Level 0
 - [ ] Check frames 4-6 against the base
 ### Level 1, [FCL](https://github.com/BerkeleyAutomation/python-fcl)

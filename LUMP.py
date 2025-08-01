@@ -28,7 +28,8 @@ from homog_utils import ( posn_from_xform, bases_from_xform, R_krot, R_z, homog_
                           diff_unit, )
 from dh_mp import FK_DH_chain, dh_link_homog
 
-from Geometry import get_D405_FOV_frustum, p_sphere_inside_plane_list, grid_points_on_plane, bases_from_xB_zB
+from Geometry import ( get_D405_FOV_frustum, p_sphere_inside_plane_list, grid_points_on_plane, bases_from_xB_zB, 
+                       point_above_plane, )
 from draw_beliefs import render_memory_list
 from utils import get_pose_attr
 
@@ -520,6 +521,11 @@ class LUMP:
         self.obstacles.append({ 'type': "aabb", 'geo' : np.array( aabb ) })
 
 
+    def register_planar_obstacle( self, pointNormal ):
+        """ Add an Axis-Aligned Boudning Box that the robot should avoid """
+        self.obstacles.append({ 'type': "plane", 'geo' : np.array( pointNormal ) })
+
+
     @staticmethod
     def p_point_in_aabb( pnt, aabb, margin = _RBT_TABLE_MARGIN ):
         """ Return True if the `pnt` is inside the `aabb` of arbitrary dimension """
@@ -539,15 +545,22 @@ class LUMP:
         """ Return true if the `q` would put the robot in collision """
         if not self.p_q_within_limits(q):
             return True
+        frames = LUMP.FK_all( q )
+        if not self.p_safe_pose( frames[-1] ): # Check base<->effector<->table collision
+            return True
         for obstacle in self.obstacles:
             if obstacle["type"] == "aabb":
                 aabb   = obstacle["geo"]
-                frames = LUMP.FK_all( q )
-                if not self.p_safe_pose( frames[-1] ): # Check base<->effector<->table collision
-                    return True
                 for frm in frames:
                     posn = extract_position( frm )
                     if LUMP.p_point_in_aabb( posn, aabb, margin ):
+                        return True
+            elif obstacle["type"] == "plane":
+                point = obstacle["geo"][0]
+                norml = obstacle["geo"][1] 
+                for frm in frames[3:]:
+                    posn = extract_position( frm )
+                    if not point_above_plane( posn, point, norml, margin ):
                         return True
             else:
                 raise ValueError( f"`LUMP.p_collision_q()`, UNDEFINED obstacle:\n{obstacle}\n" )
@@ -715,7 +728,7 @@ class LUMP:
         _DELTA_MAX         = [np.pi for _ in range(6)]
         _DELTA_MAX[-1]     = np.pi*2.0
         _DELTA_DIVISOR     = np.linalg.norm( _DELTA_MAX )
-        _ABOVE_BASE_BUFFER = 0.200
+        _ABOVE_BASE_BUFFER = 0.300
 
         def sep_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
             """ Compute badness based on angle between this and existing shots """

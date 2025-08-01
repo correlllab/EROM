@@ -45,16 +45,17 @@ def get_D405_FOV_frustum( camXform ):
     return rtnFOV
 
 
+def point_above_plane( qPnt, pPnt, pNrm, margin = 0.000 ):
+    """ Return True if `qPnt` is on the `pNrm` side of `pPnt`, including `margin` """
+    return (np.dot( np.subtract( qPnt, pPnt ), vec_unit( pNrm ) ) >= margin)
+
+
 def p_sphere_inside_plane_list( qCen, qRad, planeList ):
     """ Return True if a sphere with `qCen` and `qRad` can be found above every plane in `planeList` = [ ..., [point, normal], ... ] """
     if len( qCen ) == 4:
         qCen = posn_from_xform( qCen )
     for (pnt_i, nrm_i) in planeList:
-        # print(pnt_i, nrm_i)
-        dif_i = np.subtract( qCen, pnt_i )
-        dst_i = np.dot( dif_i, vec_unit( nrm_i ) )
-        # print( f"Distance to Plane: {dst_i}" )
-        if dst_i < qRad:
+        if not point_above_plane( qCen, pnt_i, nrm_i, margin = qRad ):
             return False
     return True
 
