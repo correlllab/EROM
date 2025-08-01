@@ -897,6 +897,11 @@ if __name__ == "__main__":
                 [xHi    , yLo    , 0.000,],
                 [xHi-pad, yLo+pad, 0.300,],
             ] )
+            planner.memory.mp.register_planar_obstacle( [
+                [ 0.000,  0.000, 0.000,],
+                vec_unit([-1.000, -1.000, 0.000,]),
+            ] )
+
 
             # if _TRACK_PERF:
             #     timeit( 'planner.solve_task( maxIter = 30, beginPlanPose = _EXP_BGN_POSES )', number = 1 )
