@@ -722,7 +722,7 @@ class LUMP:
 
         _CONFIG_FACTOR     = 10.0
         _TABLE_FACTOR      = 10.0
-        _REACH_FACTOR      =  7.0
+        _REACH_FACTOR      =  9.0
         _CLOSE_FACTOR      = 14.0
         _DELTA_FACTOR      =  2.0
         _DELTA_MAX         = [np.pi for _ in range(6)]
