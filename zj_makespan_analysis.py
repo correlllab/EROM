@@ -66,6 +66,7 @@ result = {
     'Ntrial' : 0,
     'outcome': list(),
     'tRun'   : list(),
+    'sRun'   : list(),
 }
 
 print( f"\nThere are {len(pkls)} files to analyze:\n" )
