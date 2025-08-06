@@ -291,6 +291,8 @@ class PoseCheater:
         lSet   = set([])
         cSet   = set([])
         dlta   = False
+        if maxDiff is None:
+            maxDiff = 4.0 * env_var('_BLOCK_SCALE')
 
         def p_collide_return( qSym ):
             """ Did we already log a symbol at this location? """
@@ -311,10 +313,23 @@ class PoseCheater:
                     rtnSym.append( rSym )
                     dlta = True
 
-        elif self.fixPose:
-            if maxDiff is None:
-                maxDiff = 4.0 * env_var('_BLOCK_SCALE')
+        elif self.fixLabel:
+            for i, rSym in enumerate( symLst ):
+                sMin = None
+                dMin = 1e9
+                for j, lSym in enumerate( lastFrame ):
+                    d_ij = euclidean_distance_between_symbols( rSym, lSym )
+                    if (d_ij > 0.0) and (d_ij <= maxDiff) and (d_ij < dMin) and (not p_collide_return( lSym )):
+                        dMin = d_ij
+                        sMin = lSym
+                if (sMin is not None):
+                    lSet.add( id( lSym ) )
+                    cSet.add( rSym.label )
+                    if sMin.label not in cSet:
+                        rSym.label = sMin.label
+                rtnSym.append( rSym )
 
+        elif self.fixPose:
             print( "CHEAT OBJECTS:" )
             for j, lSym in enumerate( lastFrame ):
                 print( f"\t{lSym}" )
@@ -349,7 +364,9 @@ class PoseCheater:
                     if (lSym.label not in cSet) and (not p_collide_return( lSym )):
                         cSet.add( lSym.label )
                         rtnSym.append( lSym )
-                
+        else:
+            print( "NO CHEAT APPLIED!" )     
+
         if dlta:
             self.symbols.append( rtnSym )
         return rtnSym

@@ -1170,11 +1170,6 @@ class LUMP:
             for hit_i in datum['data']['hits']:
                 pass
 
-                
-
-
-        
-
 
     def run_birds_eye_search( self, centerXY : np.ndarray, zLo : float, zHi : float, Nshots : int = 3 ):
         """ Look at random spots from random points, and return True if we found all the things! """
