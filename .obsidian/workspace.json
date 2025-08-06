@@ -24,22 +24,6 @@
             }
           },
           {
-            "id": "f9dad22835caca8b",
-            "type": "leaf",
-            "pinned": true,
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "za_Notes/Log/2025-06-26.md",
-                "mode": "source",
-                "source": false
-              },
-              "pinned": true,
-              "icon": "lucide-file",
-              "title": "2025-06-26"
-            }
-          },
-          {
             "id": "9a1bb40c7afbfaa1",
             "type": "leaf",
             "pinned": true,
@@ -58,19 +42,21 @@
           {
             "id": "4978a13f0b07bb92",
             "type": "leaf",
+            "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/LUMP.md",
+                "file": "za_Notes/Log/2025-08-06.md",
                 "mode": "source",
                 "source": false
               },
+              "pinned": true,
               "icon": "lucide-file",
-              "title": "LUMP"
+              "title": "2025-08-06"
             }
           }
         ],
-        "currentTab": 3
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -217,6 +203,10 @@
   },
   "active": "4978a13f0b07bb92",
   "lastOpenFiles": [
+    "data/2025-08_Unused/EROM-Memories_08-06-2025_15-30-07.pkl",
+    "data/2025-08_Unused",
+    "za_Notes/LUMP.md",
+    "za_Notes/Log/2025-08-06.md",
     "data/2025-08_SC-KP/EROM-Memories_08-01-2025_16-40-32.pkl",
     "data/2025-08_SC-KP/EROM-Memories_08-01-2025_16-19-10.pkl",
     "data/2025-08_SC-KP/EROM-Memories_08-01-2025_15-54-46.pkl",
@@ -226,10 +216,7 @@
     "data/2025-08_SC-KP/EROM-Memories_08-01-2025_14-49-07.pkl",
     "data/2025-08_SC-KP/EROM-Memories_08-01-2025_14-41-39.pkl",
     "data/2025-08_SC-KP/EROM-Memories_08-01-2025_14-32-11.pkl",
-    "data/2025-08_SC-KP/EROM-Memories_08-01-2025_14-22-32.pkl",
-    "data/2025-08_SC-KP/EROM-Memories_08-01-2025_12-20-14.pkl",
     "za_Notes/OWLv2 Vision Pipeline.md",
-    "za_Notes/LUMP.md",
     "za_Notes/Log/2025-07-16.md",
     "za_Notes/DEV_PLAN.md",
     "za_Notes/Daydreams.md",
