@@ -162,6 +162,8 @@ class PoseCheater:
 
     def last_known_symbols( self ):
         """ Get last known symbol locations, even if we goofed last time """
+        if self.trouble:
+            return list()
         if len( self.symbols ):
             rtnSym = self.symbols[-1]
             index  = 2
@@ -184,6 +186,8 @@ class PoseCheater:
     def last_known_beliefs( self ):
         """ Get last known belief locations, even if we goofed last time """
         # WARNING: STATE LEAKAGE
+        if self.trouble:
+            return list()
         if len( self.beliefs ):
             rtnSym = self.beliefs[-1]
             index  = 2
@@ -314,6 +318,7 @@ class PoseCheater:
                     dlta = True
 
         elif self.fixLabel:
+            dlta = True
             for i, rSym in enumerate( symLst ):
                 sMin = None
                 dMin = 1e9
@@ -324,10 +329,10 @@ class PoseCheater:
                         sMin = lSym
                 if (sMin is not None):
                     lSet.add( id( lSym ) )
-                    cSet.add( rSym.label )
                     if sMin.label not in cSet:
                         rSym.label = sMin.label
                 rtnSym.append( rSym )
+                cSet.add( rSym.label )
 
         elif self.fixPose:
             print( "CHEAT OBJECTS:" )

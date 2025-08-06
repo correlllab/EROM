@@ -783,6 +783,7 @@ class LUMP:
                 nuShot = self.plan_3d_shot_centroid( objects, dBackup, energyFunc = self.get_pose_energy_func( shots, centroid, desiredAngularSeparation_rad ) )
                 if nuShot is not None:
                     shots.append( nuShot )
+                print( f"Planned {len( shots )} shots!" )
 
         return [np.array( shot[1] ) for shot in shots]
     
