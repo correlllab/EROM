@@ -41,7 +41,10 @@ _RBT_BASE_BUFFER  = 0.300
 # _RBT_BASE_FACTOR  = 1.500
 # _RBT_TABLE_MARGIN = 0.070
 # _RBT_TABLE_MARGIN = 0.140
-_RBT_TABLE_MARGIN = 0.210
+# _RBT_TABLE_MARGIN = 0.210
+# _RBT_TABLE_MARGIN = 0.250
+# _RBT_TABLE_MARGIN = 0.300
+_RBT_TABLE_MARGIN = 0.350
 _REVERSE_QUERIES  = {
     "bluBlock": {'query': "a photo of a small block", 'abbrv': "blu", },
     "ylwBlock": {'query': "a photo of a small block", 'abbrv': "ylw", },
@@ -434,6 +437,7 @@ def get_aabb( ptsLst ):
 
 ########## MOTION PLANNER ##########################################################################
 _COLLISION_NRG_PENALTY = 20.0 #13.0
+_NEAR_SHOT_PEN         =  6.0
 _JOINT_Q_MARGIN        = np.pi/8.0
 
 class LUMP:
@@ -441,7 +445,13 @@ class LUMP:
 
     ## Problem-Specific Static Vars ##
     ZTableCam   : float = -0.081666 - 0.017
-    dShot       : float = 3.00*env_var( "_MIN_CAM_PCD_DIST_M" )
+
+    # dShot : float = 3.000*env_var( "_MIN_CAM_PCD_DIST_M" )
+    # dShot : float = 2.750*env_var( "_MIN_CAM_PCD_DIST_M" )
+    dShot : float = 2.625*env_var( "_MIN_CAM_PCD_DIST_M" )
+    # dShot : float = 2.500*env_var( "_MIN_CAM_PCD_DIST_M" )
+    # dShot : float = 2.000*env_var( "_MIN_CAM_PCD_DIST_M" )
+    
     dLoc        : float = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
     _SEP_DIST_M : float =  0.150
 
@@ -723,12 +733,13 @@ class LUMP:
         return rtnPath
     
 
-    @staticmethod
-    def greatest_config_energy_for_path( qRef : list | np.ndarray, q : list | np.ndarray, div : int = 6 ):
+    def greatest_config_energy_for_path( self, qRef : list | np.ndarray, q : list | np.ndarray, div : int = None ):
+        if div is None:
+            div = env_var("_N_PATH_DIV")
         poseRef = LUMP.FK( qRef )
         poseQry = LUMP.FK( q    )
-        posnRef = poseRef[0:3,3] 
-        posnQry = poseQry[0:3,3] 
+        posnRef = poseRef[0:3,3].copy().reshape( (3,) )
+        posnQry = poseQry[0:3,3].copy().reshape( (3,) )
         directn = vec_unit( posnQry - posnRef )
         distanc = diff_mag( posnQry,  posnRef )
         rotnRef = Rotation.from_matrix( poseRef[0:3,0:3] )
@@ -743,7 +754,7 @@ class LUMP:
             factor = i/div
             pose_i[0:3,0:3] = slerp( factor ).as_matrix()
             pose_i[0:3,3  ] = posnRef + directn * (distanc*factor)
-            soln_i = LUMP.IK( pose_i )
+            soln_i = self.IK( pose_i, suppressCache = True )
             if soln_i is not None:
                 sMax = max( sMax, LUMP.config_energy( qRef, soln_i ) )
         return sMax
@@ -751,9 +762,9 @@ class LUMP:
 
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
         """ Enclose a function that calculates the config penalty relative to the current config """
-        _CONFIG_FACTOR     = 10.0
+        _CONFIG_FACTOR     = 16.0
         _TABLE_FACTOR      = 12.0
-        _REACH_FACTOR      = 11.0
+        _REACH_FACTOR      = 13.0
         _CLOSE_FACTOR      = 16.0
         _DELTA_FACTOR      =  2.0
         _DELTA_MAX         = [np.pi for _ in range(6)]
@@ -772,7 +783,7 @@ class LUMP:
             angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs if (diff_mag( vc_i, vc_f ) > 0.0)]
 
             # nrg = LUMP.config_energy( qRef, q ) * _CONFIG_FACTOR
-            nrg = LUMP.greatest_config_energy_for_path( qRef, q ) * _CONFIG_FACTOR
+            nrg = self.greatest_config_energy_for_path( qRef, q ) * _CONFIG_FACTOR
 
             zQ   = pose[2,3]
             nrg += max( 0.0, _RBT_TABLE_MARGIN/max(0.005, zQ) )*_TABLE_FACTOR # Penalize being near the table
@@ -1008,7 +1019,6 @@ class LUMP:
         _VIEW_PENALTY  = 1.0
         _EDGE_PENALTY  = 0.75
         _MULT_FACTOR   = env_var("_PERC_MULT_FACTOR")
-        _NEAR_SHOT_PEN = 1.25
         
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
@@ -1134,9 +1144,9 @@ class LUMP:
     def rank_search_shots( self ):
         """ Obtain a ranking of all planned shots """
         _EXCLUDE_PENALTY = 0.75
-        _REPEAT_PENALTY  = 6.00 # 4.0 # 2.00 # 1.00 # 0.65
+        _REPEAT_PENALTY  = 8.00 # 6.0 # 4.0 # 2.00 # 1.00 # 0.65
         _EDGE_PENALTY    = 0.75
-        _NEAR_SHOT_PEN   = 1.50
+        
 
         self.set_state_from_robot()
         centroid = LUMP.SearchTarget.get_centroid( self.targets )
@@ -1221,8 +1231,8 @@ class LUMP:
         hiCntr[2]  = zHi
         loCntr[:2] = centerXY
         loCntr[2]  = zLo
-        hiPnts = grid_points_on_plane( hiCntr, [0.0,0.0,1.0,], 0.050, [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS") )
-        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], 0.050, [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS") )
+        hiPnts = grid_points_on_plane( hiCntr, [0.0,0.0,1.0,], env_var("_SEARCH_GRID_UNIT"), [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS") )
+        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], env_var("_SEARCH_GRID_UNIT"), [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS") )
         Npoint = hiPnts.shape[0]
         # print( hiPnts.shape )
         eyePts = [ np.array( hiPnts[ choice( list( range( Npoint ) ) ) ] ) for _ in range( Nshots ) ]
@@ -1241,7 +1251,7 @@ class LUMP:
             self.mov_cb( robotPose )
             self.see_cb( i , Nshots )
 
-        return self.chk_cb()
+        return self.chk_cb(), self.get_cb()
 
 
     def run_object_search( self, proposedObjects : list[GraspObj] ):
@@ -1254,16 +1264,26 @@ class LUMP:
         _FINGER_LEN_M = 0.100
 
         ## Run init scan and return early if we found the objects ##
-        if self.run_birds_eye_search( 
-            centerXY = [ env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
-                         env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, ], 
-            # centerXY = [ -0.340-0.100, -0.130-0.100, ], 
+        found, propObj = self.run_birds_eye_search( 
+            centerXY = [ env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")*(1.0/2.0), 
+                         env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")*(1.0/2.0), ], 
             zLo      = 0.0, 
             zHi      = env_var("_Z_SAFE"), 
-            # Nshots   = env_var("_N_SEARCH_SHOTS")+1
             Nshots   = env_var("_N_SEARCH_SHOTS")
-        ):
+        )
+        if found:
             return True
+
+        while not len( propObj ):
+            _, propObj = self.run_birds_eye_search( 
+                centerXY = [ env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
+                            env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, ], 
+                zLo      = 0.0, 
+                zHi      = env_var("_Z_SAFE"), 
+                Nshots   = env_var("_N_SEARCH_SHOTS")
+            )
+        if len( propObj ) > len( proposedObjects ):
+            proposedObjects = propObj[:]
 
         self.searchActive = True
         self.shotHist     = deque()

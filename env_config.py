@@ -246,7 +246,6 @@ def set_experiment_env():
 
     env_sto( "_USE_SPACE_HACK", False )
     env_sto( "_USE_PERC_HACK" , True )
-
     
 
     env_sto( "_USE_POSE_CHEAT", True )
@@ -256,8 +255,12 @@ def set_experiment_env():
 
 
     env_sto( "_N_PERC_SHOTS"    , 3 )
-    env_sto( "_PERC_MULT_FACTOR", 8 )
+    env_sto( "_N_PATH_DIV"      , 2 ) # 4 # 6
+    env_sto( "_PERC_MULT_FACTOR", 2 ) # 3 # 8
     env_sto( "_N_SEARCH_SHOTS"  , 3 )
-    env_sto( "_N_GRID_EXPAND"   , 3 )
+
+    env_sto( "_N_GRID_EXPAND"   , 3 ) 
+    env_sto( "_SEARCH_GRID_UNIT", 0.030 ) # 0.050
+
     env_sto( "_N_GRID_HALF_PTS" , 2 )
     env_sto( "_RETRY_CLOUDS"    , True )

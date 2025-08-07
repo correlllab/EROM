@@ -201,6 +201,7 @@ class PoseCheater:
 
     def log_symbols( self, symLst ):
         """ Store the most recent symbols """
+        self.trouble = False
         self.symbols.append( deep_copy_memory_list( symLst ) )
 
 
@@ -237,6 +238,8 @@ class PoseCheater:
             # lastFrame = self.repair_symbol_poses( lastFrame )
 
             self.symbols.append( lastFrame[:] )
+        else:
+            print( "`log_successful_action`: NO FRAME TO MODIFY!" )
         
 
     def log_failed_action( self, poseBgn, poseEnd ):
@@ -331,6 +334,11 @@ class PoseCheater:
                     lSet.add( id( lSym ) )
                     if sMin.label not in cSet:
                         rSym.label = sMin.label
+
+                nuPose = extract_pose_as_homog( rSym )
+                nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
+                rSym.pose.pose = nuPose
+                
                 rtnSym.append( rSym )
                 cSet.add( rSym.label )
 
