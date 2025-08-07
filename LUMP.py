@@ -428,7 +428,7 @@ def get_aabb( ptsLst ):
 
 
 ########## MOTION PLANNER ##########################################################################
-_COLLISION_NRG_PENALTY = 11.0
+_COLLISION_NRG_PENALTY = 20.0 #13.0
 _JOINT_Q_MARGIN        = np.pi/8.0
 
 class LUMP:
@@ -721,9 +721,9 @@ class LUMP:
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
 
         _CONFIG_FACTOR     = 10.0
-        _TABLE_FACTOR      = 10.0
-        _REACH_FACTOR      =  9.0
-        _CLOSE_FACTOR      = 14.0
+        _TABLE_FACTOR      = 12.0
+        _REACH_FACTOR      = 11.0
+        _CLOSE_FACTOR      = 16.0
         _DELTA_FACTOR      =  2.0
         _DELTA_MAX         = [np.pi for _ in range(6)]
         _DELTA_MAX[-1]     = np.pi*2.0
@@ -884,6 +884,8 @@ class LUMP:
                        [0.0, 0.0, -env_var("_BLOCK_SCALE"),], [0.0, 0.0, env_var("_BLOCK_SCALE"),],]
             prob    = 0.25
             while len( addLst ) < N:
+                if not len( things ):
+                    break
                 for thing in things:
                     if random() < prob:
                         nuObj = thing.copy()
@@ -1123,6 +1125,10 @@ class LUMP:
 
         self.ranking = list( nuLst )
         self.ranking.sort( key = lambda x: x['score'] )
+
+        print( type( self.ranking ) )
+        if (not isinstance( self.ranking, (list, deque) )) or (not len( self.ranking )):
+            return None
 
         topPose = self.ranking[0]['pose']
         for shot in self.ranking[1:]:
