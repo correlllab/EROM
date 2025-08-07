@@ -18,6 +18,7 @@ import numpy as np
 from numpy import linalg
 from vispy import scene
 from vispy.visuals import transforms
+from scipy.spatial.transform import Rotation, Slerp
 
 from magpie_control.poses import vec_unit
 from magpie_control.ur5 import UR5_Interface
@@ -252,15 +253,19 @@ def invKine( desired_pos ):# T60
 
 ########## HELPER FUNCTIONS ########################################################################
 
-def sample_on_sphere( center = [0.0, 0.0, 0.0,], radius = 1.0, N = 1 ):
+def sample_on_sphere( center = [0.0, 0.0, 0.0,], radius = 1.0, N = 1, Zpos = True ):
     """ Generate `N` point(s) on a sphere with `center` and `radius` """
     center = np.array( center )
     radius = abs( radius )
     N      = int( N )
 
-    def gen_pnt():
+    def gen_pnt( posDome = True ):
         """ Get one point """
-        pnt = np.array([ -1.0+2.0*random() for _ in range(3) ])
+        if posDome:
+            smp = [ -1.0+2.0*random() for _ in range(2) ] + [random(),]
+        else:
+            smp = [ -1.0+2.0*random() for _ in range(3) ]
+        pnt = np.array( smp )
         mag = np.linalg.norm( pnt )
         if mag > 0.0:
            pnt /= mag
@@ -270,11 +275,11 @@ def sample_on_sphere( center = [0.0, 0.0, 0.0,], radius = 1.0, N = 1 ):
             return np.array([1.0, 0.0, 0.0,])
         
     if N == 1:
-        return gen_pnt()
+        return gen_pnt( Zpos )
     elif N > 1:
         rtnLst = deque()
         for _ in range(N):
-            rtnLst.append( gen_pnt() )
+            rtnLst.append( gen_pnt( Zpos ) )
         return np.array( list( rtnLst ) )
     
 
@@ -718,8 +723,34 @@ class LUMP:
         return rtnPath
     
 
-    def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
+    @staticmethod
+    def greatest_config_energy_for_path( qRef : list | np.ndarray, q : list | np.ndarray, div : int = 6 ):
+        poseRef = LUMP.FK( qRef )
+        poseQry = LUMP.FK( q    )
+        posnRef = poseRef[0:3,3] 
+        posnQry = poseQry[0:3,3] 
+        directn = vec_unit( posnQry - posnRef )
+        distanc = diff_mag( posnQry,  posnRef )
+        rotnRef = Rotation.from_matrix( poseRef[0:3,0:3] )
+        rotnQry = Rotation.from_matrix( poseQry[0:3,0:3] )
+        # Create a Slerp object with the start and end rotations
+        times     = [0, 1]  # Represents the start and end points of the interpolation
+        rotations = Rotation.concatenate( [rotnRef, rotnQry,] )
+        slerp     = Slerp( times, rotations )
+        pose_i    = np.eye(4)
+        sMax      = -1e9
+        for i in range( div+1 ):
+            factor = i/div
+            pose_i[0:3,0:3] = slerp( factor ).as_matrix()
+            pose_i[0:3,3  ] = posnRef + directn * (distanc*factor)
+            soln_i = LUMP.IK( pose_i )
+            if soln_i is not None:
+                sMax = max( sMax, LUMP.config_energy( qRef, soln_i ) )
+        return sMax
 
+
+    def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
+        """ Enclose a function that calculates the config penalty relative to the current config """
         _CONFIG_FACTOR     = 10.0
         _TABLE_FACTOR      = 12.0
         _REACH_FACTOR      = 11.0
@@ -739,7 +770,10 @@ class LUMP:
             vecs = [np.subtract( extract_position(shot[1]), centroid ) for shot in shots if (shot is not None)]
             vecs.append( np.array([0.0, 0.0, 1.0,]) ) # Penalize being exactly vertical
             angl = [angle_between_vectors_rad(vc_i, vc_f) for vc_f in vecs if (diff_mag( vc_i, vc_f ) > 0.0)]
-            nrg  = LUMP.config_energy( qRef, q ) * _CONFIG_FACTOR
+
+            # nrg = LUMP.config_energy( qRef, q ) * _CONFIG_FACTOR
+            nrg = LUMP.greatest_config_energy_for_path( qRef, q ) * _CONFIG_FACTOR
+
             zQ   = pose[2,3]
             nrg += max( 0.0, _RBT_TABLE_MARGIN/max(0.005, zQ) )*_TABLE_FACTOR # Penalize being near the table
             hit = 1.0 if self.p_collision_q( q ) else 0.0
@@ -973,7 +1007,7 @@ class LUMP:
             N = env_var("_N_PERC_SHOTS")
         _VIEW_PENALTY  = 1.0
         _EDGE_PENALTY  = 0.75
-        _MULT_FACTOR   = 7 #10
+        _MULT_FACTOR   = env_var("_PERC_MULT_FACTOR")
         _NEAR_SHOT_PEN = 1.25
         
         targets  = list( proposedObjects )

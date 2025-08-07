@@ -255,8 +255,9 @@ def set_experiment_env():
     env_sto( "_CHEAT_LKG"     , False and env_var("_USE_POSE_CHEAT") )
 
 
-    env_sto( "_N_PERC_SHOTS"   , 3 )
-    env_sto( "_N_SEARCH_SHOTS" , 3 )
-    env_sto( "_N_GRID_EXPAND"  , 3 )
-    env_sto( "_N_GRID_HALF_PTS", 2 )
-    env_sto( "_RETRY_CLOUDS"   , True )
+    env_sto( "_N_PERC_SHOTS"    , 3 )
+    env_sto( "_PERC_MULT_FACTOR", 8 )
+    env_sto( "_N_SEARCH_SHOTS"  , 3 )
+    env_sto( "_N_GRID_EXPAND"   , 3 )
+    env_sto( "_N_GRID_HALF_PTS" , 2 )
+    env_sto( "_RETRY_CLOUDS"    , True )
