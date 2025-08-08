@@ -1232,11 +1232,12 @@ class LUMP:
         loCntr[:2] = centerXY
         loCntr[2]  = zLo
         hiPnts = grid_points_on_plane( hiCntr, [0.0,0.0,1.0,], env_var("_SEARCH_GRID_UNIT"), [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS") )
-        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], env_var("_SEARCH_GRID_UNIT"), [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS") )
-        Npoint = hiPnts.shape[0]
+        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], env_var("_SEARCH_GRID_UNIT"), [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS")+1 )
+        Nhi    = hiPnts.shape[0]
+        Nlo    = loPnts.shape[0]
         # print( hiPnts.shape )
-        eyePts = [ np.array( hiPnts[ choice( list( range( Npoint ) ) ) ] ) for _ in range( Nshots ) ]
-        lukPts = [ np.array( loPnts[ choice( list( range( Npoint ) ) ) ] ) for _ in range( Nshots ) ]
+        eyePts = [ np.array( hiPnts[ choice( list( range( Nhi ) ) ) ] ) for _ in range( Nshots ) ]
+        lukPts = [ np.array( loPnts[ choice( list( range( Nlo ) ) ) ] ) for _ in range( Nshots ) ]
         efPose = deque()
         for i in range( Nshots ):
             efPose.append(  self.effector_lookAt_pose( lukPts[i], eyePts[i], camXbasis = [0.0, -1.0, 0.0,] )  )
@@ -1263,25 +1264,23 @@ class LUMP:
         _N_LOOK       =  env_var("_N_SEARCH_SHOTS")
         _FINGER_LEN_M = 0.100
 
-        ## Run init scan and return early if we found the objects ##
-        found, propObj = self.run_birds_eye_search( 
-            centerXY = [ env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")*(1.0/2.0), 
-                         env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")*(1.0/2.0), ], 
-            zLo      = 0.0, 
-            zHi      = env_var("_Z_SAFE"), 
-            Nshots   = env_var("_N_SEARCH_SHOTS")
-        )
-        if found:
-            return True
-
-        while not len( propObj ):
-            _, propObj = self.run_birds_eye_search( 
-                centerXY = [ env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
-                            env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, ], 
+        def BES():
+            nonlocal self
+            return self.run_birds_eye_search( 
+                centerXY = [ env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")*(1.0/2.0), 
+                            env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")*(1.0/2.0), ], 
                 zLo      = 0.0, 
                 zHi      = env_var("_Z_SAFE"), 
                 Nshots   = env_var("_N_SEARCH_SHOTS")
             )
+
+        ## Run init scan and return early if we found the objects ##
+        found, propObj = BES()
+        if found:
+            return True
+
+        while not len( propObj ):
+            _, propObj = BES()
         if len( propObj ) > len( proposedObjects ):
             proposedObjects = propObj[:]
 
@@ -1306,7 +1305,14 @@ class LUMP:
 
         self.rank_search_shots()
 
+        ii = 0
         while not self.chk_cb():
+
+            if (((ii+1)%3) == 0):
+                found, _ = BES()
+                if found:
+                    break
+
 
             # Lower threshold for finding things
             self.viz_cb( self._VIZ_THRESH_DOWN )
@@ -1351,7 +1357,7 @@ class LUMP:
             self.rank_search_shots()
             if len( self.shots ) > _N_SHOT_TOTAL:
                 self.shots = self.shots[:_N_SHOT_TOTAL]
-
+            ii += 1
             
 
         self.searchActive = False
