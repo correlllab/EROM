@@ -140,8 +140,10 @@ def set_experiment_env():
     env_sto( "_WIDE_PLACEMENT" , 3.000*env_var("_BLOCK_SCALE") ) # 2025-02-25: ?? WINNING PARAMS ??
 
 
-    env_sto( "_WIDE_Z_ABOVE" , 1.75*env_var("_BLOCK_SCALE") )
-    env_sto( "_SMUSH_Z_ABOVE", 0.80*env_var("_BLOCK_SCALE") )
+    env_sto( "_WIDE_Z_ABOVE"         , 1.75*env_var("_BLOCK_SCALE") )
+    env_sto( "_SMUSH_Z_ABOVE"        , 0.80*env_var("_BLOCK_SCALE") )
+    env_sto( "_TABLE_SUPPORT_Z_MAX"  , 0.65*env_var("_BLOCK_SCALE") )
+    env_sto( "_DEFAULT_TABLE_SUPPORT", True )
 
     env_sto( "_ROBOT_FREE_SPEED", 0.125 * 2.00 ) # 2.00 # 2.50 # 3.00 # 3.50
     env_sto( "_ROBOT_HOLD_SPEED", 0.125 * 1.50 ) # 1.50 # 2.00

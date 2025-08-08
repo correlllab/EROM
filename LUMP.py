@@ -448,7 +448,9 @@ class LUMP:
 
     # dShot : float = 3.000*env_var( "_MIN_CAM_PCD_DIST_M" )
     # dShot : float = 2.750*env_var( "_MIN_CAM_PCD_DIST_M" )
-    dShot : float = 2.625*env_var( "_MIN_CAM_PCD_DIST_M" )
+    # dShot : float = 2.700*env_var( "_MIN_CAM_PCD_DIST_M" )
+    dShot : float = 2.650*env_var( "_MIN_CAM_PCD_DIST_M" )
+    # dShot : float = 2.625*env_var( "_MIN_CAM_PCD_DIST_M" )
     # dShot : float = 2.500*env_var( "_MIN_CAM_PCD_DIST_M" )
     # dShot : float = 2.000*env_var( "_MIN_CAM_PCD_DIST_M" )
     
@@ -1232,7 +1234,7 @@ class LUMP:
         loCntr[:2] = centerXY
         loCntr[2]  = zLo
         hiPnts = grid_points_on_plane( hiCntr, [0.0,0.0,1.0,], env_var("_SEARCH_GRID_UNIT"), [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS") )
-        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], env_var("_SEARCH_GRID_UNIT"), [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS")+1 )
+        loPnts = grid_points_on_plane( loCntr, [0.0,0.0,1.0,], env_var("_SEARCH_GRID_UNIT"), [1.0, 0.0, 0.0,], env_var("_N_GRID_HALF_PTS")+2 )
         Nhi    = hiPnts.shape[0]
         Nlo    = loPnts.shape[0]
         # print( hiPnts.shape )
@@ -1308,10 +1310,13 @@ class LUMP:
         ii = 0
         while not self.chk_cb():
 
-            if (((ii+1)%3) == 0):
-                found, _ = BES()
+            if (((ii+1)%2) == 0):
+                found, propObj = BES()
                 if found:
                     break
+                else:
+                    prevSymbols  = LUMP.SearchTarget.from_GraspObj_list( propObj )
+                    self.targets = prevSymbols[:]
 
 
             # Lower threshold for finding things
