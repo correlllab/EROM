@@ -765,7 +765,7 @@ class LUMP:
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
         """ Enclose a function that calculates the config penalty relative to the current config """
         _CONFIG_FACTOR     = 16.0
-        _TABLE_FACTOR      = 12.0
+        _TABLE_FACTOR      = 14.0
         _REACH_FACTOR      = 13.0
         _CLOSE_FACTOR      = 16.0
         _DELTA_FACTOR      =  2.0

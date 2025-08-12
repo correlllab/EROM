@@ -383,7 +383,7 @@ class PoseCheater:
             for i, rSym in enumerate( symLst ):
                 if env_var("_USE_Z_SNAP"):
                     # WARNING: HACK
-                    nuPose = extract_pose_as_homog( rSym )
+                    nuPose      = extract_pose_as_homog( rSym )
                     nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
                     rSym.pose.pose = nuPose
             rtnSym = symLst[:]
