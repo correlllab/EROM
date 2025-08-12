@@ -988,6 +988,7 @@ class LUMP:
     @staticmethod
     def sample_covering_shots( targets : list[GraspObj] | list[LUMP.SearchTarget], camDist = dShot, Nshots = 10 ) -> list[np.ndarray]:
         """ Generate a list of shots that will cover as many objects as possible """
+        _DIST_FACTOR = 2.0
         # 1. Get minimum distance that would still fit in the camera frustum
         fovHlf = env_var("_D405_FOV_H_DEG")/180.0 * np.pi / 2.0
         posn   = [extract_position( trgt.pose ) for trgt in targets]
@@ -995,7 +996,7 @@ class LUMP:
         aabb   = get_aabb( posn )
         sHlf   = np.linalg.norm( np.subtract( aabb[1][:-1], aabb[0][:-1] ) )/2.0
         dMin   = sHlf / np.tan( fovHlf ) * 1.25
-        dCam   = max( [env_var("_MIN_CAM_PCD_DIST_M"), dMin, camDist,] ) 
+        dCam   = max( [env_var("_MIN_CAM_PCD_DIST_M")*_DIST_FACTOR, dMin, camDist,] ) 
         cPts   = sample_on_sphere( center = mean, radius = dCam, N = Nshots )
         cPos   = sphere_samples_to_eff_poses( cPts, center = mean, effXbasis = [0.0, -1.0, 0.0] )
         rPos   = vary_eff_wrist_3( cPos, N = 3, lo = -np.pi/2.0, hi = np.pi/2.0 )
