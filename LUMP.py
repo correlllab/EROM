@@ -764,9 +764,9 @@ class LUMP:
 
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
         """ Enclose a function that calculates the config penalty relative to the current config """
-        _CONFIG_FACTOR     = 16.0
+        _CONFIG_FACTOR     = 18.0
         _TABLE_FACTOR      = 14.0
-        _REACH_FACTOR      = 13.0
+        _REACH_FACTOR      = 15.0
         _CLOSE_FACTOR      = 16.0
         _DELTA_FACTOR      =  2.0
         _DELTA_MAX         = [np.pi for _ in range(6)]
@@ -1147,9 +1147,9 @@ class LUMP:
     def rank_search_shots( self ):
         """ Obtain a ranking of all planned shots """
         _EXCLUDE_PENALTY = 0.75
+        _OBSCURE_PENALTY = 3.00
         _REPEAT_PENALTY  = 8.00 # 6.0 # 4.0 # 2.00 # 1.00 # 0.65
         _EDGE_PENALTY    = 0.75
-        
 
         self.set_state_from_robot()
         centroid = LUMP.SearchTarget.get_centroid( self.targets )
@@ -1165,7 +1165,7 @@ class LUMP:
                     if self.p_target_in_cam_view( shot, trgt ):
                         scor += trgt.count * (1.0 - obsc[i]) * _REPEAT_PENALTY
                         scor += max([abs( coord ) for coord in self.viewport_coords( shot, trgt )]) * _EDGE_PENALTY
-                        scor += obsc[i] * _EXCLUDE_PENALTY
+                        scor += obsc[i] * _OBSCURE_PENALTY
                     else:
                         scor += _EXCLUDE_PENALTY
                 nuLst.append( LUMP.wrap_shots( pose = shot, score = scor ) )
@@ -1265,7 +1265,7 @@ class LUMP:
         _N_SHOT_TOTAL = _N_SHOT_ADD*_MULT_FACTOR 
         _N_INSPECT    =  3
         _N_LOOK       =  env_var("_N_SEARCH_SHOTS")
-        _FINGER_LEN_M = 0.100
+        _ITER_LIMIT   = 8
 
         def BES():
             nonlocal self
@@ -1310,6 +1310,10 @@ class LUMP:
 
         ii = 0
         while not self.chk_cb():
+
+            if (ii > _ITER_LIMIT):
+                print( f"\n**TIRED** OF SEARCHING AFTER {ii-1} ITERATIONS!\n" )
+                break
 
             if (((ii+1)%2) == 0):
                 found, propObj = BES()
