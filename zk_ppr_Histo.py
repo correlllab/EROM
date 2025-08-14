@@ -21,60 +21,28 @@ set_render_env()
 ########## SETUP ###################################################################################
 _PLOT_DIR = "/media/james/FILEPILE/EROM/data/plots/"
 
-# path      = "/media/james/FILEPILE/EROM/data/2025-08_KC-KP"
-path      = "/media/james/FILEPILE/EROM/data/2025-08_SC-KP"
+tests = [
+    "KC-KP",
+    "SC-KP",
+    "KC-SP",
+    "SC-SP",
+]
 
-# plotTitle = "Makespan Distribution with Known Pose & Known Class"
-plotTitle = "Makespan Distribution with Known Pose & Sensed Class"
+paths = [ f"/media/james/FILEPILE/EROM/data/2025-08_{test}" for test in tests ]
 
-# fName     = f"{_PLOT_DIR}KP-KC_Histo-"
-fName     = f"{_PLOT_DIR}KP-SC_Histo-"
+plotTitles = [
+    "Makespan Distribution with Known Class & Known Pose", 
+    "Makespan Distribution with Sensed Class & Known Pose", 
+    "Makespan Distribution with Known Class & Sensed Pose", 
+    "Makespan Distribution with Sensed Class & Sensed Pose", 
+]
 
-plotExt   = ".pdf"
-##### Load ################################################################
-pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
-for pkl in pkls:
-    print( pkl )
+fNames = [ f"{_PLOT_DIR}{test}_Histo-" for test in tests  ]
 
-
-########## ANALYSIS ################################################################################
-
-##### Success Rate && Makespan ############################################
-N   = 0
-S   = 0
-F   = 0
-MTS = 0.0
-MTF = 0.0
-
-result = {
-    'Ntrial' : 0,
-    'outcome': deque(),
-    'tRun'   : deque(),
-    'sRun'   : deque(),
-}
-
-for dPth in pkls:
-    print( f"About to open {dPth} ..." )
-    data = list()
-    Nstp = 0
-
-    try:
-        with open( dPth, 'rb' ) as f:
-            data = pickle.load( f )
-    except EOFError as e:
-        print( f"LOAD ERROR: {e}" )
-        continue
-
-    for i, datum in enumerate( data ):
-        if datum['msg'] == 'memory':
-            Nstp += 1
-            # print( f"\t{i}\t{datum['msg']}" )
-
-    result['sRun'].append( Nstp )
-    result['tRun'].append( data[-1]['t'] - data[0]['t'] )
+plotExt = ".pdf"
 
 
-##### Makespan Plot #######################################################
+########## PLOTS ###################################################################################
 import matplotlib.pyplot as plt
 
 
@@ -94,8 +62,58 @@ def make_histo( series, plotTitle, fName, showPlot = False ):
     if showPlot:
         plt.show() 
 
-make_histo( result['sRun'], f"{plotTitle}, Steps", f"{fName}Steps{plotExt}" )
-make_histo( result['tRun'], f"{plotTitle}, Time", f"{fName}Time{plotExt}" )
+
+
+for ii, test in enumerate( tests ):
+    path      = paths[ii]
+    plotTitle = plotTitles[ii]
+    fName     = fNames[ii]
+
+    ##### Load ################################################################
+    pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
+    for pkl in pkls:
+        print( pkl )
+
+
+    ########## ANALYSIS ################################################################################
+
+    ##### Success Rate && Makespan ############################################
+    N   = 0
+    S   = 0
+    F   = 0
+    MTS = 0.0
+    MTF = 0.0
+
+    result = {
+        'Ntrial' : 0,
+        'outcome': deque(),
+        'tRun'   : deque(),
+        'sRun'   : deque(),
+    }
+
+    for dPth in pkls:
+        print( f"About to open {dPth} ..." )
+        data = list()
+        Nstp = 0
+
+        try:
+            with open( dPth, 'rb' ) as f:
+                data = pickle.load( f )
+        except EOFError as e:
+            print( f"LOAD ERROR: {e}" )
+            continue
+
+        for i, datum in enumerate( data ):
+            if datum['msg'] == 'memory':
+                Nstp += 1
+                # print( f"\t{i}\t{datum['msg']}" )
+
+        result['sRun'].append( Nstp )
+        result['tRun'].append( data[-1]['t'] - data[0]['t'] )
+
+    make_histo( result['sRun'], f"{plotTitle}, Steps", f"{fName}Steps{plotExt}" )
+    make_histo( result['tRun'], f"{plotTitle}, Time", f"{fName}Time{plotExt}" )
+
 
 
 ########## EXIT ####################################################################################
