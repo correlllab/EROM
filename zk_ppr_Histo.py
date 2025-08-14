@@ -32,10 +32,10 @@ tests = [
 paths = [ f"/media/james/{_DATA_DRIVE}/2025-08_{test}" for test in tests ]
 
 plotTitles = [
-    "Makespan Distribution with Known Class & Known Pose", 
-    "Makespan Distribution with Sensed Class & Known Pose", 
-    "Makespan Distribution with Known Class & Sensed Pose", 
-    "Makespan Distribution with Sensed Class & Sensed Pose", 
+    "Distribution with Known Class & Known Pose", 
+    "Distribution with Sensed Class & Known Pose", 
+    "Distribution with Known Class & Sensed Pose", 
+    "Distribution with Sensed Class & Sensed Pose", 
 ]
 
 fNames = [ f"{_PLOT_DIR}{test}_Histo-" for test in tests  ]
@@ -43,7 +43,7 @@ fNames = [ f"{_PLOT_DIR}{test}_Histo-" for test in tests  ]
 plotExt = ".pdf"
 
 
-########## PLOTS ###################################################################################
+########## HELPER FUNCTIONS ########################################################################
 import matplotlib.pyplot as plt
 
 
@@ -63,6 +63,43 @@ def make_histo( series, plotTitle, fName, showPlot = False ):
     if showPlot:
         plt.show() 
 
+
+def make_scatter( X, Y, plotTitle, fName, showPlot = False ):
+    """ Create Histogram """
+    plt.clf()
+    print()
+
+    plt.scatter( X, Y )
+    plt.title( plotTitle ) # Set the title
+    plt.xlabel('Step')  # Setting the x-axis label
+    plt.ylabel('Time') # Setting the y-axis label
+    plt.savefig( fName )
+    if showPlot:
+        plt.show() 
+
+
+def p_str_has_any( string, qLst, cap = False ):
+    """ Return True if `string` contains any member of `qLst` """
+    for q in qLst:
+        if cap and (q in string):
+            return True
+        elif (not cap) and (f"{q}".lower() in f"{string}".lower()):
+            return True
+    return False
+
+
+def filter_series( series, stdFactor = 2.0 ):
+    """ Filter outliers more than `stdFactor` standard deviations from the mean """
+    if not len( series ):
+        return list()
+    mu = np.mean( series )
+    sd = np.std( series )
+    nuSeries = deque()
+    thresh   = abs(sd*stdFactor)
+    for datum in series:
+        if abs( datum - mu ) <= thresh:
+            nuSeries.append( datum )
+    return list( nuSeries )
 
 
 for ii, test in enumerate( tests ):
@@ -90,6 +127,11 @@ for ii, test in enumerate( tests ):
         'outcome': deque(),
         'tRun'   : deque(),
         'sRun'   : deque(),
+        'tObs'   : deque(),
+        'oStp'   : {
+            "s": deque(),
+            "t": deque(),
+        },
     }
 
     for dPth in pkls:
@@ -104,16 +146,43 @@ for ii, test in enumerate( tests ):
             print( f"LOAD ERROR: {e}" )
             continue
 
+        obsTimes = deque()
+        obsBgn   = 0
+        obsEnd   = 0
+        obsRun   = False
+
         for i, datum in enumerate( data ):
-            if datum['msg'] == 'memory':
+
+            if datum['msg'] == "Observation BEGIN":
+                if not obsRun:
+                    obsBgn = datum['t']
+                obsRun = True
+            elif p_str_has_any( datum['msg'], ["BT BEGIN", "Planning Failure"], cap = False ):
+                if obsRun:
+                    obsEnd   = datum['t']
+                    duration = obsEnd - obsBgn
+                    obsTimes.append( duration )
+                    result['oStp']['s'].append( Nstp )
+                    result['oStp']['t'].append( duration )
+                obsRun = False
+            
+            if p_str_has_any( datum['msg'], ["BT END", "Planning Failure"], cap = False ):
                 Nstp += 1
-                # print( f"\t{i}\t{datum['msg']}" )
+
 
         result['sRun'].append( Nstp )
         result['tRun'].append( data[-1]['t'] - data[0]['t'] )
-
-    make_histo( result['sRun'], f"{plotTitle}, Steps", f"{fName}Steps{plotExt}" )
-    make_histo( result['tRun'], f"{plotTitle}, Time", f"{fName}Time{plotExt}" )
+        result['tObs'].extend( obsTimes )
+    
+    _FILTER_FACTOR = 2.5    
+    # result['sRun'] = filter_series( result['sRun'], _FILTER_FACTOR )
+    # result['tRun'] = filter_series( result['tRun'], _FILTER_FACTOR )    
+    result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
+    
+    make_histo( result['sRun'], f"{plotTitle}, Makespan Steps", f"{fName}Steps{plotExt}" )
+    make_histo( result['tRun'], f"{plotTitle}, Makespan Time", f"{fName}Time{plotExt}" )
+    make_histo( result['tObs'], f"{plotTitle}, Object Search Time", f"{fName}Search{plotExt}" )
+    make_scatter( result['oStp']['s'], result['oStp']['t'], f"{plotTitle}, Object Search Trend", f"{fName}Trend{plotExt}" )
 
 
 

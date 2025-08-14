@@ -276,11 +276,12 @@ class TaskPlanner:
 
         camPose = self.robot.get_cam_pose()
 
+        self.memory.history.append( msg = "Observation BEGIN" )
+
         obsrv, metadata = self.perc.segment( _QUERIES )
 
         self.memory.history.append( msg = "Annotation", datum = {"Event": "The robot takes a 3D picture of the scene."} )
         self.memory.history.append( msg = "ObsMeta"   , datum = metadata )
-        self.memory.history.append( msg = "Observation BEGIN" )
         
         self.memory.process_observations( 
             obsrv,
