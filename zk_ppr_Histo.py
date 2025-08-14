@@ -19,7 +19,8 @@ set_render_env()
 
 
 ########## SETUP ###################################################################################
-_PLOT_DIR = "/media/james/FILEPILE/EROM/data/plots/"
+_DATA_DRIVE = "DATA_TANK"
+_PLOT_DIR   = "/media/james/FILEPILE/EROM/data/plots/"
 
 tests = [
     "KC-KP",
@@ -28,7 +29,7 @@ tests = [
     "SC-SP",
 ]
 
-paths = [ f"/media/james/FILEPILE/EROM/data/2025-08_{test}" for test in tests ]
+paths = [ f"/media/james/{_DATA_DRIVE}/2025-08_{test}" for test in tests ]
 
 plotTitles = [
     "Makespan Distribution with Known Class & Known Pose", 
@@ -71,8 +72,8 @@ for ii, test in enumerate( tests ):
 
     ##### Load ################################################################
     pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
-    for pkl in pkls:
-        print( pkl )
+    # for pkl in pkls:
+    #     print( pkl )
 
 
     ########## ANALYSIS ################################################################################
