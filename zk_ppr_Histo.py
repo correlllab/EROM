@@ -261,9 +261,8 @@ for ii, test in enumerate( tests ):
         result['tObs'].extend( obsTimes )
     
     _FILTER_FACTOR = 2.5    
-    # result['sRun'] = filter_series( result['sRun'], _FILTER_FACTOR )
-    # result['tRun'] = filter_series( result['tRun'], _FILTER_FACTOR )    
     result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
+    result['tRun'] = filter_series( result['tRun'], _FILTER_FACTOR )
 
     make_histo( result['sRun'], f"{longTNam},\nMakespan Distribution [Steps]", f"{fName}_Histo-Steps{plotExt}" )
     make_histo( result['tRun'], f"{longTNam},\nMakespan Distribution [Time]", f"{fName}_Histo-Time{plotExt}" )
