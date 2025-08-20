@@ -167,9 +167,17 @@ for ii, test in enumerate( tests ):
         }, 
     }
 
+    total = {
+        'Ntrial' : 0,
+        'outcome': deque(),
+        'tRun'   : deque(),
+        'sRun'   : deque(),
+    }
+
     for dPth in pkls:
         print( f"About to open {dPth} ..." )
         data = list()
+        N   += 1
         
 
         try:
@@ -259,6 +267,32 @@ for ii, test in enumerate( tests ):
         result['rFal']['plan'  ].append( NfailPlan/Nstp )
         result['rFal']['N'     ].append( Nstp           )
         result['tObs'].extend( obsTimes )
+
+        tRun = data[-1]['t'] - data[0]['t']
+        end  =  False
+        total['Ntrial'] += 1
+        total['tRun'  ].append( tRun )
+        for i in range(1,11):
+            msg = data[-i]['msg']
+            # print( msg )
+            if ("Status.FAILURE" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                F += 1
+                print( f"FAILURE: {msg}" )
+                MTF += tRun
+                end = True
+                total['outcome'].append( 0 )
+                break
+            elif ("Status.SUCCESS" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                S += 1
+                print( f"SUCCESS: {msg}" )
+                MTS += tRun
+                end = True
+                total['outcome'].append( 1 )
+                break
+        if not end:
+            F += 1
+            print( f"FAILURE: {msg}" )
+            MTF += tRun
     
     _FILTER_FACTOR = 2.5    
     result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
@@ -280,6 +314,14 @@ for ii, test in enumerate( tests ):
         xLabel = 'Failure Rates', 
         yLabel = 'Occurrences' 
     )
+
+    if S > 0:
+        MTS /= S
+    if F > 0:
+        MTF /= F
+    print( f"\n{N} episodes, Success Rate: {S*1.0/N}, Failure Rate: {F*1.0/N}, Sanity Check == 0.0: {1.0-S*1.0/N-F*1.0/N}" )
+    print( f"Mean Time to Success: {[int(item) for item in divmod( MTS, 60.0 )]}, Mean Time to Failure: {[int(item) for item in divmod( MTF, 60.0 )]}" )
+    print( "\n\n" )
 
 
 
