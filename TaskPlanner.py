@@ -782,8 +782,8 @@ class TaskPlanner:
             self.memory.history.append( msg = "BGN: Phase 3" )
             self.phase_3_Plan_Task()
             self.memory.history.append( msg = "END: Phase 3", datum = {
-                "plan": deepcopy( self.symPln.action ),
-                "next": deepcopy( self.symPln.nxtAct ),
+                "plan": [str( item ) for item in self.symPln.action.children] if (self.symPln.action is not None) else list(), 
+                "next": [str( item ) for item in self.symPln.nxtAct.children] if (self.symPln.nxtAct is not None) else list(),
             } )
             report_time( "PDDL planning COMPLETE!" )
 
