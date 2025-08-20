@@ -16,6 +16,7 @@ from time import sleep
 from random import random
 from traceback import print_exc
 from datetime import datetime
+from copy import deepcopy
 
 
 ### Special ###
@@ -273,6 +274,7 @@ class TaskPlanner:
 
     def phase_1_Perceive( self, Append = False, suppressDeterm = False ):
         """ Take in evidence and form beliefs """
+        rtnSym = list()
 
         camPose = self.robot.get_cam_pose()
 
@@ -291,9 +293,10 @@ class TaskPlanner:
         ) 
 
         if not suppressDeterm:
-            self.memory.get_current_most_likely()
+            rtnSym = self.memory.get_current_most_likely()
 
         self.memory.history.append( msg = "Observation END" )
+        return rtnSym
         
 
 
@@ -518,6 +521,7 @@ class TaskPlanner:
         """ Attempt to execute the first action in the symbolic plan """
 
         self.memory.history.append( msg = f"BT BEGIN: {now()}" )
+        btr = None
 
         if _RESPONSIVE_MODE:
 
@@ -606,6 +610,10 @@ class TaskPlanner:
                 self.memory.history.append( msg = "Annotation", datum = {
                     "Event": "The final outcome of the robot's actions was undetermined.",
                 } )
+        if btr is not None:
+            return btr.status
+        else:
+            return None
 
 
     def phase_5_Return_Home( self, goPose = None ):
@@ -663,8 +671,9 @@ class TaskPlanner:
 
         self.reset_state() 
         self.move_report_cb()
+        _GOAL = env_var("_GOAL_GRB")
         
-        self.symPln.set_goal( env_var("_GOAL_GRB") )
+        self.symPln.set_goal( _GOAL )
         # self.symPln.set_goal( env_var("_GOAL_OR_RGB") )
 
         self.cheater.log_symbols( [env_var(f"_KNOWN_BLOCK_{i}") for i in range(3)] )
@@ -687,7 +696,8 @@ class TaskPlanner:
 
             print( f"Phase 1, {self.status} ..." )
 
-            
+            self.memory.history.append( msg = "BGN: Phase 1", datum = _GOAL )
+            reportSymbols = list()
 
             if self.cheater.trouble:
                 symLst = self.cheater.last_known_symbols()
@@ -718,7 +728,7 @@ class TaskPlanner:
                     if i < (Npose-1):
                         self.phase_1_Perceive( Append = True, suppressDeterm = True )
                     else:
-                        self.phase_1_Perceive( Append = True, suppressDeterm = False )
+                        reportSymbols = self.phase_1_Perceive( Append = True, suppressDeterm = False )
 
             
 
@@ -736,10 +746,16 @@ class TaskPlanner:
 
             self.cheater.log_beliefs( self.memory.bMem.beliefs )
 
+            self.memory.history.append( msg = "END: Phase 1", datum = deep_copy_memory_list( reportSymbols[:] ) )
+
             ##### Phase 2 ########################
 
             print( f"Phase 2, {self.status} ..." )
+
+            self.memory.history.append( msg = "BGN: Phase 2" )
             self.phase_2_Conditions()
+            self.memory.history.append( msg = "END: Phase 2", datum = deep_copy_memory_list( self.symPln.symbols ) )
+
             report_time( "Conditions GROUNDED!" )
 
             if env_var("_VERBOSE"):
@@ -749,6 +765,8 @@ class TaskPlanner:
                 self.memory.history.append( msg = f"Believe Success, Iteration {ii}: Noisy facts indicate goal was met!\n{self.symPln.facts}" )
                 print( f"!!! Noisy success at iteration {ii} !!!" )
                 self.status = Status.SUCCESS
+
+            self.memory.history.append( msg = "Validate Goal State", datum = self.symPln.facts[:] )
 
             if self.status in (Status.SUCCESS, Status.FAILURE):
                 print( f"LOOP, {self.status} ..." )
@@ -760,7 +778,13 @@ class TaskPlanner:
             ##### Phase 3 ########################
 
             print( f"Phase 3, {self.status} ..." )
+
+            self.memory.history.append( msg = "BGN: Phase 3" )
             self.phase_3_Plan_Task()
+            self.memory.history.append( msg = "END: Phase 3", datum = {
+                "plan": deepcopy( self.symPln.action ),
+                "next": deepcopy( self.symPln.nxtAct ),
+            } )
             report_time( "PDDL planning COMPLETE!" )
 
             if self.p_failed():
@@ -783,7 +807,10 @@ class TaskPlanner:
 
             print( f"Phase 4, {self.status} ..." )
 
-            self.phase_4_Execute_Action()
+            self.memory.history.append( msg = "BGN: Phase 4" )
+            res4 = self.phase_4_Execute_Action()
+            self.memory.history.append( msg = "END: Phase 4", datum = res4 )
+
             report_time( "Action EXECUTED!" )
 
             if self.p_failed():
@@ -793,13 +820,17 @@ class TaskPlanner:
             ##### Phase 5 ########################
 
             print( f"Phase 5, {self.status} ..." )
+
+            self.memory.history.append( msg = "BGN: Phase 5" )
             self.phase_5_Return_Home( _SAFE )
+            self.memory.history.append( msg = "END: Phase 5", datum = np.array( _SAFE ).tolist() )
+            
             report_time( "Returned HOME!" )
 
             print()
 
         self.memory.history.append( 
-            msg   = f"Task End, Succes?: {self.status}, end_symbols : {list( self.symPln.symbols )}",
+            msg   = f"Task End, Success?: {self.status}, end_symbols : {list( self.symPln.symbols )}",
             datum = list( self.symPln.symbols )
         )
 
