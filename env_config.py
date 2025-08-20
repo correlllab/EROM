@@ -219,6 +219,8 @@ def set_experiment_env():
         )
     )
 
+    env_sto( "_GRIPPER_TORQUE", 250 ) 
+    
     env_sto( "_UPDATE_PERIOD_S", 3.0       ) 
     env_sto( "_OBJ_TIMEOUT_S"  , 60.0*10.0 )
 

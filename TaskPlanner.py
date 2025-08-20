@@ -519,7 +519,8 @@ class TaskPlanner:
 
     def phase_4_Execute_Action( self ):
         """ Attempt to execute the first action in the symbolic plan """
-
+        self.robot.gripper.set_torque( env_var("_GRIPPER_TORQUE") )
+        sleep( 0.5 )
         self.memory.history.append( msg = f"BT BEGIN: {now()}" )
         btr = None
 
@@ -606,10 +607,12 @@ class TaskPlanner:
                 self.memory.history.append( msg = "Annotation", datum = {
                     "Event": "The robot's plan was executed correctly.",
                 } )
+                self.robot.gripper.set_torque( 0 )
             else:
                 self.memory.history.append( msg = "Annotation", datum = {
                     "Event": "The final outcome of the robot's actions was undetermined.",
                 } )
+        
         if btr is not None:
             return btr.status
         else:
@@ -815,6 +818,7 @@ class TaskPlanner:
 
             if self.p_failed():
                 self.robot.open_gripper()
+                self.robot.gripper.set_torque( 0 )
                 
 
             ##### Phase 5 ########################
