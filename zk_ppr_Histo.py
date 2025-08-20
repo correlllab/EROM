@@ -163,6 +163,7 @@ for ii, test in enumerate( tests ):
         'rFal': {
             'action' : deque(),
             'plan'   : deque(),
+            'find'   : deque(),
             'N'      : deque(),
         }, 
     }
@@ -191,6 +192,7 @@ for ii, test in enumerate( tests ):
         Nstp      = 0
         NfailActn = 0
         NfailPlan = 0
+        NfailFind = 0
 
         # Segmentation Performance
         obsTimes = deque()
@@ -204,8 +206,10 @@ for ii, test in enumerate( tests ):
         Ndelta  = 0
         Ncnfus  = 0
         Ntotal  = 0
+        symbols : list[GraspObj] = list()
 
         for i, datum in enumerate( data ):
+            # print( ".", end="", flush=True )
 
             if datum['msg'] == "Observation BEGIN":
                 if not obsRun:
@@ -219,52 +223,70 @@ for ii, test in enumerate( tests ):
                     result['oStp']['s'].append( Nstp     )
                     result['oStp']['t'].append( duration )
                 obsRun = False
-            
+
+            if ('symbol' in datum['msg']):
+                if len( datum['data'] ):
+                    # print( f"{Ncnfus}:{Ntotal}\n{datum['data']}" )
+                    symbols = datum['data']
+
             if p_str_has_any( datum['msg'], ["BT END", "Planning Failure"], cap = False ):
                 result['sDel']['s'].append( Nstp   ) 
                 result['sDel']['c'].append( Ndelta )
                 Nstp  += 1
                 Ndelta = 0 # Reset confusions for the next step
+                found  = True
 
                 if "Planning Failure" in datum['msg']:
                     NfailPlan += 1
 
                 if ("BT END" in datum['msg']) and ("fail" in f"{datum['msg']}".lower()):
                     NfailActn += 1
-            
 
-            if ('symbol' in datum['msg']):
-                if len( datum['data'] ):
-                    # print( f"{Ncnfus}:{Ntotal}\n{datum['data']}" )
-                    symbols : list[GraspObj] = datum['data']
-                    if len( symHist ) and len( symHist[-1] ):
-                        symLast : list[GraspObj] = symHist[-1]
-                        Nmatch = 0
-                        mtcSet = set([])
-                        for sym_i in symbols:
-                            Ntotal += 1
+                if len( symbols ):
+                    Nlabel = len( set([item.label for item in symbols]) )
+                    if Nlabel < 3:
+                        NfailFind += 1
+                        found = False
+                    else:
+                        Ntotal += len( symbols )
+
+                if len( symbols ) and len( symHist ) and len( symHist[-1] ):
+                    symLast : list[GraspObj] = symHist[-1]
+                    Nmatch = 0
+                    mtcSet = set([])
+                    if found:
+                        # print( "FOUND" )
+                        # for sym_i in symbols:
+                        for sym_i in symLast:
                             dMin_i = 6e10
                             mtch_i = None
-                            for sym_j in symLast:
+                            # for sym_j in symLast:
+                            for sym_j in symbols:
                                 d_ij = euclidean_distance_between_symbols( sym_i, sym_j )
+                                # print( f"{d_ij:.4f}:{dMin_i:.4f}", end=", ", flush=True )
                                 if ((d_ij < dMin_i) and (d_ij <= _D_THRESH_M)) and (id(sym_j) not in mtcSet):
+                                # if ((d_ij < dMin_i) and (d_ij <= _D_THRESH_M)):
                                     dMin_i = d_ij
                                     mtch_i = sym_j
+                            # print()
                             if mtch_i is not None:
                                 mtcSet.add( id(mtch_i) )
                                 Nmatch += 1
                                 if sym_i.label != mtch_i.label:
                                     Ndelta += 1
                                     Ncnfus += 1
+                if len( symbols ):
                     symHist.append( symbols[:] )
 
-        # print( f"\nEnd of Episode Confusion: {Ncnfus}:{Ntotal} = {Ncnfus / Ntotal}\n" )
+
+                
 
         result['sRun'].append( Nstp )
         result['tRun'].append( data[-1]['t'] - data[0]['t'] )
         result['rCon'].append( Ncnfus / Ntotal )
         result['rFal']['action'].append( NfailActn/Nstp )
         result['rFal']['plan'  ].append( NfailPlan/Nstp )
+        result['rFal']['find'  ].append( NfailFind/Nstp )
         result['rFal']['N'     ].append( Nstp           )
         result['tObs'].extend( obsTimes )
 
@@ -277,22 +299,26 @@ for ii, test in enumerate( tests ):
             # print( msg )
             if ("Status.FAILURE" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
                 F += 1
-                print( f"FAILURE: {msg}" )
+                # print( f"FAILURE: {msg}" )
+                print( f"FAILURE" )
                 MTF += tRun
                 end = True
                 total['outcome'].append( 0 )
                 break
             elif ("Status.SUCCESS" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
                 S += 1
-                print( f"SUCCESS: {msg}" )
+                # print( f"SUCCESS: {msg}" )
+                print( f"SUCCESS" )
                 MTS += tRun
                 end = True
                 total['outcome'].append( 1 )
                 break
         if not end:
             F += 1
-            print( f"FAILURE: {msg}" )
+            # print( f"FAILURE: {msg}" )
+            print( f"FAILURE" )
             MTF += tRun
+        print()
     
     _FILTER_FACTOR = 2.5    
     result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
@@ -307,8 +333,8 @@ for ii, test in enumerate( tests ):
     make_scatter( result['sDel']['s'], result['sDel']['c'], 
                   f"{longTNam},\nNumber of Objects Confused at Each Step", f"{fName}_Scatter-Confusion{plotExt}" )
     make_multi_histo( 
-        [ result['rFal']['action'], result['rFal']['plan'], ], 
-        [ "Action Failure Rate", "Planning Failure Rate", ], 
+        [ result['rFal']['action'], result['rFal']['plan'], result['rFal']['find'], ], 
+        [ "Action Failure Rate", "Planning Failure Rate", "Search Failure Rate", ], 
         f"{longTNam},\nDistribution of Action and Planning Failure Rates, Per Episode", 
         f"{fName}_Histo-Failure{plotExt}", 
         xLabel = 'Failure Rates', 
