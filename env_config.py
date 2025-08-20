@@ -93,7 +93,8 @@ def set_experiment_env():
     # env_sto( "_SHOW_SEGMENT", True )
     env_sto( "_SHOW_SEGMENT", False )
 
-    env_sto( "_USE_Z_SNAP" , False )
+    env_sto( "_USE_Z_SNAP"   , False )
+    env_sto( "_Z_SNAP_CHEAT" , True  )
 
     # env_sto( "_Z_SNAP_BOOST" , -0.25*env_var("_BLOCK_SCALE")   )
     # env_sto( "_Z_SNAP_BOOST" , 0.00*env_var("_BLOCK_SCALE") )
@@ -220,7 +221,7 @@ def set_experiment_env():
     )
 
     env_sto( "_GRIPPER_TORQUE", 250 ) 
-    
+
     env_sto( "_UPDATE_PERIOD_S", 3.0       ) 
     env_sto( "_OBJ_TIMEOUT_S"  , 60.0*10.0 )
 

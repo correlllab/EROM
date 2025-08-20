@@ -1,6 +1,6 @@
 import os, pickle, time, subprocess, math
 now = time.time 
-from collections import deque
+from collections import deque, defaultdict
 from datetime import datetime
 
 import matplotlib.pyplot as plt
@@ -309,6 +309,42 @@ class PoseCheater:
                 if euclidean_distance_between_symbols( qSym, rSym ) < env_var('_BLOCK_SCALE')*0.65:
                     return True
             return False
+        
+        def dct_Mars() -> float:
+            """ Distance to Mars in meters """
+            return {  
+                "d"  : 6e10,
+                "ref": None,
+            }
+        
+        def p_assigned( dRefDct : dict, keyLst : list ):
+            for k in keyLst:
+                try:
+                    if dRefDct[k]['ref'] is None:
+                        return False
+                except KeyError:
+                    return False
+            return True
+        
+        def readings_match( prvLst : list[GraspObj], nowLst : list[GraspObj], dThresh_m : float = None ) -> list[list[GraspObj]]:
+            if dThresh_m is None:
+                dThresh_m = env_var("_BLOCK_SCALE")*0.75
+            lookup  = defaultdict( dct_Mars )
+            for sym_i in prvLst:
+                # idn_i = id( sym_i )
+                for sym_j in nowLst:
+                    idn_j = id( sym_j )
+                    d_ij  = euclidean_distance_between_symbols( sym_i, sym_j )
+                    if (d_ij <= dThresh_m) and d_ij < lookup[ idn_j ]['d']:
+                        lookup[ idn_j ] = {  
+                            "d"  : d_ij,
+                            "ref": sym_j,
+                        }
+            rtnZip = deque()
+            for sym_j in nowLst:
+                idn_j = id( sym_j )
+                rtnZip.append([ sym_j, lookup[ idn_j ]['ref'],])
+            return list( rtnZip )
 
         if self.fixLabel and self.fixPose:
             for j, lSym in enumerate( lastFrame ):
@@ -321,74 +357,50 @@ class PoseCheater:
                     dlta = True
 
         elif self.fixLabel:
-            dlta = True
-            for i, rSym in enumerate( symLst ):
-                sMin = None
-                dMin = 1e9
-                for j, lSym in enumerate( lastFrame ):
-                    d_ij = euclidean_distance_between_symbols( rSym, lSym )
-                    if (d_ij > 0.0) and (d_ij <= maxDiff) and (d_ij < dMin) and (not p_collide_return( lSym )):
-                        dMin = d_ij
-                        sMin = lSym
-                if (sMin is not None):
-                    lSet.add( id( lSym ) )
-                    if sMin.label not in cSet:
-                        rSym.label = sMin.label
+            symZip = readings_match( lastFrame, symLst, maxDiff )
+            for pair in symZip:
+                dlta  = True
+                sym_i = pair[0]
+                sym_j = pair[1]
+                if sym_j is not None:
+                    sym_i.label = sym_j.label
+                if env_var("_Z_SNAP_CHEAT"):
+                    # WARNING: HACK
+                    nuPose = extract_pose_as_homog( sym_i )
+                    nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
+                    sym_i.pose.pose = nuPose
+                rtnSym.append( sym_i )
 
-                nuPose = extract_pose_as_homog( rSym )
-                nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
-                rSym.pose.pose = nuPose
-                
-                rtnSym.append( rSym )
-                cSet.add( rSym.label )
 
         elif self.fixPose:
             print( "CHEAT OBJECTS:" )
             for j, lSym in enumerate( lastFrame ):
                 print( f"\t{lSym}" )
-
-            for i, rSym in enumerate( symLst ):
-                sMin = None
-                dMin = 1e9
-                for j, lSym in enumerate( lastFrame ):
-                    d_ij = euclidean_distance_between_symbols( rSym, lSym )
-                    # if (d_ij <= maxDiff) and (d_ij < dMin) and (not p_collide_return( lSym )):
-                    if (d_ij > 0.0) and (d_ij <= maxDiff) and (d_ij < dMin) and (not p_collide_return( lSym )):
-                        dMin = d_ij
-                        sMin = lSym
-                if sMin is not None:
-                    lSet.add( id( lSym ) )
-                    cSet.add( rSym.label )
-
-                    if env_var("_USE_Z_SNAP"):
-                        # WARNING: HACK
-                        nuPose = extract_pose_as_homog( sMin )
-                        nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
-                        rSym.pose.pose = nuPose
-                    else:
-                        rSym.pose = sMin.pose
-
-                    dlta = True
-                # if not p_collide_return( rSym ):
-                rtnSym.append( rSym )
-
-            if env_var("_CHEAT_LKG"):
-                for j, lSym in enumerate( lastFrame ):
-                    if (lSym.label not in cSet) and (not p_collide_return( lSym )):
-                        cSet.add( lSym.label )
-                        rtnSym.append( lSym )
+            symZip = readings_match( lastFrame, symLst, maxDiff )
+            for pair in symZip:
+                dlta  = True
+                sym_i = pair[0]
+                sym_j = pair[1]
+                if sym_j is not None:
+                    sym_i.pose = sym_j.pose
+                if env_var("_Z_SNAP_CHEAT"):
+                    # WARNING: HACK
+                    nuPose = extract_pose_as_homog( sym_i )
+                    nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
+                    sym_i.pose.pose = nuPose
+                rtnSym.append( sym_i )
         else:
             print( "NO CHEAT APPLIED!" )     
             dlta = True
             for i, rSym in enumerate( symLst ):
-                if env_var("_USE_Z_SNAP"):
+                if env_var("_Z_SNAP_CHEAT"):
                     # WARNING: HACK
                     nuPose      = extract_pose_as_homog( rSym )
                     nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
                     rSym.pose.pose = nuPose
             rtnSym = symLst[:]
 
-        if dlta:
-            self.symbols.append( rtnSym )
+        # if dlta: # FUCK: THIS SEEMS VERY BAD!
+        #     self.symbols.append( rtnSym )
         return rtnSym
         

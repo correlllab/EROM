@@ -818,6 +818,7 @@ class TaskPlanner:
 
             if self.p_failed():
                 self.robot.open_gripper()
+                sleep(3)
                 self.robot.gripper.set_torque( 0 )
                 
 
@@ -856,7 +857,10 @@ def experiment_prep( beginPlanPose = None ):
         beginPlanPose = beginPlanPose[0]
 
     planner = TaskPlanner()
-    planner.robot.set_grip_N( 10.0 )
+
+    planner.robot.gripper.set_torque( env_var("_GRIPPER_TORQUE") )
+    sleep( 0.5 )
+
     print( planner.robot.get_tcp_pose() )
 
     if beginPlanPose is None:
@@ -866,6 +870,8 @@ def experiment_prep( beginPlanPose = None ):
             beginPlanPose = _HIGH_VIEW_POSE
     
     planner.robot.open_gripper()
+    sleep(3)
+    planner.robot.gripper.set_torque( 0 )
     return planner
 
     
