@@ -17,6 +17,7 @@ from random import random
 from traceback import print_exc
 from datetime import datetime
 from copy import deepcopy
+from collections import deque
 
 
 ### Special ###
@@ -327,14 +328,20 @@ class TaskPlanner:
         if env_var("_USE_POSE_CHEAT"):
             print( f"\n>>>! POSE CHEAT !<<<\n" )
             print( f"\nBefore cheat..." )
+
+            self.memory.history.append( msg = "Pre-Cheat", datum = deep_copy_memory_list( self.symPln.symbols ) )
+
             for obj in self.symPln.symbols:
                 print( f"\t{obj}" )
 
             _always_cheat = True
             if (not self.cheater.trouble) or _always_cheat:
                 self.symPln.symbols = self.cheater.repair_symbol_poses( self.symPln.symbols )
+                
             else:
                 print( f"Cheater in TROUBLE! No nudge!", end = '    ' )
+
+            self.memory.history.append( msg = "Post-Cheat", datum = deep_copy_memory_list( self.symPln.symbols ) )
 
         else:
             print( f"No cheating allowed!", end = '    ' )
@@ -357,6 +364,17 @@ class TaskPlanner:
                 print( f"\tNO OBJECTS DETERMINIZED" )
 
         self.blcMod.instantiate_conditions( self.robot )
+
+        def cond_as_struct( cond ):
+            rtnLst = deque()
+            if isinstance( cond, (list, tuple, deque) ):
+                for elem in cond:
+                    rtnLst.append( cond_as_struct( elem ) )
+                return list( rtnLst )
+            else:
+                return f"{cond}"
+
+        self.memory.history.append( msg = "Conditions Grounded", datum = cond_as_struct( self.symPln.facts ) )
 
         self.memory.history.append( msg = "Annotation", datum = {
             "Event": "The robot has taken a 3D picture of the scene.",
