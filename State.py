@@ -338,7 +338,7 @@ class PoseCheater:
                     if (d_ij <= dThresh_m) and d_ij < lookup[ idn_j ]['d']:
                         lookup[ idn_j ] = {  
                             "d"  : d_ij,
-                            "ref": sym_j,
+                            "ref": sym_i,
                         }
             rtnZip = deque()
             for sym_j in nowLst:
@@ -363,6 +363,7 @@ class PoseCheater:
                 sym_i = pair[0]
                 sym_j = pair[1]
                 if sym_j is not None:
+                    print( f"Match!: {sym_i} <-- {sym_j}" )
                     sym_i.label = sym_j.label
                 if env_var("_Z_SNAP_CHEAT"):
                     # WARNING: HACK
@@ -382,12 +383,14 @@ class PoseCheater:
                 sym_i = pair[0]
                 sym_j = pair[1]
                 if sym_j is not None:
+                    print( f"Match!: {sym_i} <-- {sym_j}: {euclidean_distance_between_symbols(sym_i, sym_j)}" )
                     sym_i.pose = sym_j.pose
                 if env_var("_Z_SNAP_CHEAT"):
                     # WARNING: HACK
                     nuPose = extract_pose_as_homog( sym_i )
                     nuPose[2,3] = snap_z_to_nearest_block_unit_above_zero( nuPose[2,3] )
-                    sym_i.pose.pose = nuPose
+                    # sym_i.pose.pose = nuPose
+                    sym_i.pose = ObjPose( nuPose )
                 rtnSym.append( sym_i )
         else:
             print( "NO CHEAT APPLIED!" )     
