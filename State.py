@@ -359,7 +359,6 @@ class PoseCheater:
         elif self.fixLabel:
             symZip = readings_match( lastFrame, symLst, maxDiff )
             for pair in symZip:
-                dlta  = True
                 sym_i = pair[0]
                 sym_j = pair[1]
                 if sym_j is not None:
@@ -379,7 +378,6 @@ class PoseCheater:
                 print( f"\t{lSym}" )
             symZip = readings_match( lastFrame, symLst, maxDiff )
             for pair in symZip:
-                dlta  = True
                 sym_i = pair[0]
                 sym_j = pair[1]
                 if sym_j is not None:
@@ -394,7 +392,6 @@ class PoseCheater:
                 rtnSym.append( sym_i )
         else:
             print( "NO CHEAT APPLIED!" )     
-            dlta = True
             for i, rSym in enumerate( symLst ):
                 if env_var("_Z_SNAP_CHEAT"):
                     # WARNING: HACK
@@ -403,7 +400,6 @@ class PoseCheater:
                     rSym.pose.pose = nuPose
             rtnSym = symLst[:]
 
-        # if dlta: # FUCK: THIS SEEMS VERY BAD!
-        #     self.symbols.append( rtnSym )
+        self.symbols.append( rtnSym )
         return rtnSym
         
