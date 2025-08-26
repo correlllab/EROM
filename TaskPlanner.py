@@ -324,6 +324,7 @@ class TaskPlanner:
         
         # self.symPln.symbols = self.memory.get_current_most_likely()
         self.symPln.symbols = self.memory.get_current_most_likely( self.symPln.get_goal_objects() )
+        
 
         if env_var("_USE_POSE_CHEAT"):
             print( f"\n>>>! POSE CHEAT !<<<\n" )
@@ -618,6 +619,8 @@ class TaskPlanner:
                 
                 if env_var("_USE_POSE_CHEAT"):
                     self.cheater.log_successful_action( srcPose, dstPose )
+                    # DON'T HIT THE FUCKING BLOCKS WHILE LOOKING FOR THEM
+                    self.lump.register_temp_block_obstacles( self.cheater.last_known_symbols(), wipeTemp = True ) 
 
                 self.memory.bMem.action_success_update( srcPose, dstPose )
 

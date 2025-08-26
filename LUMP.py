@@ -464,6 +464,7 @@ class LUMP:
         self.pose      : np.ndarray    = self.FK( self.q )
         self.robot     : UR5_Interface = robot
         self.obstacles : list          = list()
+        self.tempObstc : list          = list()
         self.NshotDflt : int           = 3
         self.nextNshot : int           = self.NshotDflt
         if isinstance( qInit, (list, np.ndarray) ):
@@ -543,6 +544,27 @@ class LUMP:
         self.obstacles.append({ 'type': "plane", 'geo' : np.array( pointNormal ) })
 
 
+    def register_aa_cube_obstacle( self, center, sLen_m = None, temp = False ):
+        if sLen_m is None:
+            sLen_m = env_var("_BLOCK_SCALE")
+        sHlf_m = sLen_m / 2.0
+        vecHlf = np.array( [sHlf_m for _ in center] )
+        vecMin = np.subtract( center, vecHlf )
+        vecMax = np.add(      center, vecHlf )
+        aabbCb = np.array( [vecMin, vecMax] )
+        if not temp:
+            self.obstacles.append({ 'type': "aabb", 'geo' : aabbCb })
+        else:
+            self.tempObstc.append({ 'type': "aabb", 'geo' : aabbCb })
+
+
+    def register_temp_block_obstacles( self, objLst : list[GraspObj], wipeTemp = True ):
+        if wipeTemp:
+            self.tempObstc = list()
+        for obj in objLst:
+            self.register_aa_cube_obstacle( extract_position( obj ), sLen_m = env_var("_BLOCK_SCALE"), temp = True )
+
+
     @staticmethod
     def p_point_in_aabb( pnt, aabb, margin = _RBT_TABLE_MARGIN ):
         """ Return True if the `pnt` is inside the `aabb` of arbitrary dimension """
@@ -560,12 +582,15 @@ class LUMP:
 
     def p_collision_q( self, q, margin = _RBT_TABLE_MARGIN ):
         """ Return true if the `q` would put the robot in collision """
+        totalObstacles = list()
+        totalObstacles.extend( self.obstacles )
+        totalObstacles.extend( self.tempObstc )
         if not self.p_q_within_limits(q):
             return True
         frames = LUMP.FK_all( q )
         if not self.p_safe_pose( frames[-1] ): # Check base<->effector<->table collision
             return True
-        for obstacle in self.obstacles:
+        for obstacle in totalObstacles:
             if obstacle["type"] == "aabb":
                 aabb   = obstacle["geo"]
                 for frm in frames:
