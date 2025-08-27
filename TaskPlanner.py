@@ -913,7 +913,7 @@ def experiment_prep( beginPlanPose = None ):
 ########## MAIN ####################################################################################
 # from timeit import timeit
 
-_TROUBLESHOOT = 1
+_TROUBLESHOOT = 0
 _TRACK_PERF   = 0
 
 

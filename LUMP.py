@@ -645,10 +645,14 @@ class LUMP:
     def IK( self, effPose : np.ndarray, suppressCache = False ):
         """ Perform inverse kinematics (conditional) """
         soln = self.IK_search( effPose )
-        if ((not suppressCache) and (soln is not None) and self.p_safe_pose( effPose )):
+        pSaf = self.p_safe_pose( effPose )
+        if ((not suppressCache) and (soln is not None) and pSaf):
             self.q    = np.array( soln )
             self.pose = np.array( effPose )
-        return soln
+        if pSaf:
+            return soln
+        else:
+            return None
     
 
     @staticmethod
