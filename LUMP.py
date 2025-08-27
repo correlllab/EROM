@@ -437,6 +437,7 @@ def get_aabb( ptsLst ):
 
 ########## MOTION PLANNER ##########################################################################
 _COLLISION_NRG_PENALTY = 20.0 #13.0
+_CONFIG_FACTOR         = 20.0
 _NEAR_SHOT_PEN         =  6.0
 _JOINT_Q_MARGIN        = np.pi/8.0
 
@@ -632,7 +633,7 @@ class LUMP:
         eMin = 1e9
         qMin = None
         for soln in qFltr:
-            nrg = self.config_energy( self.q, soln )
+            nrg = self.config_energy( self.q, soln )*_CONFIG_FACTOR
             hit = 1.0 if self.p_collision_q( soln ) else 0.0
             nrg += hit*_COLLISION_NRG_PENALTY
             if nrg < eMin:
@@ -789,7 +790,6 @@ class LUMP:
 
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
         """ Enclose a function that calculates the config penalty relative to the current config """
-        _CONFIG_FACTOR     = 18.0
         _TABLE_FACTOR      = 14.0
         _REACH_FACTOR      = 15.0
         _CLOSE_FACTOR      = 16.0
