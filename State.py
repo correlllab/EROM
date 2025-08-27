@@ -226,18 +226,19 @@ class PoseCheater:
         lastFrame = deep_copy_memory_list( self.last_known_symbols() )
 
         if len( lastFrame ):
-            dMin = 1e9
+            dMin = 6e10
             sCls : GraspObj = None
             for sym in lastFrame:
                 d = euclidean_distance_between_symbols( sym, poseBgn )
-                if d < dMin:
+                if (d < dMin) and (d < env_var("_BLOCK_SCALE")*0.75):
                     dMin = d
                     sCls = sym
-            sCls.pose = ObjPose( poseEnd )
+            if sCls is not None:
+                sCls.pose = ObjPose( poseEnd )
+                self.symbols.append( lastFrame[:] )
+            else:
+                print( "`log_successful_action`: NO MATCH FOR THIS ACTION!" )
 
-            # lastFrame = self.repair_symbol_poses( lastFrame )
-
-            self.symbols.append( lastFrame[:] )
         else:
             print( "`log_successful_action`: NO FRAME TO MODIFY!" )
         

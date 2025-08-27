@@ -1304,11 +1304,13 @@ class LUMP:
 
         ## Run init scan and return early if we found the objects ##
         found, propObj = BES()
+        self.register_temp_block_obstacles( propObj, wipeTemp = True )
         if found:
             return True
 
         while not len( propObj ):
             _, propObj = BES()
+            self.register_temp_block_obstacles( propObj, wipeTemp = True )
         if len( propObj ) > len( proposedObjects ):
             proposedObjects = propObj[:]
 
@@ -1393,6 +1395,8 @@ class LUMP:
             if len( self.shots ) > _N_SHOT_TOTAL:
                 self.shots = self.shots[:_N_SHOT_TOTAL]
             ii += 1
+
+            self.register_temp_block_obstacles( self.get_cb(), wipeTemp = True )
             
 
         self.searchActive = False

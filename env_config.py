@@ -259,6 +259,7 @@ def set_experiment_env():
     env_sto( "_Z_SNAP_CHEAT"  , False  )
     env_sto( "_CHEAT_LKG"     , False and env_var("_USE_POSE_CHEAT") )
 
+    env_sto( "_MATCH_LIMIT_M", env_var("_BLOCK_SCALE")*0.75 )
 
     env_sto( "_N_PERC_SHOTS"    , 3 )
     env_sto( "_N_PATH_DIV"      , 2 ) # 4 # 6

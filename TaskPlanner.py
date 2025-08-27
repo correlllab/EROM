@@ -540,6 +540,11 @@ class TaskPlanner:
         """ Attempt to execute the first action in the symbolic plan """
         self.robot.gripper.set_torque( env_var("_GRIPPER_TORQUE") )
         sleep( 0.5 )
+        ## Unwind Wrist 3! ##
+        qNow = self.robot.get_joint_angles().tolist()
+        qNow[-1] = 0.0
+        self.robot.moveJ( qNow,
+                          asynch = False )
         self.memory.history.append( msg = f"BT BEGIN: {now()}" )
         btr = None
 
