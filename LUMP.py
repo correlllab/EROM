@@ -438,7 +438,7 @@ def get_aabb( ptsLst ):
 ########## MOTION PLANNER ##########################################################################
 _COLLISION_NRG_PENALTY = 20.0 #13.0
 _CONFIG_FACTOR         = 20.0
-_NEAR_SHOT_PEN         =  6.0
+_NEAR_SHOT_PEN         =  4.0 # 6.0
 _JOINT_Q_MARGIN        = np.pi/8.0
 
 class LUMP:
@@ -794,7 +794,7 @@ class LUMP:
 
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
         """ Enclose a function that calculates the config penalty relative to the current config """
-        _TABLE_FACTOR      = 14.0
+        _TABLE_FACTOR      = 18.0
         _REACH_FACTOR      = 15.0
         _CLOSE_FACTOR      = 16.0
         _DELTA_FACTOR      =  2.0
@@ -1054,30 +1054,33 @@ class LUMP:
         
         targets  = list( proposedObjects )
         centroid = np.mean( [extract_position( obj ) for obj in targets], axis = 0 )
-
-        shots = list()
-        Nt    = len( targets )
-        Nsee  = 2
-        Nij   = max( int(N*_MULT_FACTOR / Nsee), 1 )
-        for i in range( Nt-1 ):
-            for j in range( i+1, Nt ):
-                shots.extend( LUMP.sample_covering_shots( [targets[i], targets[j],], shotDist, Nshots = Nij ) )
+        
+        Nt      = len( targets )
+        Nsee    = 2
+        Nij     = max( int(N*_MULT_FACTOR / Nsee), 1 )
+        nrgFunc = self.get_pose_energy_func( list(), centroid )
 
         ranking = deque()
-        nrgFunc = self.get_pose_energy_func( list(), centroid )
-        for shot_i in shots:
-            shot = LUMP.wrap_shots( shot_i )
-            soln = self.IK( shot_i, suppressCache = True )
-            if soln is not None:
-                score = nrgFunc( self.q, soln )
-                for trgt in targets:
-                    if not self.p_target_in_cam_view( shot_i, trgt ):
-                        score += _VIEW_PENALTY
-                    else:
-                        score += max([abs( coord ) for coord in self.viewport_coords( shot_i, trgt )]) * _EDGE_PENALTY
-                shot['score'] = score
-                ranking.append( shot )
-        ranking = list( ranking )
+        shots   = list()
+
+        while not len( ranking ):
+            shots = list()
+            for i in range( Nt-1 ):
+                for j in range( i+1, Nt ):
+                    shots.extend( LUMP.sample_covering_shots( [targets[i], targets[j],], shotDist, Nshots = Nij ) )
+            for shot_i in shots:
+                shot = LUMP.wrap_shots( shot_i )
+                soln = self.IK( shot_i, suppressCache = True )
+                if soln is not None:
+                    score = nrgFunc( self.q, soln )
+                    for trgt in targets:
+                        if not self.p_target_in_cam_view( shot_i, trgt ):
+                            score += _VIEW_PENALTY
+                        else:
+                            score += max([abs( coord ) for coord in self.viewport_coords( shot_i, trgt )]) * _EDGE_PENALTY
+                    shot['score'] = score
+                    ranking.append( shot )
+            ranking = list( ranking )
 
         ranking.sort( key = lambda x: x['score'] )
         # Re-Rank Based on Closeness #
