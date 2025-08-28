@@ -977,6 +977,15 @@ if __name__ == "__main__":
                 [ 0.000,  0.000, 0.000,],
                 vec_unit([-1.000, -1.000, 0.000,]),
             ] )
+            planner.memory.mp.register_planar_obstacle( [
+                [ 0.000,  0.000, 0.000,],
+                vec_unit([0.000, 0.000, 1.000,]),
+            ] )
+            planner.memory.mp.register_cylindrical_obstacle(
+                [0,0,0,],
+                0.150,
+                2.000
+            )
 
 
             # if _TRACK_PERF:

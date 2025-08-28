@@ -38,7 +38,7 @@ from utils import get_pose_attr
 
 # _RBT_BASE_BUFFER  = 0.200
 _RBT_BASE_BUFFER  = 0.300
-# _RBT_BASE_FACTOR  = 1.500
+_COLLSN_MARGIN  = 0.1500
 # _RBT_TABLE_MARGIN = 0.070
 # _RBT_TABLE_MARGIN = 0.140
 # _RBT_TABLE_MARGIN = 0.210
@@ -545,6 +545,14 @@ class LUMP:
         self.obstacles.append({ 'type': "plane", 'geo' : np.array( pointNormal ) })
 
 
+    def register_cylindrical_obstacle( self, baseCenter, radius, height ):
+        self.obstacles.append({ 'type': "cylinder", 'geo' : {
+            'b' : baseCenter,
+            'r' : radius,
+            'h' : height,
+        } })
+
+
     def register_aa_cube_obstacle( self, center, sLen_m = None, temp = False ):
         if sLen_m is None:
             sLen_m = env_var("_BLOCK_SCALE")
@@ -576,12 +584,25 @@ class LUMP:
         return ans
     
 
+    @staticmethod
+    def p_point_in_cylinder( pnt, cyl, margin = 0.0 ):
+        """ Return True if the `pnt` lies within the cylinder specification {'b','r','h'} """
+        zP    = pnt[2]
+        zC_hi = cyl['b'][2] + cyl['h'] + margin
+        zC_lo = cyl['b'][2] - margin
+        if (zC_lo <= zP <= zC_hi):
+            dXY = np.linalg.norm( pnt[:2] )
+            return (dXY <= (cyl['r'] + margin))
+        else:
+            return False
+    
+
     def p_safe_pose( self, effPose : np.ndarray ):
         """ Should the robot even consider this pose? """
         return (self.p_base_safe( effPose ) and self.p_nonneg_Z( effPose ))
 
 
-    def p_collision_q( self, q, margin = _RBT_TABLE_MARGIN ):
+    def p_collision_q( self, q, margin = _COLLSN_MARGIN ):
         """ Return true if the `q` would put the robot in collision """
         totalObstacles = list()
         totalObstacles.extend( self.obstacles )
@@ -604,6 +625,11 @@ class LUMP:
                 for frm in frames[3:]:
                     posn = extract_position( frm )
                     if not point_above_plane( posn, point, norml, margin ):
+                        return True
+            elif obstacle["type"] == "cylinder":
+                for frm in frames[3:]:
+                    posn = extract_position( frm )
+                    if LUMP.p_point_in_cylinder( posn, obstacle["geo"] ):
                         return True
             else:
                 raise ValueError( f"`LUMP.p_collision_q()`, UNDEFINED obstacle:\n{obstacle}\n" )
@@ -646,7 +672,8 @@ class LUMP:
         """ Perform inverse kinematics (conditional) """
         soln = self.IK_search( effPose )
         pSaf = self.p_safe_pose( effPose )
-        if ((not suppressCache) and (soln is not None) and pSaf):
+        pCol = self.p_collision_q( soln ) if (soln is not None) else True
+        if ((not suppressCache) and (soln is not None) and pSaf and (not pCol)):
             self.q    = np.array( soln )
             self.pose = np.array( effPose )
         if pSaf:
