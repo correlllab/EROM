@@ -265,7 +265,7 @@ def sample_on_sphere( center = [0.0, 0.0, 0.0,], radius = 1.0, N = 1, Zpos = Tru
     def gen_pnt( posDome = True ):
         """ Get one point """
         if posDome:
-            smp = [ -1.0+2.0*random() for _ in range(2) ] + [random(),]
+            smp = [ -1.0+2.0*random() for _ in range(2) ] + [random() + env_var("_SAMPLE_Z_BUMP"),]
         else:
             smp = [ -1.0+2.0*random() for _ in range(3) ]
         pnt = np.array( smp )
@@ -794,9 +794,9 @@ class LUMP:
 
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
         """ Enclose a function that calculates the config penalty relative to the current config """
-        _TABLE_FACTOR      = 18.0
+        _TABLE_FACTOR      = 24.0
         _REACH_FACTOR      = 15.0
-        _CLOSE_FACTOR      = 18.0
+        _CLOSE_FACTOR      = 20.0
         _DELTA_FACTOR      =  2.0
         _DELTA_MAX         = [np.pi for _ in range(6)]
         _DELTA_MAX[-1]     = np.pi*2.0
