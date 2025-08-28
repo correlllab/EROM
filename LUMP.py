@@ -438,7 +438,7 @@ def get_aabb( ptsLst ):
 ########## MOTION PLANNER ##########################################################################
 _COLLISION_NRG_PENALTY = 20.0 #13.0
 _CONFIG_FACTOR         = 20.0
-_NEAR_SHOT_PEN         =  4.0 # 6.0
+_NEAR_SHOT_PEN         =  5.0 # 4.0 # 6.0
 _JOINT_Q_MARGIN        = np.pi/8.0
 
 class LUMP:
@@ -796,7 +796,7 @@ class LUMP:
         """ Enclose a function that calculates the config penalty relative to the current config """
         _TABLE_FACTOR      = 18.0
         _REACH_FACTOR      = 15.0
-        _CLOSE_FACTOR      = 16.0
+        _CLOSE_FACTOR      = 18.0
         _DELTA_FACTOR      =  2.0
         _DELTA_MAX         = [np.pi for _ in range(6)]
         _DELTA_MAX[-1]     = np.pi*2.0
