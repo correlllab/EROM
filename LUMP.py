@@ -379,7 +379,7 @@ def UR5_Jacobian( q : list | np.ndarray ):
 
 def UR5_manip_score( q : list | np.ndarray ):
     """ Get the manipulability score of the config """
-    return np.linalg.det( UR5_Jacobian( q ) ) # 0.0 is BAD
+    return min( 1.0, max( 0.0, np.linalg.det( UR5_Jacobian( q ) ) ) ) # 0.0 is BAD
     
 
 def p_all_joints_above_point_normal_plane( joints , point, normal, margin = _RBT_TABLE_MARGIN ):
@@ -614,7 +614,7 @@ class LUMP:
     def config_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
         """ Compute a "joint position badness" """
         mag = np.linalg.norm( np.subtract( q, qRef ) )
-        return mag + (1.0-UR5_manip_score( q ))*mag
+        return (1.0-UR5_manip_score( q )) * mag * mag
 
 
     def IK_search( self, effPose : np.ndarray ):
@@ -806,7 +806,8 @@ class LUMP:
         def sep_energy( qRef : list | np.ndarray, q : list | np.ndarray ):
             """ Compute badness based on angle between this and existing shots """
             nonlocal shots, centroid, desiredAngularSeparation_rad, self
-            pose = LUMP.FK( q )
+            poses = LUMP.FK_all( q )
+            pose  = poses[-1]
             vc_i = np.subtract( extract_position( pose ), centroid )
             # print( shots )
             vecs = [np.subtract( extract_position(shot[1]), centroid ) for shot in shots if (shot is not None)]
@@ -821,8 +822,10 @@ class LUMP:
             hit = 1.0 if self.p_collision_q( q ) else 0.0
             nrg += hit*_COLLISION_NRG_PENALTY
 
-            dXY  = np.linalg.norm( pose[0:2,3] )
-            nrg += (_ABOVE_BASE_BUFFER / max( 0.005, dXY ))*_CLOSE_FACTOR + dXY*_REACH_FACTOR
+            dXYii   = [np.linalg.norm( poses[ii][0:2,3] ) for ii in range(3,6)]
+            dXYmin  = min( dXYii )
+            dXYmax  = max( dXYii )
+            nrg += (_ABOVE_BASE_BUFFER / max( 0.005, dXYmin ))*_CLOSE_FACTOR + dXYmax*_REACH_FACTOR
             
             nrg += (np.linalg.norm( np.subtract( qRef, q ) )/_DELTA_DIVISOR + abs(qRef[-1] - q[-1])/np.pi)*_DELTA_FACTOR
             nrg += max( 0.0, 0.75 - np.linalg.norm( extract_position( pose ) ) )/0.75*4.0
