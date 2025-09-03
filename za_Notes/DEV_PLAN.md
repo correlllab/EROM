@@ -1,9 +1,9 @@
 # Plan Outline
 - [x] Basic Baseline
 	- --> 2025-05-13: 2 minutes!
-- [ ] Baseline: Class confusion only <--- $W$  
-	- [ ] Needs testing! <--- $W$  
-- [ ] Baseline: Remove pose cheat
+- [x] Baseline: Class confusion only <--- $W$  
+	- [x] Needs testing! <--- $W$  
+- [x] Baseline: Remove pose cheat
 - [ ] Method w/ Shortcutting
 
 # Repair Plan

@@ -700,7 +700,8 @@ class TaskPlanner:
 
         self.reset_state() 
         self.move_report_cb()
-        _GOAL = env_var("_GOAL_GRB")
+        # _GOAL = env_var("_GOAL_GRB")
+        _GOAL = env_var("_GOAL_WRK")
         
         self.symPln.set_goal( _GOAL )
         # self.symPln.set_goal( env_var("_GOAL_OR_RGB") )

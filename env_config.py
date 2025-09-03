@@ -33,7 +33,8 @@ def KNOWN_BLOCKS():
                       [ 0.112,  0.993,  0.044, -0.199+yOfst],
                       [-0.017,  0.046, -0.999,  0.246],
                       [ 0.0  ,  0.0  ,  0.0  ,  1.0  ],])
-    names = ['redBlock','grnBlock','bluBlock',]
+    # names = ['redBlock','grnBlock','bluBlock',]
+    names = ['redBlock','whtBlock','blkBlock',]
     rtnBlocks = list()
     for i, bloc_i in enumerate([bloc1,bloc2,bloc3,]):
         pose_i = np.eye(4)
@@ -157,6 +158,16 @@ def set_experiment_env():
             ('GraspObj', 'grnBlock' , _trgtGrn ), # ; Tower
             ('Supported', 'redBlock', 'grnBlock'), 
             ('Supported', 'bluBlock', 'redBlock'), 
+            ('HandEmpty',),
+        )        
+    )
+
+
+    env_sto( "_GOAL_WRK" ,
+        ( 'and',
+            ('GraspObj', 'whtBlock' , _trgtGrn ), # ; Tower
+            ('Supported', 'redBlock', 'whtBlock'), 
+            ('Supported', 'blkBlock', 'redBlock'), 
             ('HandEmpty',),
         )        
     )

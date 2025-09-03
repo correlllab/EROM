@@ -50,6 +50,8 @@ _REVERSE_QUERIES  = {
     "ylwBlock": {'query': "a photo of a small block", 'abbrv': "ylw", },
     "grnBlock": {'query': "a photo of a small block", 'abbrv': "grn", },
     "redBlock": {'query': "a photo of a small block", 'abbrv': "red", },
+    "whtBlock": {'query': "a photo of a small block", 'abbrv': "wht", },
+    "blkBlock": {'query': "a photo of a small block", 'abbrv': "blk", },
 }
 
 ##### Globals #####
