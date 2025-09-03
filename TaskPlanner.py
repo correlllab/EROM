@@ -61,8 +61,10 @@ _SAFE = repair_pose( np.array( [[-0.985, -0.163, -0.052, -0.252],
 _BLOCK_TYPE = "plastic" if (env_var("_BLOCK_SCALE") > 0.030) else "wooden"
 _BLOCK_DESC = {
     'grnBlock' : f"green {_BLOCK_TYPE} block",
-    # 'ylwBlock' : f"yellow {_BLOCK_TYPE} block",
+    'ylwBlock' : f"yellow {_BLOCK_TYPE} block",
     'redBlock' : f"red {_BLOCK_TYPE} block",
+    'whtBlock' : f"white {_BLOCK_TYPE} block",
+    'blkBlock' : f"black {_BLOCK_TYPE} block",
     'bluBlock' : f"blue {_BLOCK_TYPE} block",
     'table'    : f"wooden table",
 }
