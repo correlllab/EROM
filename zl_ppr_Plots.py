@@ -143,7 +143,7 @@ for ii, test in enumerate( tests ):
 
     ########## ANALYSIS ################################################################################
 
-    ##### Success Rate && Makespan ############################################
+    ##### Success Rate && Makespan Tracking ###############################
     N   = 0
     S   = 0
     F   = 0
@@ -180,11 +180,12 @@ for ii, test in enumerate( tests ):
         'sRun'   : deque(),
     }
 
+    ##### Per-Episode Accounting ##########################################
+
     for dPth in pkls:
         print( f"About to open {dPth} ..." )
         data = list()
         N   += 1
-        
 
         try:
             with open( dPth, 'rb' ) as f:
@@ -203,7 +204,6 @@ for ii, test in enumerate( tests ):
         obsTimes = deque()
         obsBgn   = 0
         obsEnd   = 0
-        obsRun   = False
 
         # Confusion Tracking
         symHist = deque()
@@ -217,80 +217,81 @@ for ii, test in enumerate( tests ):
         outFile = open( f"data/txt_log/{txtPath}", 'w' )
         timeBgn = data[0]['t']
 
-        for i, datum in enumerate( data ):
+        ##### Per-Step Accounting ################
+
+        for datum in data:
             # print( ".", end="", flush=True )
+            dtmMsg = datum['msg']
+            dtmT   = datum['t']
 
-            outFile.write( f"{(datum['t']-timeBgn):08} : {datum['msg']}\n" )
+            outFile.write( f"{(datum['t']-timeBgn):08.2f} : {dtmMsg}\n" )
 
-            if datum['msg'] == "Observation BEGIN":
-                if not obsRun:
-                    obsBgn = datum['t']
-                obsRun = True
-            elif p_str_has_any( datum['msg'], ["BT BEGIN", "Planning Failure"], cap = False ):
-                if obsRun:
-                    obsEnd   = datum['t']
-                    duration = obsEnd - obsBgn
-                    obsTimes.append( duration )
-                    result['oStp']['s'].append( Nstp     )
-                    result['oStp']['t'].append( duration )
-                obsRun = False
+            ##### Failures #####
 
-            if ('symbol' in datum['msg']):
-                if len( datum['data'] ):
-                    # print( f"{Ncnfus}:{Ntotal}\n{datum['data']}" )
-                    symbols = datum['data']
+            if "Planning Failure" in dtmMsg:
+                NfailPlan += 1
 
-            if p_str_has_any( datum['msg'], ["BT END", "Planning Failure"], cap = False ):
-                result['sDel']['s'].append( Nstp   ) 
-                result['sDel']['c'].append( Ndelta )
-                Nstp  += 1
-                Ndelta = 0 # Reset confusions for the next step
-                found  = True
+            if ("BT END" in dtmMsg) and ("fail" in f"{dtmMsg}".lower()):
+                NfailActn += 1
 
-                if "Planning Failure" in datum['msg']:
-                    NfailPlan += 1
+            if p_str_has_any( dtmMsg, ["BT END", "Planning Failure"], cap = False ):
+                Nstp += 1
 
-                if ("BT END" in datum['msg']) and ("fail" in f"{datum['msg']}".lower()):
-                    NfailActn += 1
+            ##### Symbol Grounding #####
 
+            if p_str_has_any( dtmMsg, ["symbols", "Post-Cheat"], cap = False ): # NOTE: Cheat ALWAYS applied in some form, even if fixes aren't applied
+                symbols = datum['data']
+                
+            ##### Phase 1: Perception #####
+
+            if "BGN: Phase 1" in dtmMsg:
+                obsBgn = dtmT
+            elif "END: Phase 1" in dtmMsg:
+                obsEnd = dtmT
+                duration = obsEnd - obsBgn
+                obsTimes.append( duration )
+                result['oStp']['s'].append( Nstp     )
+                result['oStp']['t'].append( duration )
+
+            ##### Phase 2: Conditions #####
+
+            elif "BGN: Phase 2" in dtmMsg:
+                Nlabel  = 0
+                Ntotal += len( symbols )
+                found   = True
                 if len( symbols ):
                     Nlabel = len( set([item.label for item in symbols]) )
-                    if Nlabel < 3:
-                        NfailFind += 1
-                        found = False
-                    else:
-                        Ntotal += len( symbols )
+                if Nlabel < 3:
+                    NfailFind += 1
+                    found = False
 
-                if len( symbols ) and len( symHist ) and len( symHist[-1] ):
-                    symLast : list[GraspObj] = symHist[-1]
-                    Nmatch = 0
-                    mtcSet = set([])
-                    if found:
-                        # print( "FOUND" )
-                        # for sym_i in symbols:
-                        for sym_i in symLast:
-                            dMin_i = 6e10
-                            mtch_i = None
-                            # for sym_j in symLast:
-                            for sym_j in symbols:
-                                d_ij = euclidean_distance_between_symbols( sym_i, sym_j )
-                                # print( f"{d_ij:.4f}:{dMin_i:.4f}", end=", ", flush=True )
-                                if ((d_ij < dMin_i) and (d_ij <= _D_THRESH_M)) and (id(sym_j) not in mtcSet):
-                                # if ((d_ij < dMin_i) and (d_ij <= _D_THRESH_M)):
-                                    dMin_i = d_ij
-                                    mtch_i = sym_j
-                            # print()
-                            if mtch_i is not None:
-                                mtcSet.add( id(mtch_i) )
-                                Nmatch += 1
-                                if sym_i.label != mtch_i.label:
-                                    Ndelta += 1
-                                    Ncnfus += 1
                 if len( symbols ):
+                    if len( symHist ) and len( symHist[-1] ):
+                        symLast : list[GraspObj] = symHist[-1]
+                        Nmatch = 0
+                        mtcSet = set([])
+                        if found:
+                            for sym_i in symLast:
+                                dMin_i = 6e10
+                                mtch_i = None
+                                for sym_j in symbols:
+                                    d_ij = euclidean_distance_between_symbols( sym_i, sym_j )
+                                    if ((d_ij < dMin_i) and (d_ij <= _D_THRESH_M)) and (id(sym_j) not in mtcSet):
+                                        dMin_i = d_ij
+                                        mtch_i = sym_j
+                                if mtch_i is not None:
+                                    mtcSet.add( id(mtch_i) )
+                                    Nmatch += 1
+                                    if sym_i.label != mtch_i.label:
+                                        Ndelta += 1
+                                        Ncnfus += 1
                     symHist.append( symbols[:] )
-
-
+                    result['sDel']['s'].append( Nstp   ) 
+                    result['sDel']['c'].append( Ndelta )
+                Ndelta = 0 # Reset confusions for the next step
                 
+                
+
         Nstp = Nstp if (Nstp > 0) else math.nan
         result['sRun'].append( Nstp )
         result['tRun'].append( data[-1]['t'] - data[0]['t'] )
