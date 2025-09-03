@@ -371,6 +371,57 @@ for ii, test in enumerate( tests ):
 
 
 
+labels = deque()
+for test in tests:
+    labels.append( test )
+fName  = "Total-RGB"
+
+def get_series( lblLst : list[str], key : str ):
+    series = deque()
+    for lbl in lblLst:
+        series.append( totRes[ lbl ][key] )
+    return list( series )
+
+
+make_multi_histo( 
+    get_series( labels, 'sRun' ), 
+    labels, 
+    f"Makespan Distribution [Steps]", 
+    f"{_PLOT_DIR}/{fName}_Histo-MS-Steps{plotExt}", 
+    xLabel = 'Steps', 
+    yLabel = 'Occurrences' 
+)
+
+make_multi_histo( 
+    get_series( labels, 'tRun' ), 
+    labels, 
+    f"Makespan Distribution [Time]", 
+    f"{_PLOT_DIR}/{fName}_Histo-MS-Time{plotExt}", 
+    xLabel = 'Seconds', 
+    yLabel = 'Occurrences' 
+)
+
+make_multi_histo( 
+    get_series( labels, 'tObs' ), 
+    labels, 
+    f"Object Search Time Distribution", 
+    f"{_PLOT_DIR}/{fName}_Histo-Search{plotExt}", 
+    xLabel = 'Seconds', 
+    yLabel = 'Occurrences' 
+)
+
+make_multi_histo( 
+    get_series( labels, 'rCon' ), 
+    labels, 
+    f"Object Confusion Distribution", 
+    f"{_PLOT_DIR}/{fName}_Histo-Confusion{plotExt}", 
+    xLabel = 'Confusion Rate', 
+    yLabel = 'Occurrences' 
+)
+
+
+
+
 ########## EXIT ####################################################################################
 print( "\n\n" )
 os.system( 'kill %d' % os.getpid() ) 
