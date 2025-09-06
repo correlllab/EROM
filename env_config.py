@@ -266,7 +266,7 @@ def set_experiment_env():
     env_sto( "_MOVEJ_FREE", False )
 
     env_sto( "_USE_POSE_CHEAT", True )
-    env_sto( "_CHEAT_LABEL"   , True and env_var("_USE_POSE_CHEAT") )
+    env_sto( "_CHEAT_LABEL"   , False and env_var("_USE_POSE_CHEAT") )
     env_sto( "_CHEAT_POSE"    , True and env_var("_USE_POSE_CHEAT") )
     env_sto( "_Z_SNAP_CHEAT"  , False )
     env_sto( "_CHEAT_LKG"     , False and env_var("_USE_POSE_CHEAT") )
@@ -274,10 +274,10 @@ def set_experiment_env():
     env_sto( "_MATCH_LIMIT_M", env_var("_BLOCK_SCALE")*0.75 )
 
     env_sto( "_N_PERC_SHOTS"    , 3 )
-    env_sto( "_N_PATH_DIV"      , 4 ) # 2 # 4 # 6
-    env_sto( "_PERC_MULT_FACTOR", 4 ) # 2 # 3 # 4 # 6 # 8
+    env_sto( "_N_PATH_DIV"      , 6 ) # 2 # 4 # 6
+    env_sto( "_PERC_MULT_FACTOR", 8 ) # 2 # 3 # 4 # 6 # 8
     env_sto( "_N_SEARCH_SHOTS"  , 3 )
-    env_sto( "_SAMPLE_Z_BUMP"   , 0.15 ) # 0.15 # 0.25
+    env_sto( "_SAMPLE_Z_BUMP"   , 0.30 ) # 0.15 # 0.25
 
     env_sto( "_N_GRID_EXPAND"   , 3 ) 
     env_sto( "_SEARCH_GRID_UNIT", 0.030 ) # 0.050

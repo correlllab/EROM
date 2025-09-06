@@ -476,8 +476,8 @@ class LUMP:
         self.shotHist     = deque()
         self.qLimLo       = [-np.pi for _ in range(6)]
         self.qLimHi       = [ np.pi for _ in range(6)]
-        self.qLimLo[5]   -= np.pi
-        self.qLimHi[5]   += np.pi
+        self.qLimLo[5]   -= np.pi*0.75
+        self.qLimHi[5]   += np.pi*0.75
 
     def set_state_from_robot( self ):
         if isinstance( self.robot, UR5_Interface ):
@@ -818,14 +818,18 @@ class LUMP:
             soln_i = self.IK( pose_i, suppressCache = True )
             if soln_i is not None:
                 sMax = max( sMax, LUMP.config_energy( qRef, soln_i ) )
+                if self.p_collision_q( soln_i ):
+                    sMax += _COLLISION_NRG_PENALTY
+            else:
+                sMax += _COLLISION_NRG_PENALTY
         return sMax
 
 
     def get_pose_energy_func( self, shots, centroid, desiredAngularSeparation_rad : float = 30.0/180.0*np.pi ):
         """ Enclose a function that calculates the config penalty relative to the current config """
-        _TABLE_FACTOR      = 24.0
+        _TABLE_FACTOR      = 28.0
         _REACH_FACTOR      = 15.0
-        _CLOSE_FACTOR      = 20.0
+        _CLOSE_FACTOR      = 28.0
         _DELTA_FACTOR      =  2.0
         _DELTA_MAX         = [np.pi for _ in range(6)]
         _DELTA_MAX[-1]     = np.pi*2.0
@@ -846,15 +850,16 @@ class LUMP:
             # nrg = LUMP.config_energy( qRef, q ) * _CONFIG_FACTOR
             nrg = self.greatest_config_energy_for_path( qRef, q ) * _CONFIG_FACTOR
 
-            zQ   = pose[2,3]
-            nrg += max( 0.0, _RBT_TABLE_MARGIN/max(0.005, zQ) )*_TABLE_FACTOR # Penalize being near the table
+            for pose_ii in poses[3:]:
+                # Penalize being near the table
+                zQ   = pose_ii[2,3]
+                nrg += max( 0.0, _RBT_TABLE_MARGIN/max(0.005, zQ) )*_TABLE_FACTOR 
+                # Penalize being too near to and too far from the robot base
+                dXYii   = np.linalg.norm( pose_ii[0:2,3] )
+                nrg += (_ABOVE_BASE_BUFFER / max( 0.005, dXYii ))*_CLOSE_FACTOR + dXYii*_REACH_FACTOR
+
             hit = 1.0 if self.p_collision_q( q ) else 0.0
             nrg += hit*_COLLISION_NRG_PENALTY
-
-            dXYii   = [np.linalg.norm( poses[ii][0:2,3] ) for ii in range(3,6)]
-            dXYmin  = min( dXYii )
-            dXYmax  = max( dXYii )
-            nrg += (_ABOVE_BASE_BUFFER / max( 0.005, dXYmin ))*_CLOSE_FACTOR + dXYmax*_REACH_FACTOR
             
             nrg += (np.linalg.norm( np.subtract( qRef, q ) )/_DELTA_DIVISOR + abs(qRef[-1] - q[-1])/np.pi)*_DELTA_FACTOR
             nrg += max( 0.0, 0.75 - np.linalg.norm( extract_position( pose ) ) )/0.75*4.0
