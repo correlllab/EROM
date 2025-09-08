@@ -986,7 +986,7 @@ if __name__ == "__main__":
             ] )
             planner.memory.mp.register_cylindrical_obstacle(
                 [0,0,0,],
-                0.150,
+                0.200,
                 2.000
             )
 
