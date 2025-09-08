@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import cmath, math, os
+import cmath, math, os, json
 from math import cos as cos
 from math import sin as sin
 from math import atan2 as atan2
@@ -13,6 +13,8 @@ from random import random, choice
 from collections import deque
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import dataclass, field, asdict
+from typing import Deque
 
 import numpy as np
 from numpy import linalg
@@ -443,6 +445,33 @@ _CONFIG_FACTOR         = 20.0
 _NEAR_SHOT_PEN         =  5.0 # 4.0 # 6.0
 _JOINT_Q_MARGIN        = np.pi/8.0
 
+
+##### Caching #############################################################
+_CACHE_LOCATION = "data/LUMP_CACHE.json"
+
+
+def q_zero():
+    """ Return the zero joint position """
+    return [0.0 for _ in range(6)]
+
+
+def origin_pose():
+    """ Return the zero joint pose """
+    return np.eye(4)
+
+
+@dataclass
+class Config:
+    """ Container class for manipulator condiguration info to be used for MP """
+    qJoints : list[float] = field( default_factory = q_zero )
+    qRef    : list[float] = field( default_factory = q_zero )
+    effPose : np.ndarray  = field( default_factory = origin_pose )
+    penalty : float       = float( 6e10 )
+    observs : int         = 0
+
+
+##### Planner #############################################################
+
 class LUMP:
     """ [L]imited [U]R5 [M]otion [P]lanner """
 
@@ -459,6 +488,45 @@ class LUMP:
     
     dLoc        : float = 1.25*env_var( "_MIN_CAM_PCD_DIST_M" )
     _SEP_DIST_M : float =  0.150
+
+
+    def load_cache( self, cachePath : str = _CACHE_LOCATION ):
+        """ Load poses to reuse and to avoid """
+        self.cachePath = cachePath
+        self.configCache : dict[str,deque] = {
+            "good" : deque(),
+            "fail" : deque(),
+        }
+        try:
+            with open( self.cachePath, 'r' ) as f:
+                rawCache = json.load(f)
+                for item in rawCache["good"]:
+                    self.configCache["good"].append( Config( **item ) )
+                for item in rawCache["fail"]:
+                    self.configCache["fail"].append( Config( **item ) )
+        except OSError as e:
+            print( f"\nFAILURE LOADING CONFIG CACHE: {e}\n" )
+
+
+    def save_cache( self ):
+        """ Save poses to reuse and to avoid """
+        goodDqu = deque()
+        failDqu = deque()
+        for item in self.configCache["good"]:
+            goodDqu.append( asdict( item ) )
+        for item in self.configCache["fail"]:
+            failDqu.append( asdict( item ) )
+        try:
+            with open( self.cachePath, 'w' ) as f:
+                json.dump( {
+                    "good" : list( goodDqu ),
+                    "fail" : list( failDqu ),
+                }, f )
+                return True
+        except OSError as e:
+            print( f"\nFAILURE SAVING CONFIG CACHE: {e}\n" )
+            return False
+
 
     def __init__( self, qInit = None, robot : UR5_Interface = None ):
         """ Set params """
@@ -478,6 +546,35 @@ class LUMP:
         self.qLimHi       = [ np.pi for _ in range(6)]
         self.qLimLo[5]   -= np.pi*0.75
         self.qLimHi[5]   += np.pi*0.75
+        self.load_cache()
+
+
+    def __del__( self ):
+        """ Destructor: save the cache """
+        print( f"\nL.U.M.P. DESTROYED, Cache Saved?: {self.save_cache()}\n" )  
+
+
+    def cache_good( self, q = None, qRef = None, pose = np.eye(4), score = float(6e10), obs = 0 ):
+        """ Cache a good pose """
+        self.configCache["good"].append( Config(
+            qJoints = q if (q is not None) else q_zero(),
+            qRef    = qRef if (qRef is not None) else q_zero(),
+            effPose = pose,
+            penalty = score,
+            observs = obs
+        ) )
+
+
+    def cache_fail( self, q, qRef, pose, score, obs = 0 ):
+        """ Cache a bad pose """
+        self.configCache["fail"].append( Config(
+            qJoints = q,
+            qRef    = qRef,
+            effPose = pose,
+            penalty = score,
+            observs = obs
+        ) )
+
 
     def set_state_from_robot( self ):
         if isinstance( self.robot, UR5_Interface ):
@@ -728,7 +825,6 @@ class LUMP:
             backupVc = np.subtract( pnt, centroid )
             backupDr = vec_unit( backupVc ) 
             xBasis   = np.array([0.0, -1.0, 0.0])
-            # xBasis   = np.array([1.0, 0.0, 0.0]) # 2025-06-30: Does NOT work!
             zBasis   = -backupDr
             yBasis   = vec_unit( np.cross( zBasis, xBasis ) )
             xBasis   = vec_unit( np.cross( yBasis, zBasis ) )
@@ -737,12 +833,6 @@ class LUMP:
             rtnPose[0:3,2] = zBasis
             rtnPose[0:3,3] = pnt
             rtnSoln = self.IK( rtnPose, suppressCache = True )
-            # if is_pose_mtrx( rtnPose ):
-            #     rtnSoln = self.IK( rtnPose, suppressCache = True )
-            # else:
-            #     rtnSoln = None
-            # rtnSoln = pose_vec_to_mtrx( rtnSoln )
-            # print( rtnSoln )
             if ((rtnSoln is not None) and self.p_safe_pose( rtnPose )):
                 ranking.append((
                     energyFunc( self.q, rtnSoln ),
@@ -750,11 +840,41 @@ class LUMP:
                 ))
             else:
                 pass
-                # print( f"Cannot Rank: {rtnSoln}" )
+
+        if len( self.configCache["good"] ):
+            for _ in range( env_var("_N_CACHE_INJECT") ):
+                config_i : Config = choice( self.configCache["good"] )
+                rtnPose  = config_i.effPose
+                if np.linalg.norm( config_i.qJoints ) > 0.5:
+                    rtnSoln = config_i.qJoints
+                else:
+                    rtnSoln = self.IK( rtnPose, suppressCache = True )
+                if ((rtnSoln is not None) and self.p_safe_pose( rtnPose )):
+                    ranking.append((
+                        energyFunc( self.q, rtnSoln ),
+                        np.array( rtnSoln ),
+                    ))
+                else:
+                    pass
 
         ranking = list( ranking )
-        # ranking.sort( key = lambda x: x[0], reverse = True )
         ranking.sort( key = lambda x: x[0] )
+
+        for i in range( env_var("_N_CACHE_PER_SEARCH") ):
+            if self.p_collision_q( ranking[i][1] ):
+                self.cache_fail(
+                    q     = list( ranking[i][1] ),
+                    qRef  = list( self.q ),
+                    pose  = self.FK( ranking[i][1] ),
+                    score = ranking[i][0]
+                )
+            else:
+                self.cache_good(
+                    q     = list( ranking[i][1] ),
+                    qRef  = list( self.q ),
+                    pose  = self.FK( ranking[i][1] ),
+                    score = ranking[i][0]
+                )
 
         if len( ranking ):
             return ranking[0][1], self.FK( ranking[0][1] )
@@ -1077,6 +1197,7 @@ class LUMP:
         else:
             return {
                 'pose' : np.array( pose ),
+                'q'    : np.array( pose ),
                 'score': score if (score is not None) else 0.0,
             }
 
@@ -1127,6 +1248,13 @@ class LUMP:
             # print(topPose, pose_i)
             shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( topPose, pose_i ), 0.005 ) * _NEAR_SHOT_PEN
         ranking.sort( key = lambda x: x['score'] )
+
+        for i in range( env_var("_N_CACHE_PER_SEARCH") ):
+            self.cache_good(
+                qRef  = list( self.q ),
+                pose  = np.array( ranking[i]['pose'] ),
+                score = ranking[i]['score']
+            )
 
         return [item['pose'] for item in ranking[:N]]
     

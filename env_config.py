@@ -10,8 +10,8 @@ from Memory import now
 
 def BASE_TARGET():
     _poseGrn = np.eye(4)
-    _poseGrn[0:3,3] = [ -0.200, # env_var("_MIN_X_OFFSET")+env_var("_X_WRK_SPAN")/2.0, 
-                        -0.300, # env_var("_MIN_Y_OFFSET")+env_var("_Y_WRK_SPAN")/2.0, 
+    _poseGrn[0:3,3] = [ -0.200, 
+                        -0.400, 
                          0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE"), ]
     return ObjPose( _poseGrn )
 
@@ -284,3 +284,7 @@ def set_experiment_env():
 
     env_sto( "_N_GRID_HALF_PTS" , 2 )
     env_sto( "_RETRY_CLOUDS"    , True )
+
+    env_sto( "_N_CACHE_PER_SEARCH"   ,    1 )
+    env_sto( "_N_CACHE_RANKED_TOTAL" , 1000 )
+    env_sto( "_N_CACHE_INJECT"       ,    5 )

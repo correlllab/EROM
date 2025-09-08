@@ -1,5 +1,10 @@
 # [L]imited [U]R5 [M]otion [P]lanner
 
+# 2025-09-08, Caching
+- [ ] Cache good configs - Promote
+- [ ] Cache bad configs - Penalize
+	- [ ] How to catch them? -> The config we were going to on a `KeybaordInterrupt`
+
 # 2025-07-16, PROBLEMS
 
 ## Search is PAINFUL!
@@ -9,13 +14,14 @@
 	- [ ] Action Failure: Erase cache
 	- [ ] Determ Failure: Retain Cache
 ## COLLISIONS && SINGULARITIES!
-- [ ] Add planar collision object type
-- [ ] Add table collision plane
-- [ ] Add collision plane through robot base + margin
+- [x] Add planar collision object type
+- [x] Add table collision plane
+- [x] Add collision plane through robot base + margin
+- [x] Add cylindrical collision object through robot base + margin
 
 
 ### Level 0
-- [ ] Check frames 4-6 against the base
+- [x] Check frames 4-6 against the base
 ### Level 1, [FCL](https://github.com/BerkeleyAutomation/python-fcl)
 - [ ] Use a sphere to represent the Hand
 - [ ] Use 2 triangles to represent the Table!
