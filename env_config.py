@@ -277,7 +277,7 @@ def set_experiment_env():
     env_sto( "_N_PATH_DIV"      ,  6 ) # 2 # 4 # 6
     env_sto( "_PERC_MULT_FACTOR", 10 ) # 2 # 3 # 4 # 6 # 8
     env_sto( "_N_SEARCH_SHOTS"  ,  3 )
-    env_sto( "_SAMPLE_Z_BUMP"   ,  0.30 ) # 0.15 # 0.25
+    env_sto( "_SAMPLE_Z_BUMP"   ,  0.40 ) # 0.15 # 0.25
 
     env_sto( "_N_GRID_EXPAND"   , 3 ) 
     env_sto( "_SEARCH_GRID_UNIT", 0.030 ) # 0.050
