@@ -258,6 +258,83 @@ def apply_homog_to_direction_vec( xform, drctn ):
     return R_from_xform( xform ).dot( drctn )
     
 
+def rotMatx_to_quat( R ):
+    """Return the quaternion WXYZ that corresponds to the given 3x3 rotation matrix `R`"""
+    quatWXYZ = np.zeros(4)
+    e0Sqr = 0.25 * (1 + R[0, 0] + R[1, 1] + R[2, 2])
+    quatWXYZ[0] = np.sqrt( e0Sqr )
+    w = quatWXYZ[0]
+    if e0Sqr > 0:
+        quatWXYZ[1] = (1 / (4 * w)) * (R[2, 1] - R[1, 2])
+        quatWXYZ[2] = (1 / (4 * w)) * (R[0, 2] - R[2, 0])
+        quatWXYZ[3] = (1 / (4 * w)) * (R[1, 0] - R[0, 1])
+    else:
+        e1Sqr = -0.5 * (R[1, 1] + R[2, 2])
+        quatWXYZ[1] = np.sqrt( e1Sqr )
+        x = quatWXYZ[1]
+        if e1Sqr > 0:
+            quatWXYZ[2] = R[0, 1] / (2 * x)
+            quatWXYZ[3] = R[0, 2] / (2 * x)
+        else:
+            e2Sqr = 0.5 * (1 - R[2, 2])
+            quatWXYZ[2] = np.sqrt( e2Sqr )
+            y = quatWXYZ[2]
+            if e2Sqr > 0:
+                quatWXYZ[3] = R[1, 2] / (2 * y)
+            else:
+                quatWXYZ[3] = 1
+    return np.array(quatWXYZ)
+
+
+def sclr( quat ):
+    """Retrieve the scalar component 'w' of the quaternion [ w x y z ]"""
+    return quat[0]
+
+
+def vctr( quat ):
+    """Retrieve the vector component [ x y z ]' of the quaternion [ w x y z ]"""
+    return np.array([quat[1], quat[2], quat[3]])
+
+
+def skew_sym( vec ):
+    """Return the skew symmetic matrix for the equivalent cross operation: [r_cross][v] = cross( r , v )"""
+    return np.array(
+        [[0.0, -vec[2], vec[1]], [vec[2], 0.0, -vec[0]], [-vec[1], vec[0], 0.0]]
+    )
+
+
+def orientation_error( quatMeasure, quatDesired ):
+    """Implement the orientation error between quaternions from Siciliano et al."""
+    # NOTE: This function assumes that 'quatMeasure' and 'quatDesired' are properly-formed, unit quaternions [ w x y z ]
+    # NOTE: Returns an error vector with all 3 rotation components
+    return (
+        sclr(quatMeasure) * vctr(quatDesired)
+        - sclr(quatDesired) * vctr(quatMeasure)
+        - skew_sym(vctr(quatDesired)).dot(vctr(quatMeasure))
+    )
+
+
+def orient_err_R( Rmeasure, Rdesired ):
+    """Implement the orientation error between quaternions from Siciliano et al."""
+    # NOTE: This function assumes that 'Rmeasure' and 'Rdesired' are properly-formed rotation matrices
+    # NOTE: Returns an error vector with all 3 rotation components
+    return orientation_error(rotMatx_to_quat(Rmeasure), rotMatx_to_quat(Rdesired))
+
+
+def get_distance_between_poses( pose_1, pose_2 ):
+    """Return the Euclidian distance between the displacement vectors of the respective poses"""
+    point_a = pose_1[:3, 3]
+    point_b = pose_2[:3, 3]
+    return np.linalg.norm( point_a - point_b )
+
+
+def pose_error( pose_1, pose_2 ):
+    """ Get position and rotation error between the poses """
+    posnErr = get_distance_between_poses( pose_1, pose_2 )
+    rotnErr = sum( orient_err_R( R_from_xform( pose_1 ), R_from_xform( pose_2 ) ) )
+    return posnErr, rotnErr
+
+
 
 ########## 2D GEOMETRY #############################################################################
 

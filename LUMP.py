@@ -13,7 +13,7 @@ from random import random, choice
 from collections import deque
 from collections.abc import Callable
 from copy import deepcopy
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import Deque
 
 import numpy as np
@@ -27,7 +27,7 @@ from magpie_control.ur5 import UR5_Interface
 from aspire.symbols import euclidean_distance_between_symbols, GraspObj, extract_pose_as_homog, extract_position
 from aspire.env_config import env_var
 
-from homog_utils import ( posn_from_xform, bases_from_xform, R_krot, R_z, homog_xform, diff_mag, apply_homog_to_direction_vec,
+from homog_utils import ( posn_from_xform, bases_from_xform, R_krot, R_z, homog_xform, diff_mag, pose_error,
                           diff_unit, )
 from dh_mp import FK_DH_chain, dh_link_homog
 
@@ -469,15 +469,28 @@ class Config:
     penalty : float       = float( 6e10 )
     observs : int         = 0
 
-    def as_dict( self ):
+    def to_dict( self ):
         """ Make this container serializable """
         return {
             "qJoints" : list( self.qJoints ),
             "qRef"    : list( self.qRef    ),
-            "effPose" : self.effPose.tolist(),
+            "effPose" : self.effPose.tolist() if isinstance( self.effPose, np.ndarray ) else self.effPose[:],
             "penalty" : self.penalty,
             "observs" : self.observs,
         }
+    
+    def from_dict( self, dct : dict ):
+        """ De-serialize this container """
+        if "qJoints" in dct:
+            self.qJoints = list( dct["qJoints"] )
+        if "qRef" in dct:
+            self.qRef = list( dct["qRef"] )
+        if "effPose" in dct:
+            self.effPose = np.array( dct["effPose"] )
+        if "penalty" in dct:
+            self.penalty = float( dct["penalty"] )
+        if "observs" in dct:
+            self.observs = int( dct["observs"] )
 
 
 ##### Planner #############################################################
@@ -511,9 +524,13 @@ class LUMP:
             with open( self.cachePath, 'r' ) as f:
                 rawCache = json.load(f)
                 for item in rawCache["good"]:
-                    self.configCache["good"].append( Config( **item ) )
+                    nuConfig = Config()
+                    nuConfig.from_dict( item )
+                    self.configCache["good"].append( nuConfig )
                 for item in rawCache["fail"]:
-                    self.configCache["fail"].append( Config( **item ) )
+                    nuConfig = Config()
+                    nuConfig.from_dict( item )
+                    self.configCache["fail"].append( nuConfig )
         except (OSError, json.decoder.JSONDecodeError) as e:
             print( f"\nFAILURE LOADING CONFIG CACHE: {e}\n" )
 
@@ -524,17 +541,17 @@ class LUMP:
         failDqu = deque()
         cacheMx = env_var("_N_CACHE_RANKED_TOTAL")
         for item in self.configCache["good"]:
-            goodDqu.append( item.as_dict() )
+            goodDqu.append( item.to_dict() )
         for item in self.configCache["fail"]:
-            failDqu.append( item.as_dict() )
+            failDqu.append( item.to_dict() )
         # Keep only the Best
         goodDqu = list( goodDqu )
-        goodDqu.sort( key = lambda x: x.penalty )
+        goodDqu.sort( key = lambda x: x["penalty"] )
         if (len( goodDqu ) > cacheMx):
             goodDqu = goodDqu[:cacheMx]
         # Keep only the Worst
         failDqu = list( failDqu )     
-        failDqu.sort( key = lambda x: x.penalty, reverse = True )
+        failDqu.sort( key = lambda x: x["penalty"], reverse = True )
         if (len( failDqu ) > cacheMx):
             failDqu = failDqu[:cacheMx]   
 
@@ -543,7 +560,7 @@ class LUMP:
                 json.dump( {
                     "good" : goodDqu,
                     "fail" : failDqu,
-                }, f )
+                }, f, indent = 4 )
                 return True
         except OSError as e:
             print( f"\nFAILURE SAVING CONFIG CACHE: {e}\n" )
@@ -977,6 +994,7 @@ class LUMP:
         _REACH_FACTOR      = 15.0
         _CLOSE_FACTOR      = 28.0
         _DELTA_FACTOR      =  2.0
+        _CACHE_FACTOR      =  5.0
         _DELTA_MAX         = [np.pi for _ in range(6)]
         _DELTA_MAX[-1]     = np.pi*2.0
         _DELTA_DIVISOR     = np.linalg.norm( _DELTA_MAX )
@@ -1011,6 +1029,26 @@ class LUMP:
             nrg += max( 0.0, 0.75 - np.linalg.norm( extract_position( pose ) ) )/0.75*4.0
             for theta_j in angl:
                 nrg += max( 0.0, desiredAngularSeparation_rad - theta_j )
+
+            def p_origin( xform ):
+                posnErr, rotnErr = pose_error( np.array( xform ), np.eye(4) )
+                if (posnErr < 0.005) and (rotnErr < (np.pi / 180.0 * 5.0)):
+                    return True
+                else:
+                    return False
+                
+            def p_zero_angle( q ):
+                return (np.linalg.norm(q) < 0.005)
+
+            if (env_var("_PENALIZE_CACHE") and len( self.configCache["fail"] )):
+                for _ in range( env_var("_N_CACHE_INJECT") ):
+                    config_i : Config = choice( self.configCache["fail"] )
+                    if (not p_origin( config_i.effPose )):
+                        posnErr, _ = pose_error( config_i.effPose, pose )
+                        nrg += (_ABOVE_BASE_BUFFER / max( 0.005, posnErr )) * _CACHE_FACTOR
+                    elif (not p_zero_angle( config_i.qJoints )):
+                        nrg += (_DELTA_DIVISOR / max( 0.005, np.linalg.norm( np.subtract( config_i.qJoints, q ) ) )) * _CACHE_FACTOR
+
             return nrg
         
         return sep_energy

@@ -1,18 +1,19 @@
 # [L]imited [U]R5 [M]otion [P]lanner
 
 # 2025-09-08, Caching
-- [ ] Cache good configs - Promote
-- [ ] Cache bad configs - Penalize
-	- [ ] How to catch them? -> The config we were going to on a `KeybaordInterrupt`
+- [x] Cache good configs - Promote
+- [x] Cache bad configs - Penalize (Optional)
+	- [x] How to catch them? -> The config we were going to on a `KeybaordInterrupt`
 
 # 2025-07-16, PROBLEMS
 
 ## Search is PAINFUL!
 - [x] Begin the search with a Bird's Eye View!
 - [x] TEST Bird's Eye Init Search!
-- [ ] There are two reasons for object search
-	- [ ] Action Failure: Erase cache
-	- [ ] Determ Failure: Retain Cache
+- [x] There are two reasons for object search
+	- No, I wrote the loop the wrong way for this to be intuitive
+	- [x] Action Failure: Erase memory
+	- [x] Determ Failure: Retain Cache
 ## COLLISIONS && SINGULARITIES!
 - [x] Add planar collision object type
 - [x] Add table collision plane
@@ -45,9 +46,10 @@
 	- [x] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L146
 	- [x] https://github.com/correlllab/EROM/blob/e51e4ecd82f19e8f097057df6fca64754ffbea54/Memory.py#L357
 	- --> This resulted in MANY false readings!
-- [ ] HAX
-	- [ ] Pose Repair should also straighten out stacked blocks?
-	- [ ] Pose Repair should also quantize Z coord?
+- [x] HAX
+	- [x] Pose Repair should also straighten out stacked blocks?
+		- No
+	- [x] Pose Repair should also quantize Z coord?
 
 - [x] Idea: Don't let the determinizer consider NULL!
 ## Object Search

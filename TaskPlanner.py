@@ -12,6 +12,8 @@ Contacts: {james.watson-2@colorado.edu,}
 ### Standard ###
 import time, os
 now = time.time
+os.environ["QT_QPA_PLATFORM"] = "offscreen" # qt.qpa.plugin: Could not load the Qt platform plugin "xcb" even though it was found
+
 from time import sleep
 from random import random
 from traceback import print_exc
@@ -189,6 +191,7 @@ class TaskPlanner:
 
         self.nPlnFl = 0
         self.lmFail = 5
+        
 
 
     ##### Callbacks #######################################################

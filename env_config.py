@@ -276,7 +276,7 @@ def set_experiment_env():
 
     env_sto( "_N_PERC_SHOTS"    ,  3 )
     env_sto( "_N_PATH_DIV"      ,  6 ) # 2 # 4 # 6
-    env_sto( "_PERC_MULT_FACTOR", 10 ) # 2 # 3 # 4 # 6 # 8
+    env_sto( "_PERC_MULT_FACTOR",  6 ) # 2 # 3 # 4 # 6 # 8 # 10
     env_sto( "_N_SEARCH_SHOTS"  ,  3 )
     env_sto( "_SAMPLE_Z_BUMP"   ,  0.40 ) # 0.15 # 0.25
 
@@ -286,6 +286,7 @@ def set_experiment_env():
     env_sto( "_N_GRID_HALF_PTS" , 2 )
     env_sto( "_RETRY_CLOUDS"    , True )
 
-    env_sto( "_N_CACHE_PER_SEARCH"   ,    1 )
-    env_sto( "_N_CACHE_RANKED_TOTAL" , 1000 )
-    env_sto( "_N_CACHE_INJECT"       ,    5 )
+    env_sto( "_N_CACHE_PER_SEARCH"   ,    1  )
+    env_sto( "_N_CACHE_RANKED_TOTAL" , 1000  )
+    env_sto( "_N_CACHE_INJECT"       ,    5  )
+    env_sto( "_PENALIZE_CACHE"       , False )
