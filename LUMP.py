@@ -1352,6 +1352,11 @@ class LUMP:
         centroid = LUMP.SearchTarget.get_centroid( self.targets )
         nrgFunc  = self.get_pose_energy_func( list(), centroid )
 
+        if len( self.configCache["good"] ):
+            for _ in range( env_var("_N_CACHE_INJECT") ):
+                config_i : Config = choice( self.configCache["good"] )
+                self.shots.append( np.array( config_i.effPose ) )
+
         nuLst = deque()
         for shot in self.shots:
             obsc = self.obscurity_list( shot, self.targets )
@@ -1385,6 +1390,13 @@ class LUMP:
                 shot['score'] += LUMP._SEP_DIST_M / max( euclidean_distance_between_poses( pose_j, pose_i ), 0.005 ) * _NEAR_SHOT_PEN
 
         self.ranking.sort( key = lambda x: x['score'] )
+
+        for i in range( env_var("_N_CACHE_PER_SEARCH") ):
+            self.cache_good(
+                qRef  = list( self.q ),
+                pose  = np.array( self.ranking[i]['pose'] ),
+                score = self.ranking[i]['score']
+            )
 
         self.shots = [item['pose'] for item in self.ranking]
 

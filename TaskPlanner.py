@@ -246,6 +246,7 @@ class TaskPlanner:
     def shutdown( self ):
         """ Stop the Perception Process and the UR5 connection """
         self.memory.history.dump_to_file()
+        self.lump.save_cache()
         if not self.noBot:
             self.robot.reset_gripper_overload( restart = False )
             self.robot.stop()

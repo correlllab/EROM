@@ -11,7 +11,7 @@ from Memory import now
 def BASE_TARGET():
     _poseGrn = np.eye(4)
     _poseGrn[0:3,3] = [ -0.200, 
-                        -0.400, 
+                        -0.300, # -0.400
                          0.5*env_var("_BLOCK_SCALE")+env_var("_Z_TABLE"), ]
     return ObjPose( _poseGrn )
 
@@ -63,11 +63,12 @@ def set_experiment_env():
     """ Params for this experiment """
 
     env_sto( "_SPACE_EXPAND",  0.000 ) 
+    env_sto( "_Y_EXPAND"    ,  0.100 ) 
 
     env_sto( "_MIN_X_OFFSET", -0.468 - env_var( "_SPACE_EXPAND" ) )
     env_sto( "_MAX_X_OFFSET", -0.103 + env_var( "_SPACE_EXPAND" ) )
-    env_sto( "_MIN_Y_OFFSET", -0.625 - env_var( "_SPACE_EXPAND" ) ) 
-    env_sto( "_MAX_Y_OFFSET",  0.200 + env_var( "_SPACE_EXPAND" ) )
+    env_sto( "_MIN_Y_OFFSET", -0.625 - env_var( "_Y_EXPAND" )     ) 
+    env_sto( "_MAX_Y_OFFSET",  0.200 )
 
     _THRESH_FACTOR = 0.0625
 
