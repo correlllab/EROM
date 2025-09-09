@@ -469,6 +469,16 @@ class Config:
     penalty : float       = float( 6e10 )
     observs : int         = 0
 
+    def as_dict( self ):
+        """ Make this container serializable """
+        return {
+            "qJoints" : list( self.qJoints ),
+            "qRef"    : list( self.qRef    ),
+            "effPose" : self.effPose.tolist(),
+            "penalty" : self.penalty,
+            "observs" : self.observs,
+        }
+
 
 ##### Planner #############################################################
 
@@ -493,7 +503,7 @@ class LUMP:
     def load_cache( self, cachePath : str = _CACHE_LOCATION ):
         """ Load poses to reuse and to avoid """
         self.cachePath = cachePath
-        self.configCache : dict[str,deque] = {
+        self.configCache : dict[str,Deque[Config]] = {
             "good" : deque(),
             "fail" : deque(),
         }
@@ -504,7 +514,7 @@ class LUMP:
                     self.configCache["good"].append( Config( **item ) )
                 for item in rawCache["fail"]:
                     self.configCache["fail"].append( Config( **item ) )
-        except OSError as e:
+        except (OSError, json.decoder.JSONDecodeError) as e:
             print( f"\nFAILURE LOADING CONFIG CACHE: {e}\n" )
 
 
@@ -512,15 +522,27 @@ class LUMP:
         """ Save poses to reuse and to avoid """
         goodDqu = deque()
         failDqu = deque()
+        cacheMx = env_var("_N_CACHE_RANKED_TOTAL")
         for item in self.configCache["good"]:
-            goodDqu.append( asdict( item ) )
+            goodDqu.append( item.as_dict() )
         for item in self.configCache["fail"]:
-            failDqu.append( asdict( item ) )
+            failDqu.append( item.as_dict() )
+        # Keep only the Best
+        goodDqu = list( goodDqu )
+        goodDqu.sort( key = lambda x: x.score )
+        if (len( goodDqu ) > cacheMx):
+            goodDqu = goodDqu[:cacheMx]
+        # Keep only the Worst
+        failDqu = list( failDqu )     
+        failDqu.sort( key = lambda x: x.score, reverse = True )
+        if (len( failDqu ) > cacheMx):
+            failDqu = failDqu[:cacheMx]   
+
         try:
             with open( self.cachePath, 'w' ) as f:
                 json.dump( {
-                    "good" : list( goodDqu ),
-                    "fail" : list( failDqu ),
+                    "good" : goodDqu,
+                    "fail" : failDqu,
                 }, f )
                 return True
         except OSError as e:
@@ -549,9 +571,9 @@ class LUMP:
         self.load_cache()
 
 
-    def __del__( self ):
-        """ Destructor: save the cache """
-        print( f"\nL.U.M.P. DESTROYED, Cache Saved?: {self.save_cache()}\n" )  
+    # def __del__( self ):
+    #     """ Destructor: save the cache """
+    #     print( f"\nL.U.M.P. DESTROYED, Cache Saved?: {self.save_cache()}\n" )  
 
 
     def cache_good( self, q = None, qRef = None, pose = np.eye(4), score = float(6e10), obs = 0 ):
