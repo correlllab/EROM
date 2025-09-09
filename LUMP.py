@@ -529,12 +529,12 @@ class LUMP:
             failDqu.append( item.as_dict() )
         # Keep only the Best
         goodDqu = list( goodDqu )
-        goodDqu.sort( key = lambda x: x.score )
+        goodDqu.sort( key = lambda x: x.penalty )
         if (len( goodDqu ) > cacheMx):
             goodDqu = goodDqu[:cacheMx]
         # Keep only the Worst
         failDqu = list( failDqu )     
-        failDqu.sort( key = lambda x: x.score, reverse = True )
+        failDqu.sort( key = lambda x: x.penalty, reverse = True )
         if (len( failDqu ) > cacheMx):
             failDqu = failDqu[:cacheMx]   
 
@@ -605,6 +605,10 @@ class LUMP:
         else:
             self.q    = np.array( [0.0 for _ in range(6)] )
             self.pose = self.FK( self.q )
+        return {
+            "qJoints" : self.q.tolist(),
+            "effPose" : self.pose.tolist(),
+        }
 
 
     def log_failed_perc( self ):

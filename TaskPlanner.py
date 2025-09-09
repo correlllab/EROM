@@ -45,7 +45,7 @@ from OWLv2_Segment import Perception_OWLv2, _QUERIES
 
 from State import PoseCheater
 from Memory import Memory
-# from LUMP import LUMP
+from LUMP import Config, _COLLISION_NRG_PENALTY
 from draw_beliefs import render_memory_list, render_scan_list
 from env_config import set_experiment_env
 from utils import deep_copy_memory_list
@@ -1006,6 +1006,9 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             # User Panic: Attempt to shut down gracefully
             try:
+                failSpec = planner.lump.set_state_from_robot()
+                failSpec["penalty"] = _COLLISION_NRG_PENALTY ** 2
+                planner.lump.cache_fail( Config( **failSpec ) )
                 planner.shutdown()
                 print( f"\nSystem SHUTDOWN initiated by user!, Planner Status: {planner.status}\n" )
             except NameError as e:
