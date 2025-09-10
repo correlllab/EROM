@@ -32,7 +32,7 @@ from magpie_control.utils import vec_unit
 
 ### ASPIRE ###
 from aspire.env_config import env_var
-from aspire.symbols import ( ObjPose, GraspObj, extract_pose_as_homog )
+from aspire.symbols import ( ObjPose, GraspObj )
 from aspire.BlocksTask import set_blocks_env, BlockFunctions
 from aspire.actions.pdls_behaviors import GroundedAction, MoveFree, Plan
 from aspire.actions.utils import line_intersect_plane
