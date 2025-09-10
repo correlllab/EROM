@@ -762,13 +762,13 @@ class TaskPlanner:
                                           asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE  
                     else:
                         self.robot.moveL( _SAFE, 
-                                        linSpeed = env_var("_ROBOT_FREE_SPEED"),
-                                        linAccel = env_var("_ROBOT_LIN_ACCEL" ),
-                                        asynch = False )
+                                          linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                                          linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                                          asynch = False )
                         self.robot.moveL( bgnPose, 
-                                        linSpeed = env_var("_ROBOT_FREE_SPEED"),
-                                        linAccel = env_var("_ROBOT_LIN_ACCEL" ),
-                                        asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE    
+                                          linSpeed = env_var("_ROBOT_FREE_SPEED"),
+                                          linAccel = env_var("_ROBOT_LIN_ACCEL" ),
+                                          asynch = False ) # 2024-07-22: MUST WAIT FOR ROBOT TO MOVE    
                     if i < (Npose-1):
                         self.phase_1_Perceive( Append = True, suppressDeterm = True )
                     else:
