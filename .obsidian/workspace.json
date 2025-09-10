@@ -40,35 +40,21 @@
             }
           },
           {
-            "id": "fb2286836f048bd9",
+            "id": "7b512479d5ce3c0a",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "za_Notes/Log/2025-09-05.md",
+                "file": "za_Notes/Log/2025-09-10.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "2025-09-05"
-            }
-          },
-          {
-            "id": "0488c9ac67939520",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "za_Notes/Log/2025-09-08.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "2025-09-08"
+              "title": "2025-09-10"
             }
           }
         ],
-        "currentTab": 3
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -214,8 +200,12 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "0488c9ac67939520",
+  "active": "7b512479d5ce3c0a",
   "lastOpenFiles": [
+    "za_Notes/OWLv2 Vision Pipeline.md",
+    "za_Notes/Log/2025-09-05.md",
+    "za_Notes/Log/2025-09-10.md",
+    "za_Notes/Log/2025-09-08.md",
     "data/EROM-Memories_09-09-2025_21-11-41.pkl",
     "data/EROM-Memories_09-09-2025_20-05-50.pkl",
     "data/EROM-Memories_09-09-2025_19-48-54.pkl",
@@ -226,11 +216,7 @@
     "data/EROM-Memories_09-09-2025_17-43-59.pkl",
     "data/EROM-Memories_09-09-2025_17-26-26.pkl",
     "data/EROM-Memories_09-09-2025_17-17-30.pkl",
-    "data/EROM-Memories_09-09-2025_16-42-27.pkl",
-    "za_Notes/OWLv2 Vision Pipeline.md",
     "za_Notes/LUMP.md",
-    "za_Notes/Log/2025-09-08.md",
-    "za_Notes/Log/2025-09-05.md",
     "za_Notes/Log/2025-09-03.md",
     "za_Notes/Log/2025-08-25.md",
     "za_Notes/DEV_PLAN.md",

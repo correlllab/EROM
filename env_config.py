@@ -17,7 +17,7 @@ def BASE_TARGET():
 
 
 
-def KNOWN_BLOCKS():
+def KNOWN_BLOCKS() -> list[GraspObj]:
     """ Set block positions """
     yOfst = 0.025
     bloc1 = np.array([[-0.994,  0.111,  0.022, -0.38 ],
