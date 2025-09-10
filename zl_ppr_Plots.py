@@ -353,18 +353,18 @@ for iii, paths in enumerate( datasets ):
         result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
         result['tRun'] = filter_series( result['tRun'], _FILTER_FACTOR )
 
-        make_histo( result['sRun'], f"{longTNam}, {suffix}\nMakespan Distribution [Steps]", f"{fName}_Histo-Steps{suffix}{plotExt}" )
-        make_histo( result['tRun'], f"{longTNam}, {suffix}\nMakespan Distribution [Time]", f"{fName}_Histo-Time{suffix}{plotExt}" )
-        make_histo( result['tObs'], f"{longTNam}, {suffix}\nObject Search Time Distribution", f"{fName}_Histo-Search{suffix}{plotExt}", xLabel = 'Time [s]' )
-        make_histo( result['rCon'], f"{longTNam}, {suffix}\nObject Confusion Distribution", f"{fName}_Histo-Confusion{suffix}{plotExt}", xLabel = 'Confusion Rate' )
+        make_histo( result['sRun'], f"{longTNam}, {suffix[1:]}\nMakespan Distribution [Steps]", f"{fName}_Histo-Steps{suffix}{plotExt}" )
+        make_histo( result['tRun'], f"{longTNam}, {suffix[1:]}\nMakespan Distribution [Time]", f"{fName}_Histo-Time{suffix}{plotExt}" )
+        make_histo( result['tObs'], f"{longTNam}, {suffix[1:]}\nObject Search Time Distribution", f"{fName}_Histo-Search{suffix}{plotExt}", xLabel = 'Time [s]' )
+        make_histo( result['rCon'], f"{longTNam}, {suffix[1:]}\nObject Confusion Distribution", f"{fName}_Histo-Confusion{suffix}{plotExt}", xLabel = 'Confusion Rate' )
         make_scatter( result['oStp']['s'], result['oStp']['t'], 
-                    f"{longTNam}, {suffix}\nObject Search Time at Each Step", f"{fName}_Scatter-Search{suffix}{plotExt}" )
+                    f"{longTNam}, {suffix[1:]}\nObject Search Time at Each Step", f"{fName}_Scatter-Search{suffix}{plotExt}" )
         make_scatter( result['sDel']['s'], result['sDel']['c'], 
-                    f"{longTNam}, {suffix}\nNumber of Objects Confused at Each Step", f"{fName}_Scatter-Confusion{suffix}{plotExt}" )
+                    f"{longTNam}, {suffix[1:]}\nNumber of Objects Confused at Each Step", f"{fName}_Scatter-Confusion{suffix}{plotExt}" )
         make_multi_histo( 
             [ result['rFal']['action'], result['rFal']['plan'], result['rFal']['find'], ], 
             [ "Action Failure Rate", "Planning Failure Rate", "Search Failure Rate", ], 
-            f"{longTNam}, {suffix}\nDistribution of Action and Planning Failure Rates, Per Episode", 
+            f"{longTNam}, {suffix[1:]}\nDistribution of Action and Planning Failure Rates, Per Episode", 
             f"{fName}_Histo-Failure{suffix}{plotExt}", 
             xLabel = 'Failure Rates', 
             yLabel = 'Occurrences' 
@@ -385,7 +385,7 @@ for iii, paths in enumerate( datasets ):
         labels = deque()
         for test in tests:
             labels.append( test )
-        fName  = "Total-RGB"
+        fName  = f"Total{suffix}"
 
         def get_series( lblLst : list[str], key : str ):
             series = deque()
@@ -397,8 +397,8 @@ for iii, paths in enumerate( datasets ):
         make_multi_histo( 
             get_series( labels, 'sRun' ), 
             labels, 
-            f"Makespan Distribution [Steps]", 
-            f"{_PLOT_DIR}/{fName}_Histo-MS-Steps{plotExt}", 
+            f"Makespan Distribution [Steps], {suffix[1:]}", 
+            f"{_PLOT_DIR}/{fName}_Histo-MS-Steps{suffix}{plotExt}", 
             xLabel = 'Steps', 
             yLabel = 'Occurrences' 
         )
@@ -406,8 +406,8 @@ for iii, paths in enumerate( datasets ):
         make_multi_histo( 
             get_series( labels, 'tRun' ), 
             labels, 
-            f"Makespan Distribution [Time]", 
-            f"{_PLOT_DIR}/{fName}_Histo-MS-Time{plotExt}", 
+            f"Makespan Distribution [Time], {suffix[1:]}", 
+            f"{_PLOT_DIR}/{fName}_Histo-MS-Time{suffix}{plotExt}", 
             xLabel = 'Seconds', 
             yLabel = 'Occurrences' 
         )
@@ -415,8 +415,8 @@ for iii, paths in enumerate( datasets ):
         make_multi_histo( 
             get_series( labels, 'tObs' ), 
             labels, 
-            f"Object Search Time Distribution", 
-            f"{_PLOT_DIR}/{fName}_Histo-Search{plotExt}", 
+            f"Object Search Time Distribution, {suffix[1:]}", 
+            f"{_PLOT_DIR}/{fName}_Histo-Search{suffix}{plotExt}", 
             xLabel = 'Seconds', 
             yLabel = 'Occurrences' 
         )
@@ -424,8 +424,8 @@ for iii, paths in enumerate( datasets ):
         make_multi_histo( 
             get_series( labels, 'rCon' ), 
             labels, 
-            f"Object Confusion Distribution", 
-            f"{_PLOT_DIR}/{fName}_Histo-Confusion{plotExt}", 
+            f"Object Confusion Distribution, {suffix[1:]}", 
+            f"{_PLOT_DIR}/{fName}_Histo-Confusion{suffix}{plotExt}", 
             xLabel = 'Confusion Rate', 
             yLabel = 'Occurrences' 
         )
