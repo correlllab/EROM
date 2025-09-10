@@ -1,9 +1,7 @@
 ########## INIT ####################################################################################
 import pickle, os, math
 from collections import deque
-from pprint import pprint
 from copy import deepcopy
-
 
 import numpy as np
 
@@ -12,7 +10,7 @@ from aspire.symbols import GraspObj, euclidean_distance_between_symbols
 from aspire.BlocksTask import set_blocks_env
 
 from TaskPlanner import set_experiment_env
-from draw_beliefs import ( set_render_env, render_memory_list, scan_geo, vispy_geo_list_window, cpcd_geo )
+from draw_beliefs import set_render_env
 
 ##### Environment && Constants ############################################
 set_blocks_env()
@@ -40,7 +38,12 @@ longTestNames = [
 ]
 
 # paths = [ f"/media/james/{_DATA_DRIVE}/2025-08_{test}" for test in tests ]
-paths = [ f"/media/james/{_DATA_DRIVE}/2025-08B_{test}" for test in tests ]
+datasets = [
+    [ f"/media/james/{_DATA_DRIVE}/2025-08B_{test}" for test in tests ],
+    [ f"/media/james/{_DATA_DRIVE}/RWB_2025-09_{test}" for test in tests ],
+]
+
+dataLabels = ["RGB", "RBW",]
 
 fNames = [ f"{_PLOT_DIR}{test}" for test in tests  ]
 
@@ -131,293 +134,301 @@ _D_THRESH_M = env_var("_BLOCK_SCALE")*0.75
 
 totRes = dict()
 
-for ii, test in enumerate( tests ):
-    ##### Init ################################################################
-    path     = paths[ii]
-    fName    = fNames[ii]
-    longTNam = longTestNames[ii]
+for iii, paths in enumerate( datasets ):
+    suffix = "_" + dataLabels[iii]
+    skip   = False
 
-    ##### Load ################################################################
-    pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
+    for ii, test in enumerate( tests ):
+        ##### Init ################################################################
+        path     = paths[ii]
+        fName    = fNames[ii]
+        longTNam = longTestNames[ii]
 
-
-    ########## ANALYSIS ################################################################################
-
-    ##### Success Rate && Makespan Tracking ###############################
-    N   = 0
-    S   = 0
-    F   = 0
-    MTS = 0.0
-    MTF = 0.0
-
-    result = {
-        'Ntrial' : 0,
-        'outcome': deque(),
-        'tRun'   : deque(),
-        'sRun'   : deque(),
-        'tObs'   : deque(),
-        'oStp'   : {
-            "s": deque(),
-            "t": deque(),
-        },
-        'sDel' : {
-            "s": deque(),
-            "c": deque(),
-        },
-        'rCon': deque(),
-        'rFal': {
-            'action' : deque(),
-            'plan'   : deque(),
-            'find'   : deque(),
-            'N'      : deque(),
-        }, 
-    }
-
-    total = {
-        'Ntrial' : 0,
-        'outcome': deque(),
-        'tRun'   : deque(),
-        'sRun'   : deque(),
-    }
-
-    ##### Per-Episode Accounting ##########################################
-
-    for dPth in pkls:
-        print( f"About to open {dPth} ..." )
-        data = list()
-        N   += 1
-
+        ##### Load ################################################################
         try:
-            with open( dPth, 'rb' ) as f:
-                data = pickle.load( f )
-        except EOFError as e:
-            print( f"LOAD ERROR: {e}" )
+            pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
+        except FileNotFoundError as e:
+            print( f"\n404, SKIP THIS TEST: {e}\n" )
+            skip = True
             continue
 
-        # Failure Tracking
-        Nstp      = 0
-        NfailActn = 0
-        NfailPlan = 0
-        NfailFind = 0
+        ########## ANALYSIS ################################################################################
 
-        # Segmentation Performance
-        obsTimes = deque()
-        obsBgn   = 0
-        obsEnd   = 0
+        ##### Success Rate && Makespan Tracking ###############################
+        N   = 0
+        S   = 0
+        F   = 0
+        MTS = 0.0
+        MTF = 0.0
 
-        # Confusion Tracking
-        symHist = deque()
-        symDlta = deque()
-        Ndelta  = 0
-        Ncnfus  = 0
-        Ntotal  = 0
-        symbols : list[GraspObj] = list()
+        result = {
+            'Ntrial' : 0,
+            'outcome': deque(),
+            'tRun'   : deque(),
+            'sRun'   : deque(),
+            'tObs'   : deque(),
+            'oStp'   : {
+                "s": deque(),
+                "t": deque(),
+            },
+            'sDel' : {
+                "s": deque(),
+                "c": deque(),
+            },
+            'rCon': deque(),
+            'rFal': {
+                'action' : deque(),
+                'plan'   : deque(),
+                'find'   : deque(),
+                'N'      : deque(),
+            }, 
+        }
 
-        txtPath = dPth.split('/')[-1].split('.')[0] + ".txt"
-        outFile = open( f"data/txt_log/{txtPath}", 'w' )
-        timeBgn = data[0]['t']
+        total = {
+            'Ntrial' : 0,
+            'outcome': deque(),
+            'tRun'   : deque(),
+            'sRun'   : deque(),
+        }
 
-        ##### Per-Step Accounting ################
+        ##### Per-Episode Accounting ##########################################
 
-        for datum in data:
-            # print( ".", end="", flush=True )
-            dtmMsg = datum['msg']
-            dtmT   = datum['t']
+        for dPth in pkls:
+            print( f"About to open {dPth} ..." )
+            data = list()
+            N   += 1
 
-            outFile.write( f"{(datum['t']-timeBgn):08.2f} : {dtmMsg}\n" )
-
-            ##### Failures #####
-
-            if "Planning Failure" in dtmMsg:
-                NfailPlan += 1
-
-            if ("BT END" in dtmMsg) and ("fail" in f"{dtmMsg}".lower()):
-                NfailActn += 1
-
-            if p_str_has_any( dtmMsg, ["BT END", "Planning Failure"], cap = False ):
-                Nstp += 1
-
-            ##### Symbol Grounding #####
-
-            if p_str_has_any( dtmMsg, ["symbols", "Post-Cheat"], cap = False ): # NOTE: Cheat ALWAYS applied in some form, even if fixes aren't applied
-                symbols = datum['data']
-                
-            ##### Phase 1: Perception #####
-
-            if "BGN: Phase 1" in dtmMsg:
-                obsBgn = dtmT
-            elif "END: Phase 1" in dtmMsg:
-                obsEnd = dtmT
-                duration = obsEnd - obsBgn
-                obsTimes.append( duration )
-                result['oStp']['s'].append( Nstp     )
-                result['oStp']['t'].append( duration )
-
-            ##### Phase 2: Conditions #####
-
-            elif "BGN: Phase 2" in dtmMsg:
-                Nlabel  = 0
-                Ntotal += len( symbols )
-                found   = True
-                if len( symbols ):
-                    Nlabel = len( set([item.label for item in symbols]) )
-                if Nlabel < 3:
-                    NfailFind += 1
-                    found = False
-
-                if len( symbols ):
-                    if len( symHist ) and len( symHist[-1] ):
-                        symLast : list[GraspObj] = symHist[-1]
-                        Nmatch = 0
-                        mtcSet = set([])
-                        if found:
-                            for sym_i in symLast:
-                                dMin_i = 6e10
-                                mtch_i = None
-                                for sym_j in symbols:
-                                    d_ij = euclidean_distance_between_symbols( sym_i, sym_j )
-                                    if ((d_ij < dMin_i) and (d_ij <= _D_THRESH_M)) and (id(sym_j) not in mtcSet):
-                                        dMin_i = d_ij
-                                        mtch_i = sym_j
-                                if mtch_i is not None:
-                                    mtcSet.add( id(mtch_i) )
-                                    Nmatch += 1
-                                    if sym_i.label != mtch_i.label:
-                                        Ndelta += 1
-                                        Ncnfus += 1
-                    symHist.append( symbols[:] )
-                    result['sDel']['s'].append( Nstp   ) 
-                    result['sDel']['c'].append( Ndelta )
-                Ndelta = 0 # Reset confusions for the next step
-                
-                
-
-        Nstp = Nstp if (Nstp > 0) else math.nan
-        result['sRun'].append( Nstp )
-        result['tRun'].append( data[-1]['t'] - data[0]['t'] )
-        result['rCon'].append( (Ncnfus / Ntotal) if (Ntotal > 0) else math.nan )
-        result['rFal']['action'].append( NfailActn/Nstp )
-        result['rFal']['plan'  ].append( NfailPlan/Nstp )
-        result['rFal']['find'  ].append( NfailFind/Nstp )
-        result['rFal']['N'     ].append( Nstp           )
-        result['tObs'].extend( obsTimes )
-
-        tRun = data[-1]['t'] - data[0]['t']
-        end  =  False
-        total['Ntrial'] += 1
-        total['tRun'  ].append( tRun )
-        for i in range(1,11):
             try:
-                msg = data[-i]['msg']
-            except IndexError as e:
-                print(e)
-                break
-            # print( msg )
-            if ("Status.FAILURE" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                with open( dPth, 'rb' ) as f:
+                    data = pickle.load( f )
+            except EOFError as e:
+                print( f"LOAD ERROR: {e}" )
+                continue
+
+            # Failure Tracking
+            Nstp      = 0
+            NfailActn = 0
+            NfailPlan = 0
+            NfailFind = 0
+
+            # Segmentation Performance
+            obsTimes = deque()
+            obsBgn   = 0
+            obsEnd   = 0
+
+            # Confusion Tracking
+            symHist = deque()
+            symDlta = deque()
+            Ndelta  = 0
+            Ncnfus  = 0
+            Ntotal  = 0
+            symbols : list[GraspObj] = list()
+
+            txtPath = dPth.split('/')[-1].split('.')[0] + ".txt"
+            outFile = open( f"data/txt_log/{txtPath}", 'w' )
+            timeBgn = data[0]['t']
+
+            ##### Per-Step Accounting ################
+
+            for datum in data:
+                # print( ".", end="", flush=True )
+                dtmMsg = datum['msg']
+                dtmT   = datum['t']
+
+                outFile.write( f"{(datum['t']-timeBgn):08.2f} : {dtmMsg}\n" )
+
+                ##### Failures #####
+
+                if "Planning Failure" in dtmMsg:
+                    NfailPlan += 1
+
+                if ("BT END" in dtmMsg) and ("fail" in f"{dtmMsg}".lower()):
+                    NfailActn += 1
+
+                if p_str_has_any( dtmMsg, ["BT END", "Planning Failure"], cap = False ):
+                    Nstp += 1
+
+                ##### Symbol Grounding #####
+
+                if p_str_has_any( dtmMsg, ["symbols", "Post-Cheat"], cap = False ): # NOTE: Cheat ALWAYS applied in some form, even if fixes aren't applied
+                    symbols = datum['data']
+                    
+                ##### Phase 1: Perception #####
+
+                if "BGN: Phase 1" in dtmMsg:
+                    obsBgn = dtmT
+                elif "END: Phase 1" in dtmMsg:
+                    obsEnd = dtmT
+                    duration = obsEnd - obsBgn
+                    obsTimes.append( duration )
+                    result['oStp']['s'].append( Nstp     )
+                    result['oStp']['t'].append( duration )
+
+                ##### Phase 2: Conditions #####
+
+                elif "BGN: Phase 2" in dtmMsg:
+                    Nlabel  = 0
+                    Ntotal += len( symbols )
+                    found   = True
+                    if len( symbols ):
+                        Nlabel = len( set([item.label for item in symbols]) )
+                    if Nlabel < 3:
+                        NfailFind += 1
+                        found = False
+
+                    if len( symbols ):
+                        if len( symHist ) and len( symHist[-1] ):
+                            symLast : list[GraspObj] = symHist[-1]
+                            Nmatch = 0
+                            mtcSet = set([])
+                            if found:
+                                for sym_i in symLast:
+                                    dMin_i = 6e10
+                                    mtch_i = None
+                                    for sym_j in symbols:
+                                        d_ij = euclidean_distance_between_symbols( sym_i, sym_j )
+                                        if ((d_ij < dMin_i) and (d_ij <= _D_THRESH_M)) and (id(sym_j) not in mtcSet):
+                                            dMin_i = d_ij
+                                            mtch_i = sym_j
+                                    if mtch_i is not None:
+                                        mtcSet.add( id(mtch_i) )
+                                        Nmatch += 1
+                                        if sym_i.label != mtch_i.label:
+                                            Ndelta += 1
+                                            Ncnfus += 1
+                        symHist.append( symbols[:] )
+                        result['sDel']['s'].append( Nstp   ) 
+                        result['sDel']['c'].append( Ndelta )
+                    Ndelta = 0 # Reset confusions for the next step
+                    
+                    
+
+            Nstp = Nstp if (Nstp > 0) else math.nan
+            result['sRun'].append( Nstp )
+            result['tRun'].append( data[-1]['t'] - data[0]['t'] )
+            result['rCon'].append( (Ncnfus / Ntotal) if (Ntotal > 0) else math.nan )
+            result['rFal']['action'].append( NfailActn/Nstp )
+            result['rFal']['plan'  ].append( NfailPlan/Nstp )
+            result['rFal']['find'  ].append( NfailFind/Nstp )
+            result['rFal']['N'     ].append( Nstp           )
+            result['tObs'].extend( obsTimes )
+
+            tRun = data[-1]['t'] - data[0]['t']
+            end  =  False
+            total['Ntrial'] += 1
+            total['tRun'  ].append( tRun )
+            for i in range(1,11):
+                try:
+                    msg = data[-i]['msg']
+                except IndexError as e:
+                    print(e)
+                    break
+                # print( msg )
+                if ("Status.FAILURE" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                    F += 1
+                    # print( f"FAILURE: {msg}" )
+                    print( f"FAILURE" )
+                    MTF += tRun
+                    end = True
+                    total['outcome'].append( 0 )
+                    break
+                elif ("Status.SUCCESS" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                    S += 1
+                    # print( f"SUCCESS: {msg}" )
+                    print( f"SUCCESS" )
+                    MTS += tRun
+                    end = True
+                    total['outcome'].append( 1 )
+                    break
+            if not end:
                 F += 1
                 # print( f"FAILURE: {msg}" )
                 print( f"FAILURE" )
                 MTF += tRun
-                end = True
-                total['outcome'].append( 0 )
-                break
-            elif ("Status.SUCCESS" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
-                S += 1
-                # print( f"SUCCESS: {msg}" )
-                print( f"SUCCESS" )
-                MTS += tRun
-                end = True
-                total['outcome'].append( 1 )
-                break
-        if not end:
-            F += 1
-            # print( f"FAILURE: {msg}" )
-            print( f"FAILURE" )
-            MTF += tRun
-        print()
+            print()
 
-        outFile.close()
-    
-    _FILTER_FACTOR = 2.5    
-    result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
-    result['tRun'] = filter_series( result['tRun'], _FILTER_FACTOR )
+            outFile.close()
+        
+        _FILTER_FACTOR = 2.5    
+        result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
+        result['tRun'] = filter_series( result['tRun'], _FILTER_FACTOR )
 
-    make_histo( result['sRun'], f"{longTNam},\nMakespan Distribution [Steps]", f"{fName}_Histo-Steps{plotExt}" )
-    make_histo( result['tRun'], f"{longTNam},\nMakespan Distribution [Time]", f"{fName}_Histo-Time{plotExt}" )
-    make_histo( result['tObs'], f"{longTNam},\nObject Search Time Distribution", f"{fName}_Histo-Search{plotExt}", xLabel = 'Time [s]' )
-    make_histo( result['rCon'], f"{longTNam},\nObject Confusion Distribution", f"{fName}_Histo-Confusion{plotExt}", xLabel = 'Confusion Rate' )
-    make_scatter( result['oStp']['s'], result['oStp']['t'], 
-                  f"{longTNam},\nObject Search Time at Each Step", f"{fName}_Scatter-Search{plotExt}" )
-    make_scatter( result['sDel']['s'], result['sDel']['c'], 
-                  f"{longTNam},\nNumber of Objects Confused at Each Step", f"{fName}_Scatter-Confusion{plotExt}" )
-    make_multi_histo( 
-        [ result['rFal']['action'], result['rFal']['plan'], result['rFal']['find'], ], 
-        [ "Action Failure Rate", "Planning Failure Rate", "Search Failure Rate", ], 
-        f"{longTNam},\nDistribution of Action and Planning Failure Rates, Per Episode", 
-        f"{fName}_Histo-Failure{plotExt}", 
-        xLabel = 'Failure Rates', 
-        yLabel = 'Occurrences' 
-    )
+        make_histo( result['sRun'], f"{longTNam}, {suffix}\nMakespan Distribution [Steps]", f"{fName}_Histo-Steps{suffix}{plotExt}" )
+        make_histo( result['tRun'], f"{longTNam}, {suffix}\nMakespan Distribution [Time]", f"{fName}_Histo-Time{suffix}{plotExt}" )
+        make_histo( result['tObs'], f"{longTNam}, {suffix}\nObject Search Time Distribution", f"{fName}_Histo-Search{suffix}{plotExt}", xLabel = 'Time [s]' )
+        make_histo( result['rCon'], f"{longTNam}, {suffix}\nObject Confusion Distribution", f"{fName}_Histo-Confusion{suffix}{plotExt}", xLabel = 'Confusion Rate' )
+        make_scatter( result['oStp']['s'], result['oStp']['t'], 
+                    f"{longTNam}, {suffix}\nObject Search Time at Each Step", f"{fName}_Scatter-Search{suffix}{plotExt}" )
+        make_scatter( result['sDel']['s'], result['sDel']['c'], 
+                    f"{longTNam}, {suffix}\nNumber of Objects Confused at Each Step", f"{fName}_Scatter-Confusion{suffix}{plotExt}" )
+        make_multi_histo( 
+            [ result['rFal']['action'], result['rFal']['plan'], result['rFal']['find'], ], 
+            [ "Action Failure Rate", "Planning Failure Rate", "Search Failure Rate", ], 
+            f"{longTNam}, {suffix}\nDistribution of Action and Planning Failure Rates, Per Episode", 
+            f"{fName}_Histo-Failure{suffix}{plotExt}", 
+            xLabel = 'Failure Rates', 
+            yLabel = 'Occurrences' 
+        )
 
-    if S > 0:
-        MTS /= S
-    if F > 0:
-        MTF /= F
-    print( f"\n{N} episodes, Success Rate: {S*1.0/N}, Failure Rate: {F*1.0/N}, Sanity Check == 0.0: {1.0-S*1.0/N-F*1.0/N}" )
-    print( f"Mean Time to Success: {[int(item) for item in divmod( MTS, 60.0 )]}, Mean Time to Failure: {[int(item) for item in divmod( MTF, 60.0 )]}" )
-    print( "\n\n" )
+        if S > 0:
+            MTS /= S
+        if F > 0:
+            MTF /= F
+        print( f"\n{N} episodes, Success Rate: {S*1.0/N}, Failure Rate: {F*1.0/N}, Sanity Check == 0.0: {1.0-S*1.0/N-F*1.0/N}" )
+        print( f"Mean Time to Success: {[int(item) for item in divmod( MTS, 60.0 )]}, Mean Time to Failure: {[int(item) for item in divmod( MTF, 60.0 )]}" )
+        print( "\n\n" )
 
-    totRes[ test ] = deepcopy( result )
+        totRes[ test ] = deepcopy( result )
+
+    if not skip:
+
+        labels = deque()
+        for test in tests:
+            labels.append( test )
+        fName  = "Total-RGB"
+
+        def get_series( lblLst : list[str], key : str ):
+            series = deque()
+            for lbl in lblLst:
+                series.append( totRes[ lbl ][key] )
+            return list( series )
 
 
+        make_multi_histo( 
+            get_series( labels, 'sRun' ), 
+            labels, 
+            f"Makespan Distribution [Steps]", 
+            f"{_PLOT_DIR}/{fName}_Histo-MS-Steps{plotExt}", 
+            xLabel = 'Steps', 
+            yLabel = 'Occurrences' 
+        )
 
-labels = deque()
-for test in tests:
-    labels.append( test )
-fName  = "Total-RGB"
+        make_multi_histo( 
+            get_series( labels, 'tRun' ), 
+            labels, 
+            f"Makespan Distribution [Time]", 
+            f"{_PLOT_DIR}/{fName}_Histo-MS-Time{plotExt}", 
+            xLabel = 'Seconds', 
+            yLabel = 'Occurrences' 
+        )
 
-def get_series( lblLst : list[str], key : str ):
-    series = deque()
-    for lbl in lblLst:
-        series.append( totRes[ lbl ][key] )
-    return list( series )
+        make_multi_histo( 
+            get_series( labels, 'tObs' ), 
+            labels, 
+            f"Object Search Time Distribution", 
+            f"{_PLOT_DIR}/{fName}_Histo-Search{plotExt}", 
+            xLabel = 'Seconds', 
+            yLabel = 'Occurrences' 
+        )
 
-
-make_multi_histo( 
-    get_series( labels, 'sRun' ), 
-    labels, 
-    f"Makespan Distribution [Steps]", 
-    f"{_PLOT_DIR}/{fName}_Histo-MS-Steps{plotExt}", 
-    xLabel = 'Steps', 
-    yLabel = 'Occurrences' 
-)
-
-make_multi_histo( 
-    get_series( labels, 'tRun' ), 
-    labels, 
-    f"Makespan Distribution [Time]", 
-    f"{_PLOT_DIR}/{fName}_Histo-MS-Time{plotExt}", 
-    xLabel = 'Seconds', 
-    yLabel = 'Occurrences' 
-)
-
-make_multi_histo( 
-    get_series( labels, 'tObs' ), 
-    labels, 
-    f"Object Search Time Distribution", 
-    f"{_PLOT_DIR}/{fName}_Histo-Search{plotExt}", 
-    xLabel = 'Seconds', 
-    yLabel = 'Occurrences' 
-)
-
-make_multi_histo( 
-    get_series( labels, 'rCon' ), 
-    labels, 
-    f"Object Confusion Distribution", 
-    f"{_PLOT_DIR}/{fName}_Histo-Confusion{plotExt}", 
-    xLabel = 'Confusion Rate', 
-    yLabel = 'Occurrences' 
-)
+        make_multi_histo( 
+            get_series( labels, 'rCon' ), 
+            labels, 
+            f"Object Confusion Distribution", 
+            f"{_PLOT_DIR}/{fName}_Histo-Confusion{plotExt}", 
+            xLabel = 'Confusion Rate', 
+            yLabel = 'Occurrences' 
+        )
 
 
 
