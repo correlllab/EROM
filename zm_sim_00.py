@@ -1,5 +1,6 @@
 ### Standard ### 
 from collections import deque
+from random import random
 
 ### Special ### 
 import numpy as np
@@ -35,14 +36,17 @@ class Engine:
 
     def stack_A_onto_B( self, A : GraspObj, B : GraspObj, factList : list[tuple] ) -> list[tuple]:
         """ Add stacked states """
-        abovPose = self.pose_above(B)
-        A.pose = abovPose
-        factList.extend( [
-            ('GraspObj' , A.label, A.pose.copy() ),
-            ('Supported', A.label, B.label ),
-            ('Blocked'  , B.label ),
-        ] )
-        return factList
+        if random() < self.prob["ActionFailure"]:
+            pass
+        else:
+            abovPose = self.pose_above(B)
+            A.pose = abovPose
+            factList.extend( [
+                ('GraspObj' , A.label, A.pose.copy() ),
+                ('Supported', A.label, B.label ),
+                ('Blocked'  , B.label ),
+            ] )
+            return factList
     
 
     def negate_fact( self, negFct : tuple, factList : list[tuple] ) -> list[tuple]:
@@ -102,6 +106,7 @@ class Solver:
             )        
         )
 
+
     def __init__( self ):
         """ Get ready to solve """
         self.poses = list()
@@ -115,8 +120,18 @@ class Solver:
         set_blocks_env()
         set_experiment_env()
         self.set_sim_env()
-        self.goal  = env_var("_GOAL_SIM")
-        self.facts = list()
+
+
+    def ground_facts( self, objs : list[GraspObj] ):
+        """ Set facts from the object list """
+        pass
+
+
+
+    def solve( self, facts : tuple, goal : tuple ):
+        pass
+
+
 
 
 
