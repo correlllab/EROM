@@ -6,7 +6,7 @@ from random import random
 import numpy as np
 
 ### ASPIRE::PDDLStream ### 
-from aspire.symbols import ObjPose, GraspObj, extract_pose_as_homog
+from aspire.symbols import ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols
 from aspire.env_config import env_var, env_sto
 from aspire.BlocksTask import set_blocks_env
 
@@ -120,16 +120,100 @@ class Solver:
         set_blocks_env()
         set_experiment_env()
         self.set_sim_env()
+        # self.goal = env_var("_GOAL_SIM")
 
 
-    def ground_facts( self, objs : list[GraspObj] ):
+    def get_goal_facts( self, goal : tuple ):
+        """ Get the individual facts from the `goal` """
+        if goal[0] in ("and", "or"):
+            rtnFcs = list()
+            for item in goal[1:]:
+                rtnFcs.extend( self.get_goal_facts( item ) )
+            return rtnFcs
+        elif goal[0] == "not":
+            return list()
+        else:
+            return [goal,]
+
+
+    def ground_facts( self, objs : list[GraspObj], goal : tuple = None ):
         """ Set facts from the object list """
-        pass
+        rtnFcs = deque()
+        for obj in objs:
+            rtnFcs.append( ['GraspObj', obj.label, obj.pose.copy()] )
+        if goal is not None:
+            goalFcts = self.get_goal_facts( goal )
+            for rFact in rtnFcs:
+                dMin = 6e10
+                pMin = None
+                for gFact in goalFcts:
+                    if (rFact[0] == gFact[0] == "GraspObj") and (rFact[1] == gFact[1]):
+                        d_ij = euclidean_distance_between_symbols( rFact[2], gFact[2] )
+                        if (d_ij <= env_var("_ACCEPT_POSN_ERR")) and (d_ij < dMin):
+                            dMin = d_ij
+                            pMin = gFact[2]
+                if pMin is not None:
+                    rFact[2] = pMin
+        return [tuple( item ) for item in rtnFcs]
+
+
+    def order_by_Z( self, facts : list[tuple] ):
+        """ Return the object pose facts in increasing Z order """
+        rtnFcs = [item for item in facts if (item[0] == "GraspObj")]
+        rtnFcs.sort( key = lambda x: x[2] )
+        return rtnFcs
+
+
+    def p_fact_match( self, qFact, factList ):
+        """ Return True if `qFact` is SUPPORTED by `factList` """
+        for fact in factList:
+            if (qFact[0] == fact[0]) and (qFact[1] == fact[1]):
+                if euclidean_distance_between_symbols( qFact[2], fact[2] ) <= env_var("_ACCEPT_POSN_ERR"):
+                    return True
+        return False
+
+
+    def p_wrong_object( self, qFact, factList ):
+        """ Return True if `qFact` is CONTRADICTED by `factList` """
+        for fact in factList:
+            if (qFact[0] == fact[0]) and (qFact[1] != fact[1]):
+                if euclidean_distance_between_symbols( qFact[2], fact[2] ) <= env_var("_ACCEPT_POSN_ERR"):
+                    return True
+        return False
+    
+
+    def get_object_pose( self, qLabel, factList ):
+        """ Return the pose of the object matching `qLabel` in `factList`, else return `None` """
+        for fact in factList:
+            if (fact[0] == "GraspObj") and (fact[1] == qLabel):
+                return fact[2]
+        return None
+
+
+    def solve( self, facts : list[tuple], goal : list[tuple] ):
+        """ Return a plan that solves the goal, If already solved then return an empty list """
+        facts = self.order_by_Z( facts )
+        goals = self.order_by_Z( self.get_goal_facts( goal ) )
+        crrct = list()
+        replc = list()
+        empty = list()
+        for i, g in enumerate( goals ):
+            if self.p_fact_match( g, facts ):
+                crrct.append(i)
+            elif self.p_wrong_object( g, facts ):
+                replc.append(i)
+            else:
+                empty.append(i)
+        if len( crrct ) >= 3:
+            return list()
+        if len( replc ) > 0:
+            pass
+        if len( empty ) > 0:
+            pass
+        
 
 
 
-    def solve( self, facts : tuple, goal : tuple ):
-        pass
 
 
 
