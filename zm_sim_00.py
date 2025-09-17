@@ -1,4 +1,5 @@
 ### Standard ### 
+import os
 from collections import deque
 from random import random
 
@@ -25,6 +26,14 @@ class Engine:
         self.prob = {
             "ActionFailure" : 0.10,
         }
+
+
+    def report( self ):
+        """ Print what is happening with the objects """
+        print( "\n##### Current State of World Objects #####" )
+        for obj in self.objs:
+            print( obj )
+        print()
 
 
     def pose_above( self, target : GraspObj ) -> ObjPose:
@@ -160,7 +169,7 @@ class Solver:
     def order_by_Z( self, facts : list[tuple] ):
         """ Return the object pose facts in increasing Z order """
         rtnFcs = [item for item in facts if (item[0] == "GraspObj")]
-        rtnFcs.sort( key = lambda x: x[2] )
+        rtnFcs.sort( key = lambda x: extract_pose_as_homog( x[2] )[2,3]  )
         return rtnFcs
 
 
@@ -188,36 +197,79 @@ class Solver:
             if (fact[0] == "GraspObj") and (fact[1] == qLabel):
                 return fact[2]
         return None
+    
 
+    def p_fact_collide( self, qPose, facts ):
+        """ Will the `q` collide with any of the current `facts` """
+        for fact in facts:
+            if (fact[0] == "GraspObj") and (euclidean_distance_between_symbols( qPose, fact[2] ) <= env_var("_ACCEPT_POSN_ERR")):
+                return True
+        return False
+
+
+    def get_random_table_pose( self, facts : list[tuple], scale = 1.000 ):
+        """ Get a table `ObjPose` that does not interfere with any of the current blocks """
+        hlfScl = scale / 2.0
+
+        def gen():
+            """ Return a Random Pose """
+            p = np.eye(4)
+            x = -hlfScl + scale*random()
+            y = -hlfScl + scale*random()
+            p[0:3,3] = [x,y,env_var("_BLOCK_SCALE")/2.0,]
+            return ObjPose(p)
+        
+        collide = True
+        rtnPose = None
+        while collide:
+            rtnPose = gen()
+            collide = self.p_fact_collide( rtnPose, facts )
+        return rtnPose
+    
 
     def solve( self, facts : list[tuple], goal : list[tuple] ):
         """ Return a plan that solves the goal, If already solved then return an empty list """
-        facts = self.order_by_Z( facts )
-        goals = self.order_by_Z( self.get_goal_facts( goal ) )
-        crrct = list()
-        replc = list()
-        empty = list()
+        facts  = self.order_by_Z( facts )
+        goals  = self.order_by_Z( self.get_goal_facts( goal ) )
+        crrct  = list()
+        replc  = list()
+        empty  = list()
+        gLen   = len( goals )
+        height = 0
         for i, g in enumerate( goals ):
             if self.p_fact_match( g, facts ):
                 crrct.append(i)
+                height += 1
             elif self.p_wrong_object( g, facts ):
                 replc.append(i)
+                height += 1
             else:
                 empty.append(i)
-        if len( crrct ) >= 3:
-            return list()
-        if len( replc ) > 0:
-            pass
-        if len( empty ) > 0:
-            pass
+        cLen = len( crrct )
+        rLen = len( replc )
+        eLen = len( empty )
+        plan = deque()
+        if cLen >= gLen:
+            print( f"SOLVED {cLen}: Return empty plan!" )
+        if rLen > 0:
+            print( f"INCORRECT: Need to undo {rLen} previous actions!" )
+            for i in range( height-1, replc[0]-1, -1 ):
+                # ASSUME: `get_random_table_pose()` WILL GENERALLY NOT CHOOSE POSES COLLIDING WITH PREVIOUS RUNS
+                freePose = self.get_random_table_pose( facts )
+                if i == 0:
+                    plan.append( ("Place", facts[i][1], freePose,) )
+                else:
+                    plan.append( ("Unstack", facts[i][1], freePose,) )
+        if eLen > 0:
+            print( f"EMPTY: Need to build {eLen} of the tower!" )
+            for i in range( eLen ):
+                if i == 0:
+                    plan.append( ("Place", goals[i][1], goals[i][2],) )
+                else:
+                    plan.append( ("Stack", goals[i][1], goals[i-1][1], goals[i][2],) )
+        return list( plan )
+
         
-
-
-
-
-
-
-
 
 
 class SimPlanner:
@@ -225,4 +277,21 @@ class SimPlanner:
     def __init__( self ):
         self.goal = None
         self.plan = None
-        
+
+
+########## MAIN ####################################################################################
+if __name__ == "__main__":
+    eng = Engine()
+    eng.report()
+    slv = Solver()
+    pln = slv.solve( slv.ground_facts( eng.objs ), env_var("_GOAL_SIM") )
+
+    print( "\n##### Plan #####" )
+    for action in pln:
+        print( action )
+    
+
+
+########## EXIT ####################################################################################
+print( "\n\n" )
+os.system( 'kill %d' % os.getpid() ) 
