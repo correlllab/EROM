@@ -55,11 +55,14 @@ import matplotlib.pyplot as plt
 
 
 _TITLE_FONT_SIZE = 13
+_N_TRIALS        = 20
+_TIGHT_MARGIN    =  0.1
 
 
-def make_histo( series, plotTitle, fName, showPlot = False, xLabel = 'Makespan', yLabel = 'Occurrences' ):
+def make_histo( series, plotTitle, fName, xLabel = 'Makespan', yLabel = 'Occurrences' ):
     """ Create Histogram """
     plt.clf()
+    plt.margins( _TIGHT_MARGIN )
     print( f"\n{plotTitle}" )
     print( f"Mean: ___ {np.mean(series)}" )
     print( f"Median: _ {np.median(series)}" )
@@ -69,14 +72,16 @@ def make_histo( series, plotTitle, fName, showPlot = False, xLabel = 'Makespan',
     plt.title( plotTitle, fontsize = _TITLE_FONT_SIZE ) # Set the title && font size
     plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
     plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
+    plt.ylim( (0, _N_TRIALS,) )
+    plt.tight_layout()
     plt.savefig( fName )
-    if showPlot:
-        plt.show() 
+    return plt.gca()
 
 
-def make_multi_histo( multiSeries, seriesNames, plotTitle, fName, showPlot = False, xLabel = 'Makespan', yLabel = 'Occurrences' ):
+def make_multi_histo( multiSeries, seriesNames, plotTitle, fName, savefig = True, xLabel = 'Makespan', yLabel = 'Occurrences' ):
     """ Create Histogram """
     plt.clf()
+    plt.margins( _TIGHT_MARGIN )
     print( f"\n### {plotTitle} ###" )
     for i, series in enumerate( multiSeries ):
         print( f"\t{seriesNames[i]}" )
@@ -87,24 +92,26 @@ def make_multi_histo( multiSeries, seriesNames, plotTitle, fName, showPlot = Fal
     plt.title( plotTitle, fontsize = _TITLE_FONT_SIZE ) # Set the title && font size
     plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
     plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
+    plt.ylim( (0, _N_TRIALS,) )
     plt.legend( loc = 'upper right' )
+    plt.tight_layout()
     plt.savefig( fName )
-    if showPlot:
-        plt.show() 
+    return plt.gca()
 
 
-def make_scatter( X, Y, plotTitle, fName, showPlot = False ):
-    """ Create Histogram """
-    plt.clf()
-    print()
 
-    plt.scatter( X, Y )
-    plt.title( plotTitle ) # Set the title
-    plt.xlabel('Step')  # Setting the x-axis label
-    plt.ylabel('Time') # Setting the y-axis label
-    plt.savefig( fName )
-    if showPlot:
-        plt.show() 
+# def make_scatter( X, Y, plotTitle, fName, showPlot = False ):
+#     """ Create Histogram """
+#     plt.clf()
+#     print()
+
+#     plt.scatter( X, Y )
+#     plt.title( plotTitle ) # Set the title
+#     plt.xlabel('Step')  # Setting the x-axis label
+#     plt.ylabel('Time') # Setting the y-axis label
+#     plt.savefig( fName )
+#     if showPlot:
+#         plt.show() 
 
 
 def p_str_has_any( string, qLst, cap = False ):
@@ -132,11 +139,18 @@ def filter_series( series, stdFactor = 2.0 ):
 
 _D_THRESH_M = env_var("_BLOCK_SCALE")*0.75
 
+
+
+########## DATA PROCESSING & GRAPHICS ##############################################################
+
 totRes = dict()
 
+
 for iii, paths in enumerate( datasets ):
-    suffix = "_" + dataLabels[iii]
+    setNam = dataLabels[iii]
+    suffix = "_" + setNam
     skip   = False
+    totRes[ setNam ] = dict()
 
     for ii, test in enumerate( tests ):
         ##### Init ################################################################
@@ -181,7 +195,7 @@ for iii, paths in enumerate( datasets ):
                 'plan'   : deque(),
                 'find'   : deque(),
                 'N'      : deque(),
-            }, 
+            },
         }
 
         total = {
@@ -357,10 +371,10 @@ for iii, paths in enumerate( datasets ):
         make_histo( result['tRun'], f"{longTNam}, {suffix[1:]}\nMakespan Distribution [Time]", f"{fName}_Histo-Time{suffix}{plotExt}" )
         make_histo( result['tObs'], f"{longTNam}, {suffix[1:]}\nObject Search Time Distribution", f"{fName}_Histo-Search{suffix}{plotExt}", xLabel = 'Time [s]' )
         make_histo( result['rCon'], f"{longTNam}, {suffix[1:]}\nObject Confusion Distribution", f"{fName}_Histo-Confusion{suffix}{plotExt}", xLabel = 'Confusion Rate' )
-        make_scatter( result['oStp']['s'], result['oStp']['t'], 
-                    f"{longTNam}, {suffix[1:]}\nObject Search Time at Each Step", f"{fName}_Scatter-Search{suffix}{plotExt}" )
-        make_scatter( result['sDel']['s'], result['sDel']['c'], 
-                    f"{longTNam}, {suffix[1:]}\nNumber of Objects Confused at Each Step", f"{fName}_Scatter-Confusion{suffix}{plotExt}" )
+        # make_scatter( result['oStp']['s'], result['oStp']['t'], 
+        #             f"{longTNam}, {suffix[1:]}\nObject Search Time at Each Step", f"{fName}_Scatter-Search{suffix}{plotExt}" )
+        # make_scatter( result['sDel']['s'], result['sDel']['c'], 
+        #             f"{longTNam}, {suffix[1:]}\nNumber of Objects Confused at Each Step", f"{fName}_Scatter-Confusion{suffix}{plotExt}" )
         make_multi_histo( 
             [ result['rFal']['action'], result['rFal']['plan'], result['rFal']['find'], ], 
             [ "Action Failure Rate", "Planning Failure Rate", "Search Failure Rate", ], 
@@ -378,7 +392,7 @@ for iii, paths in enumerate( datasets ):
         print( f"Mean Time to Success: {[int(item) for item in divmod( MTS, 60.0 )]}, Mean Time to Failure: {[int(item) for item in divmod( MTF, 60.0 )]}" )
         print( "\n\n" )
 
-        totRes[ test ] = deepcopy( result )
+        totRes[ setNam ][ test ] = deepcopy( result )
 
     if not skip:
 
@@ -390,7 +404,7 @@ for iii, paths in enumerate( datasets ):
         def get_series( lblLst : list[str], key : str ):
             series = deque()
             for lbl in lblLst:
-                series.append( totRes[ lbl ][key] )
+                series.append( totRes[ setNam ][ lbl ][key] )
             return list( series )
 
 
