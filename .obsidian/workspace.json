@@ -202,6 +202,9 @@
   },
   "active": "7b512479d5ce3c0a",
   "lastOpenFiles": [
+    "data/plots/RBW_Failure-Rates.pdf",
+    "data/plots/RGB_Failure-Rates.pdf",
+    "data/allData.txt",
     "za_Notes/Log/2025-09-10.md",
     "za_Notes/Log/2025-09-23.md",
     "data/plots/Total_RBW_Histo-Confusion_RBW.pdf",
@@ -212,8 +215,6 @@
     "data/plots/SC-SP_Scatter-Confusion_RBW.pdf",
     "data/plots/SC-SP_Scatter-Search_RBW.pdf",
     "data/plots/SC-SP_Histo-Confusion_RBW.pdf",
-    "data/plots/SC-SP_Histo-Search_RBW.pdf",
-    "data/plots/SC-SP_Histo-Time_RBW.pdf",
     "za_Notes/OWLv2 Vision Pipeline.md",
     "za_Notes/Log/2025-09-05.md",
     "za_Notes/Log/2025-09-08.md",
