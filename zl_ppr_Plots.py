@@ -46,6 +46,10 @@ datasets = [
 ]
 
 dataLabels = ["RGB", "RBW",]
+datNamLong = {
+    "RGB": "Red-Green-Blue", 
+    "RBW": "Red-Black-White",
+}
 
 fNames = [ f"{_PLOT_DIR}{test}" for test in tests  ]
 
@@ -57,6 +61,7 @@ import matplotlib.pyplot as plt
 
 
 _TITLE_FONT_SIZE = 13
+_TITLE_SMOL_SIZE = 10
 _N_TRIALS        = 20
 _TIGHT_MARGIN    =  0.05
 
@@ -82,8 +87,8 @@ def make_histo( series, plotTitle, fName, xLabel = 'Makespan', yLabel = 'Occurre
         return plt.gca()
 
 
-def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "output.pdf", xLabel = 'Makespan', yLabel = 'Occurrences', 
-                      forceYlim = True, savefig = True ):
+def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
+                      forceYlim = True, savefig = True, titleFontSize_pt = _TITLE_FONT_SIZE ):
     """ Create Histogram """
     if savefig:
         plt.clf()
@@ -96,9 +101,11 @@ def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "outpu
         print( f"\tStd.Dev.: {np.std(series)}" )
     plt.hist( multiSeries, label = seriesNames )
     if plotTitle is not None:
-        plt.title( plotTitle, fontsize = _TITLE_FONT_SIZE ) # Set the title && font size
-    plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
-    plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
+        plt.title( plotTitle, fontsize = titleFontSize_pt ) # Set the title && font size
+    if xLabel is not None:
+        plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
+    if yLabel is not None:
+        plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
     if savefig:
         plt.legend( loc = 'upper right' )
     if forceYlim:
@@ -449,7 +456,6 @@ if _LOAD_DATA:
             fName    = fNames[ii]
             longTNam = longTestNames[ii]
             result   = totRes[ setNam ][ test ]
-
             
             _FILTER_FACTOR = 2.5    
             result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
@@ -465,9 +471,7 @@ if _LOAD_DATA:
                 [ result['rFal']['action'], result['rFal']['plan'], result['rFal']['find'], ], 
                 [ "Action Failure Rate", "Planning Failure Rate", "Search Failure Rate", ], 
                 f"{longTNam}, {suffix[1:]}\nDistribution of Action and Planning Failure Rates, Per Episode", 
-                f"{fName}_Histo-Failure{suffix}{plotExt}", 
-                xLabel = 'Failure Rates', 
-                yLabel = 'Occurrences' 
+                f"{fName}_Histo-Failure{suffix}{plotExt}"
             )
 
         labels = deque()
@@ -520,28 +524,30 @@ if _LOAD_DATA:
 
     # pprint( totRes )
 
-
+    # [ ] 
     ##### Big Subplots ########################################################
     for dataName, dataset in totRes.items():
         plt.clf()
         for i in range(4):
             plt.subplot(2, 2, i+1)
-            result = dataset[ tests[i] ] 
+            result   = dataset[ tests[i] ] 
+            longTNam = longTestNames[i]
             make_multi_histo( 
                 [ result['rFal']['action'], result['rFal']['plan'], result['rFal']['find'], ], 
                 [ "Action Failure Rate", "Planning Failure Rate", "Search Failure Rate", ], 
-                # f"{longTNam}, {suffix[1:]}\nDistribution of Action and Planning Failure Rates, Per Episode", 
+                f"{longTNam}", 
                 # f"{fName}_Histo-Failure{suffix}{plotExt}", 
                 xLabel = 'Failure Rates', 
                 yLabel = 'Occurrences',
-                savefig = False
+                savefig = False,
+                titleFontSize_pt = _TITLE_SMOL_SIZE
             )
             if i == 1:
                 plt.legend( loc='upper right')
             plt.xlim([0.0,1.0,])
             # plt.xlim([0.0,0.75,])
         plt.subplots_adjust(top=0.90) # Adjust this value as needed
-        plt.suptitle( f"{dataName} Failure Rates for {tests}" )
+        plt.suptitle( f"{datNamLong[ dataName ]} Failure Rates " )
         plt.savefig( f"{_PLOT_DIR}/{dataName}_Failure-Rates{plotExt}" )
 
 
