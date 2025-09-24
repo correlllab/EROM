@@ -257,6 +257,7 @@ if _SAVE_DATA:
 
                 # Failure Tracking
                 Nstp      = 0
+                Nstage2   = 0
                 NfailActn = 0
                 NfailPlan = 0
                 NfailFind = 0
@@ -313,18 +314,34 @@ if _SAVE_DATA:
                         obsTimes.append( duration )
                         result['oStp']['s'].append( Nstp     )
                         result['oStp']['t'].append( duration )
+                        # pprint( datum["data"] )
+                        symbols = datum["data"]
+                        # os.system( 'kill %d' % os.getpid() ) 
 
                     ##### Phase 2: Conditions #####
 
+                    elif "Conditions Grounded" in dtmMsg:
+                        Nstage2 += 1
+                        NsymCond = 0
+                        for item in datum["data"]:
+                            if item[0] == "GraspObj":
+                                NsymCond += 1
+
+                        if NsymCond < 3:
+                            NfailFind += 1
+
                     elif "BGN: Phase 2" in dtmMsg:
-                        Nlabel  = 0
-                        Ntotal += len( symbols )
-                        found   = True
+
+                        
+                        Nlabel   = 0
+                        Ntotal  += len( symbols )
+                        found    = True
                         if len( symbols ):
                             Nlabel = len( set([item.label for item in symbols]) )
                         if Nlabel < 3:
-                            NfailFind += 1
                             found = False
+                        
+                            
 
                         if len( symbols ):
                             if len( symHist ) and len( symHist[-1] ):
@@ -357,10 +374,11 @@ if _SAVE_DATA:
                 result['sRun'].append( Nstp )
                 result['tRun'].append( data[-1]['t'] - data[0]['t'] )
                 result['rCon'].append( (Ncnfus / Ntotal) if (Ntotal > 0) else math.nan )
-                result['rFal']['action'].append( NfailActn/Nstp )
-                result['rFal']['plan'  ].append( NfailPlan/Nstp )
-                result['rFal']['find'  ].append( NfailFind/Nstp )
-                result['rFal']['N'     ].append( Nstp           )
+                result['rFal']['action'].append( NfailActn/Nstp    )
+                result['rFal']['plan'  ].append( NfailPlan/Nstp    )
+                if Nstage2 > 0:
+                    result['rFal']['find'  ].append( NfailFind/Nstage2 )
+                result['rFal']['N'     ].append( Nstp              )
                 result['tObs'].extend( obsTimes )
 
                 tRun = data[-1]['t'] - data[0]['t']
@@ -520,8 +538,10 @@ if _LOAD_DATA:
             )
             if i == 1:
                 plt.legend( loc='upper right')
+            plt.xlim([0.0,1.0,])
+            # plt.xlim([0.0,0.75,])
         plt.subplots_adjust(top=0.90) # Adjust this value as needed
-        plt.suptitle( f"Failure Rates for {tests}" )
+        plt.suptitle( f"{dataName} Failure Rates for {tests}" )
         plt.savefig( f"{_PLOT_DIR}/{dataName}_Failure-Rates{plotExt}" )
 
 
