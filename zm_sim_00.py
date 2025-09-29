@@ -23,7 +23,7 @@ _P_CONFUSE = 0.10
 class Engine:
     """ Shit Happens """
     def __init__( self ):
-        self.objs = KNOWN_BLOCKS()
+        self.obss = KNOWN_BLOCKS()
         self.prob = {
             "ActionFailure" : 0.10,
         }
@@ -32,7 +32,7 @@ class Engine:
     def report( self ):
         """ Print what is happening with the objects """
         print( "\n##### Current State of World Objects #####" )
-        for obj in self.objs:
+        for obj in self.obss:
             print( obj )
         print()
 
@@ -40,7 +40,7 @@ class Engine:
     def noisy_sense( self ):
         """ Get noisy readings of all the objects in the World """
         rtnLst = list()
-        for obj in self.objs:
+        for obj in self.obss:
             rObj = obj.copy()
             # Handle Class Confusion #
             if random() < _P_CONFUSE:
@@ -290,28 +290,67 @@ class SimExec:
     """ Manages the simulation """
     def __init__( self ):
         """ Set up the `Engine` and the `Solver` """
-        self.obj = list()
+        self.obs = list()
+        self.fct = list()
         self.eng = Engine()
         self.slv = Solver()
+        self.stp = 0
 
 
     def observe( self ):
         """ Simulate one run of the Perception Stack with possible confusion """
-        self.obj = self.eng.noisy_sense()
+        self.obs : list[GraspObj] = self.eng.noisy_sense()
 
 
     def solve( self ):
         """ Get a plan given the current state """
-        # self.pln = self.slv.solve( self.slv.ground_facts( self.eng.objs ), env_var("_GOAL_SIM") )
-        self.pln = self.slv.solve( self.slv.ground_facts( self.obj ), env_var("_GOAL_SIM") )
+        # self.pln = self.slv.solve( self.slv.ground_facts( self.eng.obss ), env_var("_GOAL_SIM") )
+        self.fct = self.slv.ground_facts( self.obs )
+        self.pln = self.slv.solve( self.fct, env_var("_GOAL_SIM") )
+
+
+    def get_obs_by_label( self, lbl : str ):
+        """ Get the current observation matching `lbl` """
+        for ob in self.obs:
+            if ob.label == lbl:
+                return ob
+        return None
 
 
     def exec_step( self ):
         """ Execute the first action of the plan only """
+        action = self.pln[0]
+        print( f"Execute: {action} at Step {self.stp}" )
+        if action[0] == "Place":
+            trgt = self.get_obs_by_label( action[1] )
+            if trgt is not None:
+                self.fct = self.eng.place_A( trgt, action[2].pose, self.fct )
+        elif action[0] == "Stack":
+            up = self.get_obs_by_label( action[1] )
+            dn = self.get_obs_by_label( action[2] )
+            if (up is not None) and (dn is not None):
+                self.fct = self.eng.stack_A_onto_B( up, dn, self.fct )
+        elif action[0] == "Unstack":
+            up = self.get_obs_by_label( action[1] )
+            dn = self.get_obs_by_label( action[2] )
+            if (up is not None) and (dn is not None):
+                self.fct = self.eng.unstack_A_from_B( up, dn, action[3].pose, self.fct )
+        else:
+            raise ValueError( f"CANNOT PARSE ACTION: {action}" )
+        
+        print( f"Facts after {action}:" )
+        for fact in self.fct:
+            print( f"\t{fact}" )
+
+
+    def run_step( self ):
+        """ Run entire cycle for one step of the plan """
         # 1. Observe 
+        self.observe()
         # 2. Plan 
+        self.solve()
         # 3. Execute One Action 
-        # FIXME: TAKE A BREAK
+        self.exec_step()
 
     
 
@@ -321,7 +360,7 @@ if __name__ == "__main__":
     # eng = Engine()
     # eng.report()
     # slv = Solver()
-    # pln = slv.solve( slv.ground_facts( eng.objs ), env_var("_GOAL_SIM") )
+    # pln = slv.solve( slv.ground_facts( eng.obss ), env_var("_GOAL_SIM") )
 
     # print( "\n##### Plan #####" )
     # for action in pln:
