@@ -63,7 +63,7 @@ def m_i( i : int, m_mv : float, m_pl : float, PofN : list[float], m_rm : float )
                 dn -= PofN[j]
             m_i.append( (a + n2)/dn )
 
-    return m_i[-1]
+    return sum( m_i )
 
 
 ########## MAIN ####################################################################################

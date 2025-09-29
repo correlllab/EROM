@@ -1,7 +1,7 @@
 ### Standard ### 
 import os
 from collections import deque
-from random import random
+from random import random, choice
 
 ### Special ### 
 import numpy as np
@@ -18,6 +18,7 @@ from env_config import KNOWN_BLOCKS
 
 
 ########## SIMULATION CLASSES ######################################################################
+_P_CONFUSE = 0.10
 
 class Engine:
     """ Shit Happens """
@@ -34,6 +35,19 @@ class Engine:
         for obj in self.objs:
             print( obj )
         print()
+
+
+    def noisy_sense( self ):
+        """ Get noisy readings of all the objects in the World """
+        rtnLst = list()
+        for obj in self.objs:
+            rObj = obj.copy()
+            # Handle Class Confusion #
+            if random() < _P_CONFUSE:
+                while rObj.label == obj.label:
+                    rObj.label = choice( env_var("_ACTUAL_NAMES") )
+            rtnLst.append( rObj )
+        return rtnLst
 
 
     def pose_above( self, target : GraspObj ) -> ObjPose:
@@ -272,23 +286,46 @@ class Solver:
         
 
 
-class SimPlanner:
-    """ Dice Roll Planner, w/o PDLS """
+class SimExec:
+    """ Manages the simulation """
     def __init__( self ):
-        self.goal = None
-        self.plan = None
+        """ Set up the `Engine` and the `Solver` """
+        self.obj = list()
+        self.eng = Engine()
+        self.slv = Solver()
 
+
+    def observe( self ):
+        """ Simulate one run of the Perception Stack with possible confusion """
+        self.obj = self.eng.noisy_sense()
+
+
+    def solve( self ):
+        """ Get a plan given the current state """
+        # self.pln = self.slv.solve( self.slv.ground_facts( self.eng.objs ), env_var("_GOAL_SIM") )
+        self.pln = self.slv.solve( self.slv.ground_facts( self.obj ), env_var("_GOAL_SIM") )
+
+
+    def exec_step( self ):
+        """ Execute the first action of the plan only """
+        # 1. Observe 
+        # 2. Plan 
+        # 3. Execute One Action 
+        # FIXME: TAKE A BREAK
+
+    
 
 ########## MAIN ####################################################################################
 if __name__ == "__main__":
-    eng = Engine()
-    eng.report()
-    slv = Solver()
-    pln = slv.solve( slv.ground_facts( eng.objs ), env_var("_GOAL_SIM") )
+    pass
+    # eng = Engine()
+    # eng.report()
+    # slv = Solver()
+    # pln = slv.solve( slv.ground_facts( eng.objs ), env_var("_GOAL_SIM") )
 
-    print( "\n##### Plan #####" )
-    for action in pln:
-        print( action )
+    # print( "\n##### Plan #####" )
+    # for action in pln:
+    #     print( action )
     
 
 
