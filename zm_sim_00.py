@@ -17,8 +17,28 @@ from env_config import KNOWN_BLOCKS
 
 
 
+########## SIMULATION COMPONENTS ###################################################################
+_P_CONF = 0.10
+_PLAN   = [
+    ("Stack", "A",),
+    ("Stack", "B",),
+    ("Stack", "C",),
+] 
+
+
+class SimBlock:
+    """ Container class for a Block """
+    def __init__( self, label = None, blocked = False ):
+        self.label   = None
+        self.blocked = False
+
+
+
+
+
+
 ########## SIMULATION CLASSES ######################################################################
-_P_CONFUSE = 0.10
+
 
 class Engine:
     """ Shit Happens """
@@ -319,28 +339,30 @@ class SimExec:
 
     def exec_step( self ):
         """ Execute the first action of the plan only """
-        action = self.pln[0]
-        print( f"Execute: {action} at Step {self.stp}" )
-        if action[0] == "Place":
-            trgt = self.get_obs_by_label( action[1] )
-            if trgt is not None:
-                self.fct = self.eng.place_A( trgt, action[2].pose, self.fct )
-        elif action[0] == "Stack":
-            up = self.get_obs_by_label( action[1] )
-            dn = self.get_obs_by_label( action[2] )
-            if (up is not None) and (dn is not None):
-                self.fct = self.eng.stack_A_onto_B( up, dn, self.fct )
-        elif action[0] == "Unstack":
-            up = self.get_obs_by_label( action[1] )
-            dn = self.get_obs_by_label( action[2] )
-            if (up is not None) and (dn is not None):
-                self.fct = self.eng.unstack_A_from_B( up, dn, action[3].pose, self.fct )
+        if len( self.pln ):
+            action = self.pln[0]
+            print( f"Execute: {action} at Step {self.stp}" )
+            if action[0] == "Place":
+                trgt = self.get_obs_by_label( action[1] )
+                if trgt is not None:
+                    self.fct = self.eng.place_A( trgt, action[2].pose, self.fct )
+            elif action[0] == "Stack":
+                up = self.get_obs_by_label( action[1] )
+                dn = self.get_obs_by_label( action[2] )
+                if (up is not None) and (dn is not None):
+                    self.fct = self.eng.stack_A_onto_B( up, dn, self.fct )
+            elif action[0] == "Unstack":
+                up = self.get_obs_by_label( action[1] )
+                dn = self.get_obs_by_label( action[2] )
+                if (up is not None) and (dn is not None):
+                    self.fct = self.eng.unstack_A_from_B( up, dn, action[3].pose, self.fct )
+            else:
+                raise ValueError( f"CANNOT PARSE ACTION: {action}" )
+            print( f"Facts after {action}:" )
         else:
-            raise ValueError( f"CANNOT PARSE ACTION: {action}" )
-        
-        print( f"Facts after {action}:" )
-        for fact in self.fct:
-            print( f"\t{fact}" )
+            print( f"Current Facts:" )
+            for fact in self.fct:
+                print( f"\t{fact}" )
 
 
     def run_step( self ):
@@ -356,15 +378,8 @@ class SimExec:
 
 ########## MAIN ####################################################################################
 if __name__ == "__main__":
-    pass
-    # eng = Engine()
-    # eng.report()
-    # slv = Solver()
-    # pln = slv.solve( slv.ground_facts( eng.obss ), env_var("_GOAL_SIM") )
-
-    # print( "\n##### Plan #####" )
-    # for action in pln:
-    #     print( action )
+    plnr = SimExec()
+    plnr.run_step()
     
 
 
