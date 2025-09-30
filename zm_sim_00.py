@@ -17,42 +17,75 @@ from env_config import KNOWN_BLOCKS
 
 
 
-########## SIMULATION COMPONENTS ###################################################################
-_P_CONF = 0.10
-_PLAN   = [
-    ("Stack", "A",),
-    ("Stack", "B",),
-    ("Stack", "C",),
-] 
-
+########## SIMULATION CLASSES ######################################################################
 
 class SimBlock:
     """ Container class for a Block """
-    def __init__( self, label = None, blocked = False ):
-        self.label   = None
-        self.blocked = False
+    count = 0
+
+    def __init__( self, label = None, pose = None, stacked = False , blocked = False ):
+        """ Minimal state to represent a stacked block """
+        SimBlock.count += 1
+        self.id      = SimBlock.count
+        self.label   = label
+        self.pose    = pose
+        self.stacked = stacked
+        self.blocked = blocked
+
+    def __repr__( self ):
+        """ Print state """
+        return f"({self.label}:{self.id} @ {self.pose}, {'Stacked' if self.stacked else 'On Table'}, {'Blocked' if self.blocked else 'Free'})"
+    
+    def copy( self ):
+        rtnObj = SimBlock()
+        rtnObj.label   = self.label   
+        rtnObj.pose    = self.pose    
+        rtnObj.stacked = self.stacked 
+        rtnObj.blocked = self.blocked 
+        return rtnObj
 
 
 
 
+########## SIMULATION COMPONENTS ###################################################################
+_P_CONF = 0.10
+_NAMES  = ["A","B","C",]
+_PLAN   = [
+    ("Place", "A", 0,),
+    ("Stack", "B", 1,),
+    ("Stack", "C", 2,),
+] 
+_poses = set([i for i in range(3)])
 
 
-########## SIMULATION CLASSES ######################################################################
+def rand_pose() -> int:
+    """ Generate a random int above 2 """
+    # ASSUMPTION: WE DO NOT NEED MORE THAN 1003 POSES!
+    nuPose = int( 3 + random() * 1000 )
+    while nuPose in _poses:
+        nuPose = int( 3 + random() * 1000 )
+    _poses.add( nuPose )
+    return nuPose
+
+
+def init_blocks() -> list[SimBlock]:
+    """ Get all the blocks in the scene """
+    rtnLst = list()
+    for name in _NAMES:
+        rtnLst.append( SimBlock( name, rand_pose() ) )
+
 
 
 class Engine:
     """ Shit Happens """
     def __init__( self ):
-        self.obss = KNOWN_BLOCKS()
-        self.prob = {
-            "ActionFailure" : 0.10,
-        }
-
+        self.prob = {  "ActionFailure" : 0.10,  }
+        self.objs = init_blocks()
 
     def report( self ):
         """ Print what is happening with the objects """
         print( "\n##### Current State of World Objects #####" )
-        for obj in self.obss:
+        for obj in self.objs:
             print( obj )
         print()
 
@@ -60,36 +93,19 @@ class Engine:
     def noisy_sense( self ):
         """ Get noisy readings of all the objects in the World """
         rtnLst = list()
-        for obj in self.obss:
+        for obj in self.objs:
             rObj = obj.copy()
             # Handle Class Confusion #
-            if random() < _P_CONFUSE:
+            if random() < _P_CONF:
                 while rObj.label == obj.label:
-                    rObj.label = choice( env_var("_ACTUAL_NAMES") )
+                    rObj.label = choice( _NAMES )
             rtnLst.append( rObj )
         return rtnLst
 
 
-    def pose_above( self, target : GraspObj ) -> ObjPose:
-        """ Get the stacking pose above the `target` """
-        pose = extract_pose_as_homog( target )
-        pose[2,3] += env_var("_BLOCK_SCALE")
-        return ObjPose( pose.copy() )
-
-
-    def stack_A_onto_B( self, A : GraspObj, B : GraspObj, factList : list[tuple] ) -> list[tuple]:
+    def stack( self, stkLbl ):
         """ Add stacked states """
-        if random() < self.prob["ActionFailure"]:
-            pass
-        else:
-            abovPose = self.pose_above(B)
-            A.pose = abovPose
-            factList.extend( [
-                ('GraspObj' , A.label, A.pose.copy() ),
-                ('Supported', A.label, B.label ),
-                ('Blocked'  , B.label ),
-            ] )
-            return factList
+        # FIXME: WHAT NOW?
     
 
     def negate_fact( self, negFct : tuple, factList : list[tuple] ) -> list[tuple]:
