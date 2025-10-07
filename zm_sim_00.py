@@ -73,7 +73,7 @@ def init_blocks() -> list[SimBlock]:
     rtnLst = list()
     for name in _NAMES:
         rtnLst.append( SimBlock( name, rand_pose() ) )
-
+    return rtnLst
 
 
 class Engine:
@@ -137,7 +137,7 @@ class Engine:
         ], factList )
         A.pose = poseA
         factList.extend( [
-            ('GraspObj' , A.label, A.pose.copy() ),
+            ('GraspObj' , A.label, A.pose ),
             ('Supported', A.label, 'table' ),
         ] )
         return factList
@@ -147,7 +147,7 @@ class Engine:
         poseA    = ObjPose( np.array( AdstPose ) )
         factList = self.negate_many( [('GraspObj' , A.label ),], factList )
         A.pose = poseA
-        factList.extend( [('GraspObj' , A.label, A.pose.copy() ),] )
+        factList.extend( [('GraspObj' , A.label, A.pose ),] )
         return factList
 
 
@@ -168,14 +168,14 @@ class Solver:
 
     def __init__( self ):
         """ Get ready to solve """
-        self.poses = list()
-        pose = np.eye(4)
-        pose[2,3] = 0.5 * env_var("_BLOCK_SCALE")
-        self.poses.append( ObjPose( pose.copy() ) )
-        pose[2,3] += env_var("_BLOCK_SCALE")
-        self.poses.append( ObjPose( pose.copy() ) )
-        pose[2,3] += env_var("_BLOCK_SCALE")
-        self.poses.append( ObjPose( pose.copy() ) )
+        self.poses = list([0,1,2,])
+        # pose = np.eye(4)
+        # pose[2,3] = 0.5 * env_var("_BLOCK_SCALE")
+        # self.poses.append( ObjPose( pose.copy() ) )
+        # pose[2,3] += env_var("_BLOCK_SCALE")
+        # self.poses.append( ObjPose( pose.copy() ) )
+        # pose[2,3] += env_var("_BLOCK_SCALE")
+        # self.poses.append( ObjPose( pose.copy() ) )
         set_blocks_env()
         set_experiment_env()
         self.set_sim_env()
@@ -199,7 +199,7 @@ class Solver:
         """ Set facts from the object list """
         rtnFcs = deque()
         for obj in objs:
-            rtnFcs.append( ['GraspObj', obj.label, obj.pose.copy()] )
+            rtnFcs.append( ['GraspObj', obj.label, obj.pose] )
         if goal is not None:
             goalFcts = self.get_goal_facts( goal )
             for rFact in rtnFcs:
@@ -216,11 +216,11 @@ class Solver:
         return [tuple( item ) for item in rtnFcs]
 
 
-    def order_by_Z( self, facts : list[tuple] ):
-        """ Return the object pose facts in increasing Z order """
-        rtnFcs = [item for item in facts if (item[0] == "GraspObj")]
-        rtnFcs.sort( key = lambda x: extract_pose_as_homog( x[2] )[2,3]  )
-        return rtnFcs
+    # def order_by_Z( self, facts : list[tuple] ):
+    #     """ Return the object pose facts in increasing Z order """
+    #     rtnFcs = [item for item in facts if (item[0] == "GraspObj")]
+    #     rtnFcs.sort( key = lambda x: x[2]  )
+    #     return rtnFcs
 
 
     def p_fact_match( self, qFact, factList ):
@@ -236,7 +236,8 @@ class Solver:
         """ Return True if `qFact` is CONTRADICTED by `factList` """
         for fact in factList:
             if (qFact[0] == fact[0]) and (qFact[1] != fact[1]):
-                if euclidean_distance_between_symbols( qFact[2], fact[2] ) <= env_var("_ACCEPT_POSN_ERR"):
+                # if euclidean_distance_between_symbols( qFact[2], fact[2] ) <= env_var("_ACCEPT_POSN_ERR"):
+                if abs( qFact[2] - fact[2] ) <= env_var("_ACCEPT_POSN_ERR"):
                     return True
         return False
     
@@ -279,8 +280,9 @@ class Solver:
 
     def solve( self, facts : list[tuple], goal : list[tuple] ):
         """ Return a plan that solves the goal, If already solved then return an empty list """
-        facts  = self.order_by_Z( facts )
-        goals  = self.order_by_Z( self.get_goal_facts( goal ) )
+        # facts  = self.order_by_Z( facts )
+        # goals  = self.order_by_Z( self.get_goal_facts( goal ) )
+        goals  = self.get_goal_facts( goal )
         crrct  = list()
         replc  = list()
         empty  = list()
@@ -336,6 +338,9 @@ class SimExec:
     def observe( self ):
         """ Simulate one run of the Perception Stack with possible confusion """
         self.obs : list[GraspObj] = self.eng.noisy_sense()
+        print( "# Observed: #" )
+        for ob in self.obs:
+            print( f"\t{ob}" )
 
 
     def solve( self ):
@@ -343,6 +348,7 @@ class SimExec:
         # self.pln = self.slv.solve( self.slv.ground_facts( self.eng.obss ), env_var("_GOAL_SIM") )
         self.fct = self.slv.ground_facts( self.obs )
         self.pln = self.slv.solve( self.fct, env_var("_GOAL_SIM") )
+        return self.pln
 
 
     def get_obs_by_label( self, lbl : str ):
@@ -361,7 +367,7 @@ class SimExec:
             if action[0] == "Place":
                 trgt = self.get_obs_by_label( action[1] )
                 if trgt is not None:
-                    self.fct = self.eng.place_A( trgt, action[2].pose, self.fct )
+                    self.fct = self.eng.place_A( trgt, action[2], self.fct )
             elif action[0] == "Stack":
                 up = self.get_obs_by_label( action[1] )
                 dn = self.get_obs_by_label( action[2] )
@@ -371,7 +377,7 @@ class SimExec:
                 up = self.get_obs_by_label( action[1] )
                 dn = self.get_obs_by_label( action[2] )
                 if (up is not None) and (dn is not None):
-                    self.fct = self.eng.unstack_A_from_B( up, dn, action[3].pose, self.fct )
+                    self.fct = self.eng.unstack_A_from_B( up, dn, action[3], self.fct )
             else:
                 raise ValueError( f"CANNOT PARSE ACTION: {action}" )
             print( f"Facts after {action}:" )
@@ -386,7 +392,9 @@ class SimExec:
         # 1. Observe 
         self.observe()
         # 2. Plan 
-        self.solve()
+        plan = self.solve()
+        for action in plan:
+            print( f"\t{action}" )
         # 3. Execute One Action 
         self.exec_step()
 
