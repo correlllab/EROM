@@ -2,6 +2,7 @@
 import os
 from collections import deque
 from random import random, choice
+from enum import Enum
 
 ### Special ### 
 import numpy as np
@@ -47,7 +48,7 @@ class SimBlock:
 
 
 
-########## SIMULATION COMPONENTS ###################################################################
+########## HELPER FUNCTIONS ########################################################################
 _P_CONF = 0.10
 _NAMES  = ["A","B","C",]
 _PLAN   = [
@@ -75,6 +76,9 @@ def init_blocks() -> list[SimBlock]:
         rtnLst.append( SimBlock( name, rand_pose() ) )
     return rtnLst
 
+
+
+########## TRANSITION MODEL ########################################################################
 
 class Engine:
     """ Shit Happens """
@@ -143,13 +147,24 @@ class Engine:
         return factList
     
 
-    def place_A( self, A : GraspObj, AdstPose : np.ndarray, factList : list[tuple] ) -> list[tuple]:
-        poseA    = ObjPose( np.array( AdstPose ) )
+    def place_A( self, A : GraspObj, AdstPose : int, factList : list[tuple] ) -> list[tuple]:
+        # poseA    = ObjPose( np.array( AdstPose ) )
+        poseA    = AdstPose
         factList = self.negate_many( [('GraspObj' , A.label ),], factList )
         A.pose = poseA
-        factList.extend( [('GraspObj' , A.label, A.pose ),] )
+        factList.extend( [('GraspObj', A.label, A.pose ),] )
         return factList
 
+
+
+########## SIMPLEST SOLVER #########################################################################
+
+class Status( Enum ):
+    """ Planner Status """
+    INVALID = "INVALID"
+    RUNNING = "RUNNING"
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
 
 
 class Solver:
@@ -159,23 +174,17 @@ class Solver:
         """ Set necessary params """
         env_sto( "_GOAL_SIM" ,
             ( 'and',
-                ('GraspObj', 'grnBlock', self.poses[0] ),
-                ('GraspObj', 'redBlock', self.poses[1] ), 
-                ('GraspObj', 'bluBlock', self.poses[2] ), 
+                ('GraspObj', 'A', self.poses[0] ),
+                ('GraspObj', 'B', self.poses[1] ), 
+                ('GraspObj', 'C', self.poses[2] ), 
             )        
         )
 
 
     def __init__( self ):
         """ Get ready to solve """
-        self.poses = list([0,1,2,])
-        # pose = np.eye(4)
-        # pose[2,3] = 0.5 * env_var("_BLOCK_SCALE")
-        # self.poses.append( ObjPose( pose.copy() ) )
-        # pose[2,3] += env_var("_BLOCK_SCALE")
-        # self.poses.append( ObjPose( pose.copy() ) )
-        # pose[2,3] += env_var("_BLOCK_SCALE")
-        # self.poses.append( ObjPose( pose.copy() ) )
+        self.poses  = list([0,1,2,])
+        self.status = Status.INVALID
         set_blocks_env()
         set_experiment_env()
         self.set_sim_env()
@@ -216,18 +225,12 @@ class Solver:
         return [tuple( item ) for item in rtnFcs]
 
 
-    # def order_by_Z( self, facts : list[tuple] ):
-    #     """ Return the object pose facts in increasing Z order """
-    #     rtnFcs = [item for item in facts if (item[0] == "GraspObj")]
-    #     rtnFcs.sort( key = lambda x: x[2]  )
-    #     return rtnFcs
-
-
     def p_fact_match( self, qFact, factList ):
         """ Return True if `qFact` is SUPPORTED by `factList` """
         for fact in factList:
             if (qFact[0] == fact[0]) and (qFact[1] == fact[1]):
-                if euclidean_distance_between_symbols( qFact[2], fact[2] ) <= env_var("_ACCEPT_POSN_ERR"):
+                # if euclidean_distance_between_symbols( qFact[2], fact[2] ) <= env_var("_ACCEPT_POSN_ERR"):
+                if abs( qFact[2] - fact[2] ) <= env_var("_ACCEPT_POSN_ERR"):
                     return True
         return False
 
@@ -278,10 +281,24 @@ class Solver:
         return rtnPose
     
 
+    def p_goal_objects_present( self, obsL, goal ):
+        """ Check that all the goal objects are present """
+        gSet = set([g[1] for g in goal if g[0] == "GraspObj"])
+        oSet = set([o[1] for o in obsL if o[0] == "GraspObj"])
+        if len( oSet ) < len( gSet ):
+            return False
+        for g in gSet:
+            if g not in oSet:
+                return False
+        return True
+
+
     def solve( self, facts : list[tuple], goal : list[tuple] ):
         """ Return a plan that solves the goal, If already solved then return an empty list """
-        # facts  = self.order_by_Z( facts )
-        # goals  = self.order_by_Z( self.get_goal_facts( goal ) )
+        self.status = Status.RUNNING
+        if not self.p_goal_objects_present( facts, goal ):
+            self.status = Status.FAILURE
+            return None
         goals  = self.get_goal_facts( goal )
         crrct  = list()
         replc  = list()
@@ -321,23 +338,36 @@ class Solver:
                     plan.append( ("Stack", goals[i][1], goals[i-1][1], goals[i][2],) )
         return list( plan )
 
-        
+
+
+########## SIMPLEST PLANNER ########################################################################
+_MAX_ALLOWED_STEPS = 30
+
+class FailModes( Enum ):
+    """ Ways the planner can fail """
+    PLANNING = "PLANNING FAILURE"
+    ACTION   = "ACTION FAILURE"
+    GOAL     = "GOAL OBJECTS NOT PRESENT"
+    OKAY     = "STATUS OKAY - NO FAILURE"
+    TIMEOUT  = "TIMEOUT FAILURE"
 
 
 class SimExec:
     """ Manages the simulation """
     def __init__( self ):
         """ Set up the `Engine` and the `Solver` """
-        self.obs = list()
-        self.fct = list()
-        self.eng = Engine()
-        self.slv = Solver()
-        self.stp = 0
+        self.obs    = list()
+        self.facts  = list()
+        self.engine = Engine()
+        self.solver = Solver()
+        self.Nstp   = 0
+        self.status = Status.INVALID
+        self.flMode = FailModes.OKAY
 
 
     def observe( self ):
         """ Simulate one run of the Perception Stack with possible confusion """
-        self.obs : list[GraspObj] = self.eng.noisy_sense()
+        self.obs : list[GraspObj] = self.engine .noisy_sense()
         print( "# Observed: #" )
         for ob in self.obs:
             print( f"\t{ob}" )
@@ -345,15 +375,16 @@ class SimExec:
 
     def solve( self ):
         """ Get a plan given the current state """
-        # self.pln = self.slv.solve( self.slv.ground_facts( self.eng.obss ), env_var("_GOAL_SIM") )
-        self.fct = self.slv.ground_facts( self.obs )
-        self.pln = self.slv.solve( self.fct, env_var("_GOAL_SIM") )
-        return self.pln
+        # self.plan = self.solver.solve( self.solver.ground_facts( self.engine .obss ), env_var("_GOAL_SIM") )
+        self.facts = self.solver.ground_facts( self.obs )
+        self.plan  = self.solver.solve( self.facts, env_var("_GOAL_SIM") )
+        return self.plan
 
 
     def get_obs_by_label( self, lbl : str ):
         """ Get the current observation matching `lbl` """
         for ob in self.obs:
+            print( f"\t\t{ob.label} -vs- {lbl}" )
             if ob.label == lbl:
                 return ob
         return None
@@ -361,23 +392,29 @@ class SimExec:
 
     def exec_step( self ):
         """ Execute the first action of the plan only """
-        if len( self.pln ):
-            action = self.pln[0]
-            print( f"Execute: {action} at Step {self.stp}" )
+        if len( self.plan ):
+            action = self.plan[0]
+            print( f"Execute: {action} at Step {self.Nstp}" )
             if action[0] == "Place":
                 trgt = self.get_obs_by_label( action[1] )
                 if trgt is not None:
-                    self.fct = self.eng.place_A( trgt, action[2], self.fct )
+                    self.facts = self.engine .place_A( trgt, action[2], self.facts )
+                else:
+                    print( f"BAD ACTION: {action}" )
             elif action[0] == "Stack":
                 up = self.get_obs_by_label( action[1] )
                 dn = self.get_obs_by_label( action[2] )
                 if (up is not None) and (dn is not None):
-                    self.fct = self.eng.stack_A_onto_B( up, dn, self.fct )
+                    self.facts = self.engine .stack_A_onto_B( up, dn, self.facts )
+                else:
+                    print( f"BAD ACTION: {action}" )
             elif action[0] == "Unstack":
                 up = self.get_obs_by_label( action[1] )
                 dn = self.get_obs_by_label( action[2] )
                 if (up is not None) and (dn is not None):
-                    self.fct = self.eng.unstack_A_from_B( up, dn, action[3], self.fct )
+                    self.facts = self.engine .unstack_A_from_B( up, dn, action[3], self.facts )
+                else:
+                    print( f"BAD ACTION: {action}" )
             else:
                 raise ValueError( f"CANNOT PARSE ACTION: {action}" )
             print( f"Facts after {action}:" )
@@ -389,21 +426,49 @@ class SimExec:
 
     def run_step( self ):
         """ Run entire cycle for one step of the plan """
+        self.status = Status.RUNNING
+        self.flMode = FailModes.OKAY
+        self.Nstp  += 1
         # 1. Observe 
         self.observe()
         # 2. Plan 
         plan = self.solve()
+        if plan is None:
+            self.status = Status.FAILURE
+            self.flMode = FailModes.GOAL
+            return self.status
+        if not len( plan ):
+            self.status = Status.SUCCESS
+            print( "GOAL ACHIEVED" )
         for action in plan:
             print( f"\t{action}" )
         # 3. Execute One Action 
         self.exec_step()
+        return self.status
+    
 
+    def run_episode( self ):
+        """ Run until solved """
+        run = True 
+        while run:
+            self.run_step()
+            if (self.plan is not None) and (not len( self.plan )):
+                run = False
+            if self.Nstp >= _MAX_ALLOWED_STEPS:
+                self.flMode = FailModes.TIMEOUT
+                run = False
+
+
+    def report_status( self ):
+        """ Print status and failure mode """
+        print( f"{self.status.value}, {self.flMode.value}" )
     
 
 ########## MAIN ####################################################################################
 if __name__ == "__main__":
     plnr = SimExec()
-    plnr.run_step()
+    plnr.run_episode()
+    plnr.report_status()
     
 
 
