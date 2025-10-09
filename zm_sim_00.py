@@ -56,25 +56,10 @@ _PLAN   = [
     ("Stack", "B", 1,),
     ("Stack", "C", 2,),
 ] 
-_poses = set([i for i in range(3)])
 
 
-def rand_pose() -> int:
-    """ Generate a random int above 2 """
-    # ASSUMPTION: WE DO NOT NEED MORE THAN 1003 POSES!
-    nuPose = int( 3 + random() * 1000 )
-    while nuPose in _poses:
-        nuPose = int( 3 + random() * 1000 )
-    _poses.add( nuPose )
-    return nuPose
 
 
-def init_blocks() -> list[SimBlock]:
-    """ Get all the blocks in the scene """
-    rtnLst = list()
-    for name in _NAMES:
-        rtnLst.append( SimBlock( name, rand_pose() ) )
-    return rtnLst
 
 
 
@@ -82,9 +67,44 @@ def init_blocks() -> list[SimBlock]:
 
 class Engine:
     """ Shit Happens """
+
+    ##### Static Methods ##################################################
+
+    ## Class Vars ##
+    _poses = set([i for i in range(3)])
+
+
+    @staticmethod
+    def roll_pose() -> int:
+        return int( 3 + random() * 1000 )
+
+
+    @staticmethod
+    def rand_pose() -> int:
+        """ Generate a random int above 2 """
+        # ASSUMPTION: WE DO NOT NEED MORE THAN 1003 POSES!
+        nuPose = Engine.roll_pose()
+        while nuPose in Engine._poses:
+            nuPose = Engine.roll_pose()
+        Engine._poses.add( nuPose )
+        return nuPose
+
+
+    @staticmethod
+    def init_blocks() -> list[SimBlock]:
+        """ Get all the blocks in the scene """
+        rtnLst = list()
+        for name in _NAMES:
+            rtnLst.append( SimBlock( name, Engine.rand_pose() ) )
+        return rtnLst
+
+
+    ##### General Methods #################################################
+
     def __init__( self ):
+        """ Setup a New Episode """
         self.prob = {  "ActionFailure" : 0.10,  }
-        self.objs = init_blocks()
+        self.objs = Engine.init_blocks()
 
     def report( self ):
         """ Print what is happening with the objects """
@@ -93,6 +113,8 @@ class Engine:
             print( obj )
         print()
 
+
+    ##### Perception ######################################################
 
     def noisy_sense( self ):
         """ Get noisy readings of all the objects in the World """
@@ -107,53 +129,93 @@ class Engine:
         return rtnLst
 
 
-    def stack( self, stkLbl ):
-        """ Add stacked states """
-        # FIXME: WHAT NOW?
+    ##### Actions #########################################################
+
+    def get_obj_from_pose( self, qPose : int ):
+        """ Fetch the object at the expected `pose` """
+        for obj in self.objs:
+            if abs(obj.pose - qPose) <= env_var("_ACCEPT_POSN_ERR"):
+                return obj
+        return None
     
 
-    def negate_fact( self, negFct : tuple, factList : list[tuple] ) -> list[tuple]:
-        """ Remove a fact from the list and return the list """
-        rtnLst = list()
-        for fact in factList:
-            if fact[0] == negFct[0]:
-                if (negFct[0] == "Supported") or (negFct[0] == "GraspObj"):
-                    if (fact[1] == negFct[1]):
-                        continue
-            rtnLst.append( fact )
-        return rtnLst
+    def place( self, actDesc : tuple ):
+        """ Execute the "Place" action, even if the label is WRONG!, Return whether the action was successful """
+        actName = actDesc[0]
+        _       = actDesc[1] # `Engine` doesn't actually care what the label is!
+        actPose = actDesc[2]
+        actObjc = self.get_obj_from_pose( actPose )
+
+        def roll_success() -> bool:
+            """ Return True if the die roll passes, Else apply failure transition and return False """
+            nonlocal self, actObjc
+            if random() >= self.prob["ActionFailure"]:
+                return True
+            else:
+                actObjc.pose = Engine.rand_pose()
+                return False
+        
+        if actName == "Place":
+            ## Apply Transition ##
+            actObjc.pose = actPose
+            return roll_success()
+        else:
+            raise ValueError( f"BAD DESC. for \"Place\": {actDesc}""" )
+
+
+    def stack( self, actDesc : tuple ):
+        """ Execute the "Stack" action, even if the labels are WRONG!, Return whether the action was successful """
+        actName = actDesc[0]
+        bgPose  = actDesc[1]
+        upPose  = actDesc[2]
+        dnPose  = actDesc[3]
+        bgObjct = self.get_obj_from_pose( bgPose )
+        dnObjct = self.get_obj_from_pose( dnPose )
+
+        def roll_success( forceFail : bool = False ):
+            nonlocal self, bgObjct
+            if (not forceFail) and (random() >= self.prob["ActionFailure"]):
+                return True
+            else:
+                bgObjct.pose = Engine.rand_pose()
+                return False
+
+        if actName == "Stack":
+            ## Test Physical Plausibility ##
+            if dnObjct is None:
+                return roll_success( forceFail = True )
+            ## Apply Transition ##
+            bgObjct.pose = upPose
+            return roll_success()
+        else:
+            raise ValueError( f"BAD DESC. for \"Stack\": {actDesc}""" )
+
+    
     
 
-    def negate_many( self, negLst : list, factList : list[tuple] ) -> list[tuple]:
-        """ Serially negate a list of facts """
-        for negFct in negLst:
-            factList = self.negate_fact( negFct, factList )
-        return factList
+    # def unstack_A_from_B( self, A : GraspObj, B : GraspObj, AdstPose : np.ndarray, factList : list[tuple] ) -> list[tuple]:
+    #     """ Unstack `A` and set it on the 'table' """
+    #     poseA    = ObjPose( np.array( AdstPose ) )
+    #     factList = self.negate_many( [
+    #         ('GraspObj' , A.label ),
+    #         ('Supported', A.label ),
+    #         ('Blocked'  , B.label ),
+    #     ], factList )
+    #     A.pose = poseA
+    #     factList.extend( [
+    #         ('GraspObj' , A.label, A.pose ),
+    #         ('Supported', A.label, 'table' ),
+    #     ] )
+    #     return factList
     
 
-    def unstack_A_from_B( self, A : GraspObj, B : GraspObj, AdstPose : np.ndarray, factList : list[tuple] ) -> list[tuple]:
-        """ Unstack `A` and set it on the 'table' """
-        poseA    = ObjPose( np.array( AdstPose ) )
-        factList = self.negate_many( [
-            ('GraspObj' , A.label ),
-            ('Supported', A.label ),
-            ('Blocked'  , B.label ),
-        ], factList )
-        A.pose = poseA
-        factList.extend( [
-            ('GraspObj' , A.label, A.pose ),
-            ('Supported', A.label, 'table' ),
-        ] )
-        return factList
-    
-
-    def place_A( self, A : GraspObj, AdstPose : int, factList : list[tuple] ) -> list[tuple]:
-        # poseA    = ObjPose( np.array( AdstPose ) )
-        poseA    = AdstPose
-        factList = self.negate_many( [('GraspObj' , A.label ),], factList )
-        A.pose = poseA
-        factList.extend( [('GraspObj', A.label, A.pose ),] )
-        return factList
+    # def place_A( self, A : GraspObj, AdstPose : int, factList : list[tuple] ) -> list[tuple]:
+    #     # poseA    = ObjPose( np.array( AdstPose ) )
+    #     poseA    = AdstPose
+    #     factList = self.negate_many( [('GraspObj' , A.label ),], factList )
+    #     A.pose = poseA
+    #     factList.extend( [('GraspObj', A.label, A.pose ),] )
+    #     return factList
 
 
 
@@ -189,6 +251,25 @@ class Solver:
         set_experiment_env()
         self.set_sim_env()
         # self.goal = env_var("_GOAL_SIM")
+
+
+    # def negate_fact( self, negFct : tuple, factList : list[tuple] ) -> list[tuple]:
+    #     """ Remove a fact from the list and return the list """
+    #     rtnLst = list()
+    #     for fact in factList:
+    #         if fact[0] == negFct[0]:
+    #             if (negFct[0] == "Supported") or (negFct[0] == "GraspObj"):
+    #                 if (fact[1] == negFct[1]):
+    #                     continue
+    #         rtnLst.append( fact )
+    #     return rtnLst
+    
+
+    # def negate_many( self, negLst : list, factList : list[tuple] ) -> list[tuple]:
+    #     """ Serially negate a list of facts """
+    #     for negFct in negLst:
+    #         factList = self.negate_fact( negFct, factList )
+    #     return factList
 
 
     def get_goal_facts( self, goal : tuple ):
@@ -405,14 +486,14 @@ class SimExec:
                 up = self.get_obs_by_label( action[1] )
                 dn = self.get_obs_by_label( action[2] )
                 if (up is not None) and (dn is not None):
-                    self.facts = self.engine .stack_A_onto_B( up, dn, self.facts )
+                    self.facts = self.engine.stack_A_onto_B( up, dn, self.facts )
                 else:
                     print( f"BAD ACTION: {action}" )
             elif action[0] == "Unstack":
                 up = self.get_obs_by_label( action[1] )
                 dn = self.get_obs_by_label( action[2] )
                 if (up is not None) and (dn is not None):
-                    self.facts = self.engine .unstack_A_from_B( up, dn, action[3], self.facts )
+                    self.facts = self.engine.unstack_A_from_B( up, dn, action[3], self.facts )
                 else:
                     print( f"BAD ACTION: {action}" )
             else:
