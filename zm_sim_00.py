@@ -59,10 +59,6 @@ _PLAN   = [
 
 
 
-
-
-
-
 ########## TRANSITION MODEL ########################################################################
 
 class Engine:
@@ -139,12 +135,14 @@ class Engine:
         return None
     
 
-    def place( self, actDesc : tuple ):
+    def place( self, actDesc : list ):
         """ Execute the "Place" action, even if the label is WRONG!, Return whether the action was successful """
+        # ASSUMPTION: MOVED OBJECT EXISTS
         actName = actDesc[0]
         _       = actDesc[1] # `Engine` doesn't actually care what the label is!
-        actPose = actDesc[2]
-        actObjc = self.get_obj_from_pose( actPose )
+        bgnPose = actDesc[2]
+        endPose = actDesc[3]
+        actObjc = self.get_obj_from_pose( bgnPose )
 
         def roll_success() -> bool:
             """ Return True if the die roll passes, Else apply failure transition and return False """
@@ -157,18 +155,21 @@ class Engine:
         
         if actName == "Place":
             ## Apply Transition ##
-            actObjc.pose = actPose
+            actObjc.pose = endPose
             return roll_success()
         else:
             raise ValueError( f"BAD DESC. for \"Place\": {actDesc}""" )
 
 
-    def stack( self, actDesc : tuple ):
+    def stack( self, actDesc : list ):
         """ Execute the "Stack" action, even if the labels are WRONG!, Return whether the action was successful """
+        # ASSUMPTION: MOVED OBJECT EXISTS
         actName = actDesc[0]
-        bgPose  = actDesc[1]
-        upPose  = actDesc[2]
-        dnPose  = actDesc[3]
+        bgLabl  = actDesc[1]
+        upLabl  = actDesc[2]
+        bgPose  = actDesc[3]
+        upPose  = actDesc[4]
+        dnPose  = actDesc[5]
         bgObjct = self.get_obj_from_pose( bgPose )
         dnObjct = self.get_obj_from_pose( dnPose )
 
@@ -189,35 +190,32 @@ class Engine:
             return roll_success()
         else:
             raise ValueError( f"BAD DESC. for \"Stack\": {actDesc}""" )
+        
 
-    
-    
+    def unstack( self, actDesc : list ):
+        """ Execute the "Unstack" action, even if the labels are WRONG!, Return whether the action was successful """
+        # ASSUMPTION: MOVED OBJECT EXISTS
+        actName = actDesc[0]
+        _       = actDesc[1]
+        bgnPose = actDesc[2]
+        endPose = actDesc[3]
+        actObjc = self.get_obj_from_pose( bgnPose )
 
-    # def unstack_A_from_B( self, A : GraspObj, B : GraspObj, AdstPose : np.ndarray, factList : list[tuple] ) -> list[tuple]:
-    #     """ Unstack `A` and set it on the 'table' """
-    #     poseA    = ObjPose( np.array( AdstPose ) )
-    #     factList = self.negate_many( [
-    #         ('GraspObj' , A.label ),
-    #         ('Supported', A.label ),
-    #         ('Blocked'  , B.label ),
-    #     ], factList )
-    #     A.pose = poseA
-    #     factList.extend( [
-    #         ('GraspObj' , A.label, A.pose ),
-    #         ('Supported', A.label, 'table' ),
-    #     ] )
-    #     return factList
-    
+        def roll_success( forceFail : bool = False ) -> bool:
+            """ Return True if the die roll passes, Else apply failure transition and return False """
+            nonlocal self, actObjc
+            if (not forceFail) and (random() >= self.prob["ActionFailure"]):
+                return True
+            else:
+                actObjc.pose = Engine.rand_pose()
+                return False
 
-    # def place_A( self, A : GraspObj, AdstPose : int, factList : list[tuple] ) -> list[tuple]:
-    #     # poseA    = ObjPose( np.array( AdstPose ) )
-    #     poseA    = AdstPose
-    #     factList = self.negate_many( [('GraspObj' , A.label ),], factList )
-    #     A.pose = poseA
-    #     factList.extend( [('GraspObj', A.label, A.pose ),] )
-    #     return factList
-
-
+        if actName == "Unstack":
+            ## Apply Transition ##
+            actObjc.pose = endPose
+            return roll_success()
+        else:
+            raise ValueError( f"BAD DESC. for \"Unstack\": {actDesc}""" )
 
 ########## SIMPLEST SOLVER #########################################################################
 
@@ -235,75 +233,116 @@ class Solver:
     def set_sim_env( self ):
         """ Set necessary params """
         env_sto( "_GOAL_SIM" ,
-            ( 'and',
-                ('GraspObj', 'A', self.poses[0] ),
-                ('GraspObj', 'B', self.poses[1] ), 
-                ('GraspObj', 'C', self.poses[2] ), 
-            )        
+            [ 'and',
+                ['GraspObj', 'A', self.ascendingPoses[0] ],
+                ['GraspObj', 'B', self.ascendingPoses[1] ], 
+                ['GraspObj', 'C', self.ascendingPoses[2] ], 
+            ]        
         )
 
 
     def __init__( self ):
         """ Get ready to solve """
-        self.poses  = list([0,1,2,])
-        self.status = Status.INVALID
+        self.ascendingPoses = [0,1,2,]
+        self.status         = Status.INVALID
         set_blocks_env()
         set_experiment_env()
         self.set_sim_env()
-        # self.goal = env_var("_GOAL_SIM")
 
 
-    # def negate_fact( self, negFct : tuple, factList : list[tuple] ) -> list[tuple]:
-    #     """ Remove a fact from the list and return the list """
-    #     rtnLst = list()
-    #     for fact in factList:
-    #         if fact[0] == negFct[0]:
-    #             if (negFct[0] == "Supported") or (negFct[0] == "GraspObj"):
-    #                 if (fact[1] == negFct[1]):
-    #                     continue
-    #         rtnLst.append( fact )
-    #     return rtnLst
-    
-
-    # def negate_many( self, negLst : list, factList : list[tuple] ) -> list[tuple]:
-    #     """ Serially negate a list of facts """
-    #     for negFct in negLst:
-    #         factList = self.negate_fact( negFct, factList )
-    #     return factList
-
-
-    def get_goal_facts( self, goal : tuple ):
+    @staticmethod
+    def get_goal_facts( goal : list ):
         """ Get the individual facts from the `goal` """
         if goal[0] in ("and", "or"):
             rtnFcs = list()
             for item in goal[1:]:
-                rtnFcs.extend( self.get_goal_facts( item ) )
+                rtnFcs.extend( Solver.get_goal_facts( item ) )
             return rtnFcs
         elif goal[0] == "not":
             return list()
         else:
             return [goal,]
+        
+
+    @staticmethod
+    def get_fact_by_pose( q : int, facts : list[list] ):
+        """ Return true if the facts imply that a pose is occupied by an object """
+        for fact in facts:
+            if fact[0] == "GraspObj":
+                if abs( q - fact[2] ) <= env_var("_ACCEPT_POSN_ERR"):
+                    return fact[:]
+        return None
+    
+
+    @staticmethod
+    def p_label_blocked( label : str, facts : list[list] ):
+        """ Return true if the facts imply that a named object is blocked """
+        for fact in facts:
+            if (fact[0] == "Blocked") and (fact[1] == label):
+                return True
+        return False
+    
+
+    @staticmethod
+    def get_label_support( label : str, facts : list[list] ):
+        """ Return true if the facts imply that a pose is occupied by an object """
+        for fact in facts:
+            if (fact[0] == "Supported") and (fact[1] == label):
+                return fact[2]
+        return None
+        
+
+    @staticmethod
+    def p_pose_occupied( q : int, facts : list[list] ):
+        """ Return true if the facts imply that a pose is occupied by an object """
+        return (Solver.get_fact_by_pose( q, facts ) is not None)
+    
+
+    @staticmethod
+    def p_label_supported( label : str, facts : list[list] ):
+        """ Return true if the facts imply that a pose is occupied by an object """
+        return (Solver.get_label_support( label, facts ) is not None)
 
 
-    def ground_facts( self, objs : list[GraspObj], goal : tuple = None ):
+    def ground_facts( self, objs : list[GraspObj], goal : list = None ):
         """ Set facts from the object list """
         rtnFcs = deque()
         for obj in objs:
             rtnFcs.append( ['GraspObj', obj.label, obj.pose] )
         if goal is not None:
-            goalFcts = self.get_goal_facts( goal )
+
+            ## Match Goal Facts ##
+            goalFcts = Solver.get_goal_facts( goal )
             for rFact in rtnFcs:
                 dMin = 6e10
                 pMin = None
                 for gFact in goalFcts:
                     if (rFact[0] == gFact[0] == "GraspObj") and (rFact[1] == gFact[1]):
-                        d_ij = euclidean_distance_between_symbols( rFact[2], gFact[2] )
+                        # d_ij = euclidean_distance_between_symbols( rFact[2], gFact[2] )
+                        d_ij = abs( rFact[2] - gFact[2] )
                         if (d_ij <= env_var("_ACCEPT_POSN_ERR")) and (d_ij < dMin):
                             dMin = d_ij
                             pMin = gFact[2]
                 if pMin is not None:
                     rFact[2] = pMin
-        return [tuple( item ) for item in rtnFcs]
+            
+            ## Stacked State ##
+            for dnPose in self.ascendingPoses[:-1]:
+                upPose = dnPose + 1
+                dnFact = Solver.get_fact_by_pose( dnPose, rtnFcs )
+                upFact = Solver.get_fact_by_pose( upPose, rtnFcs )
+                if (upFact is not None) and (dnFact is not None):
+                    rtnFcs.extend([
+                        ["Blocked"  , dnFact[2], ],
+                        ['Supported', upFact[1], dnFact[1], ]
+                    ])
+
+        ## Cleanup ##
+        for label in _NAMES:
+            if not Solver.p_label_supported( label, rtnFcs ):
+                rtnFcs.append( ["Supported", label, "table",] )
+
+        return list( rtnFcs )
 
 
     def p_fact_match( self, qFact, factList ):
@@ -342,7 +381,7 @@ class Solver:
         return False
 
 
-    def get_random_table_pose( self, facts : list[tuple], scale = 1.000 ):
+    def get_random_table_pose( self, facts : list[list], scale = 1.000 ):
         """ Get a table `ObjPose` that does not interfere with any of the current blocks """
         hlfScl = scale / 2.0
 
@@ -374,7 +413,7 @@ class Solver:
         return True
 
 
-    def solve( self, facts : list[tuple], goal : list[tuple] ):
+    def solve( self, facts : list[list], goal : list[list] ):
         """ Return a plan that solves the goal, If already solved then return an empty list """
         self.status = Status.RUNNING
         if not self.p_goal_objects_present( facts, goal ):
@@ -407,16 +446,16 @@ class Solver:
                 # ASSUME: `get_random_table_pose()` WILL GENERALLY NOT CHOOSE POSES COLLIDING WITH PREVIOUS RUNS
                 freePose = self.get_random_table_pose( facts )
                 if i == 0:
-                    plan.append( ("Place", facts[i][1], freePose,) )
+                    plan.append( ("Place", facts[i][1], facts[i][2], freePose,) )
                 else:
-                    plan.append( ("Unstack", facts[i][1], freePose,) )
+                    plan.append( ("Unstack", facts[i][1], facts[i][2], freePose,) )
         if eLen > 0:
             print( f"EMPTY: Need to build {eLen} of the tower!" )
             for i in range( eLen ):
                 if i == 0:
                     plan.append( ("Place", goals[i][1], goals[i][2],) )
                 else:
-                    plan.append( ("Stack", goals[i][1], goals[i-1][1], goals[i][2],) )
+                    plan.append( ("Stack", goals[i][1], goals[i-1][1], goals[i][2], goals[i-1][2], goals[i][2],) )
         return list( plan )
 
 
@@ -477,18 +516,9 @@ class SimExec:
             action = self.plan[0]
             print( f"Execute: {action} at Step {self.Nstp}" )
             if action[0] == "Place":
-                trgt = self.get_obs_by_label( action[1] )
-                if trgt is not None:
-                    self.facts = self.engine .place_A( trgt, action[2], self.facts )
-                else:
-                    print( f"BAD ACTION: {action}" )
+                self.engine.place( action )
             elif action[0] == "Stack":
-                up = self.get_obs_by_label( action[1] )
-                dn = self.get_obs_by_label( action[2] )
-                if (up is not None) and (dn is not None):
-                    self.facts = self.engine.stack_A_onto_B( up, dn, self.facts )
-                else:
-                    print( f"BAD ACTION: {action}" )
+                self.engine.stack( action )
             elif action[0] == "Unstack":
                 up = self.get_obs_by_label( action[1] )
                 dn = self.get_obs_by_label( action[2] )
