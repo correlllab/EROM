@@ -30,19 +30,15 @@ class SimBlock:
         self.id      = SimBlock.count
         self.label   = label
         self.pose    = pose
-        self.stacked = stacked
-        self.blocked = blocked
 
     def __repr__( self ):
         """ Print state """
-        return f"({self.label}:{self.id} @ {self.pose}, {'Stacked' if self.stacked else 'On Table'}, {'Blocked' if self.blocked else 'Free'})"
+        return f"({self.label} @ {self.pose}), id: {self.id}"
     
     def copy( self ):
         rtnObj = SimBlock()
         rtnObj.label   = self.label   
         rtnObj.pose    = self.pose    
-        rtnObj.stacked = self.stacked 
-        rtnObj.blocked = self.blocked 
         return rtnObj
 
 
@@ -51,11 +47,11 @@ class SimBlock:
 ########## HELPER FUNCTIONS ########################################################################
 _P_CONF = 0.10
 _NAMES  = ["A","B","C",]
-_PLAN   = [
-    ("Place", "A", 0,),
-    ("Stack", "B", 1,),
-    ("Stack", "C", 2,),
-] 
+# _PLAN   = [
+#     ("Place", "A", 0,),
+#     ("Stack", "B", 1,),
+#     ("Stack", "C", 2,),
+# ] 
 
 
 
@@ -150,6 +146,7 @@ class Engine:
             if random() >= self.prob["ActionFailure"]:
                 return True
             else:
+                print( f"ACTION FAILED: {actDesc}" )
                 actObjc.pose = Engine.rand_pose()
                 return False
         
@@ -178,6 +175,7 @@ class Engine:
             if (not forceFail) and (random() >= self.prob["ActionFailure"]):
                 return True
             else:
+                print( f"ACTION FAILED: {actDesc}" )
                 bgObjct.pose = Engine.rand_pose()
                 return False
 
@@ -207,6 +205,7 @@ class Engine:
             if (not forceFail) and (random() >= self.prob["ActionFailure"]):
                 return True
             else:
+                print( f"ACTION FAILED: {actDesc}" )
                 actObjc.pose = Engine.rand_pose()
                 return False
 
@@ -446,16 +445,17 @@ class Solver:
                 # ASSUME: `get_random_table_pose()` WILL GENERALLY NOT CHOOSE POSES COLLIDING WITH PREVIOUS RUNS
                 freePose = self.get_random_table_pose( facts )
                 if i == 0:
-                    plan.append( ("Place", facts[i][1], facts[i][2], freePose,) )
+                    plan.append( ["Place", facts[i][1], facts[i][2], freePose,] )
                 else:
-                    plan.append( ("Unstack", facts[i][1], facts[i][2], freePose,) )
+                    plan.append( ["Unstack", facts[i][1], facts[i][2], freePose,] )
         if eLen > 0:
             print( f"EMPTY: Need to build {eLen} of the tower!" )
-            for i in range( eLen ):
+            # for i in range( eLen ):
+            for i in empty:
                 if i == 0:
-                    plan.append( ("Place", goals[i][1], goals[i][2],) )
+                    plan.append( ["Place", goals[i][1], facts[i][2]  ,  goals[i][2],] )
                 else:
-                    plan.append( ("Stack", goals[i][1], goals[i-1][1], goals[i][2], goals[i-1][2], goals[i][2],) )
+                    plan.append( ["Stack", goals[i][1], goals[i-1][1], facts[i][2], goals[i][2], goals[i-1][2],] )
         return list( plan )
 
 
@@ -520,19 +520,11 @@ class SimExec:
             elif action[0] == "Stack":
                 self.engine.stack( action )
             elif action[0] == "Unstack":
-                up = self.get_obs_by_label( action[1] )
-                dn = self.get_obs_by_label( action[2] )
-                if (up is not None) and (dn is not None):
-                    self.facts = self.engine.unstack_A_from_B( up, dn, action[3], self.facts )
-                else:
-                    print( f"BAD ACTION: {action}" )
+                 self.engine.unstack( action )
             else:
                 raise ValueError( f"CANNOT PARSE ACTION: {action}" )
-            print( f"Facts after {action}:" )
         else:
-            print( f"Current Facts:" )
-            for fact in self.fct:
-                print( f"\t{fact}" )
+            print( "NO PLAN TO EXECUTE" )
 
 
     def run_step( self ):
@@ -578,7 +570,12 @@ class SimExec:
 ########## MAIN ####################################################################################
 if __name__ == "__main__":
     plnr = SimExec()
-    plnr.run_episode()
+
+    for _ in range(5):
+        plnr.run_step() 
+    
+    # plnr.run_episode()
+    
     plnr.report_status()
     
 
