@@ -3,6 +3,7 @@ import os
 from collections import deque
 from random import random, choice
 from enum import Enum
+from pprint import pprint
 
 ### Special ### 
 import numpy as np
@@ -42,16 +43,17 @@ class SimBlock:
         return rtnObj
 
 
+def copy_observations( obsLst : list[SimBlock] ):
+    """ Deep copy of blocks """
+    rtnLst = deque()
+    for obs in obsLst:
+        rtnLst.append( obs.copy() )
+    return list( rtnLst )
+
 
 
 ########## HELPER FUNCTIONS ########################################################################
-_P_CONF = 0.10
 _NAMES  = ["A","B","C",]
-# _PLAN   = [
-#     ("Place", "A", 0,),
-#     ("Stack", "B", 1,),
-#     ("Stack", "C", 2,),
-# ] 
 
 
 
@@ -95,7 +97,10 @@ class Engine:
 
     def __init__( self ):
         """ Setup a New Episode """
-        self.prob = {  "ActionFailure" : 0.10,  }
+        self.prob = {  
+            "ActionFailure" : 0.10,  
+            "classConfuse"  : 0.10,  
+        }
         self.objs = Engine.init_blocks()
 
     def report( self ):
@@ -110,14 +115,26 @@ class Engine:
 
     def noisy_sense( self ):
         """ Get noisy readings of all the objects in the World """
+
+        def swap_labels( obj0 : SimBlock, obj1 : SimBlock ):
+            swap = obj0.label
+            obj0.label = obj1.label
+            obj1.label = swap
+
+        # Copy #
         rtnLst = list()
         for obj in self.objs:
             rObj = obj.copy()
-            # Handle Class Confusion #
-            if random() < _P_CONF:
-                while rObj.label == obj.label:
-                    rObj.label = choice( _NAMES )
             rtnLst.append( rObj )
+
+        # Handle Class Confusion #
+        for obj in rtnLst:
+            if random() < self.prob["classConfuse"]:
+                other = obj
+                while id( other ) == id( obj ):
+                    other = choice( rtnLst )
+                swap_labels( obj, other )
+
         return rtnLst
 
 
@@ -443,7 +460,7 @@ class Solver:
             print( f"INCORRECT: Need to undo {rLen} previous actions!" )
             for i in range( height-1, replc[0]-1, -1 ):
                 # ASSUME: `get_random_table_pose()` WILL GENERALLY NOT CHOOSE POSES COLLIDING WITH PREVIOUS RUNS
-                freePose = self.get_random_table_pose( facts )
+                freePose = Engine.rand_pose()
                 if i == 0:
                     plan.append( ["Place", facts[i][1], facts[i][2], freePose,] )
                 else:
@@ -477,17 +494,51 @@ class SimExec:
     def __init__( self ):
         """ Set up the `Engine` and the `Solver` """
         self.obs    = list()
+        self.oHist  = deque()
         self.facts  = list()
         self.engine = Engine()
         self.solver = Solver()
         self.Nstp   = 0
         self.status = Status.INVALID
         self.flMode = FailModes.OKAY
+        # Running Times
+        self.t_s = {
+            "observe" : 10.0, 
+            "action"  : 30.0, 
+        }
+        # Per-Episode Statistics
+        self.result = { 
+            "tRun"    : 0,
+            "conf"    : deque(),
+            "actnFail": 0,
+            "planFail": 0,
+            "Nsteps"  : 0,
+            "success" : False,
+        }
+
+
+    def n_changed_labels( self ):
+        """ Count the number of labels that changed between the last two observations """
+        rtN = 0
+        if len( self.oHist ) >= 2:
+            last : list[SimBlock] = self.oHist[-1] 
+            prev : list[SimBlock] = self.oHist[-2]
+            for obj_l in last:
+                conf = False
+                for obj_p in prev:
+                    if (abs(obj_l.pose - obj_p.pose) <= env_var("_ACCEPT_POSN_ERR")) and (obj_l.label != obj_p.label):
+                        conf = True
+                if conf:
+                    rtN += 1
+        return rtN
 
 
     def observe( self ):
         """ Simulate one run of the Perception Stack with possible confusion """
-        self.obs : list[GraspObj] = self.engine .noisy_sense()
+        self.obs : list[GraspObj] = self.engine.noisy_sense()
+        self.oHist.append( copy_observations( self.obs ) )
+        self.result["conf"].append( self.n_changed_labels() )
+        self.result["tRun"] += self.t_s["observe"]
         print( "# Observed: #" )
         for ob in self.obs:
             print( f"\t{ob}" )
@@ -498,31 +549,37 @@ class SimExec:
         # self.plan = self.solver.solve( self.solver.ground_facts( self.engine .obss ), env_var("_GOAL_SIM") )
         self.facts = self.solver.ground_facts( self.obs )
         self.plan  = self.solver.solve( self.facts, env_var("_GOAL_SIM") )
+        if self.plan is None:
+            self.result["planFail"] += 1
         return self.plan
 
 
-    def get_obs_by_label( self, lbl : str ):
-        """ Get the current observation matching `lbl` """
-        for ob in self.obs:
-            print( f"\t\t{ob.label} -vs- {lbl}" )
-            if ob.label == lbl:
-                return ob
-        return None
+    # def get_obs_by_label( self, lbl : str ):
+    #     """ Get the current observation matching `lbl` """
+    #     for ob in self.obs:
+    #         print( f"\t\t{ob.label} -vs- {lbl}" )
+    #         if ob.label == lbl:
+    #             return ob
+    #     return None
 
 
     def exec_step( self ):
         """ Execute the first action of the plan only """
         if len( self.plan ):
             action = self.plan[0]
+            result = False
+            self.result["tRun"] += self.t_s["action"]
             print( f"Execute: {action} at Step {self.Nstp}" )
             if action[0] == "Place":
-                self.engine.place( action )
+                result = self.engine.place( action )
             elif action[0] == "Stack":
-                self.engine.stack( action )
+                result = self.engine.stack( action )
             elif action[0] == "Unstack":
-                 self.engine.unstack( action )
+                result = self.engine.unstack( action )
             else:
                 raise ValueError( f"CANNOT PARSE ACTION: {action}" )
+            if not result:
+                self.result["actnFail"] += 1
         else:
             print( "NO PLAN TO EXECUTE" )
 
@@ -531,7 +588,7 @@ class SimExec:
         """ Run entire cycle for one step of the plan """
         self.status = Status.RUNNING
         self.flMode = FailModes.OKAY
-        self.Nstp  += 1
+        self.result["Nsteps"] += 1
         # 1. Observe 
         self.observe()
         # 2. Plan 
@@ -560,6 +617,9 @@ class SimExec:
             if self.Nstp >= _MAX_ALLOWED_STEPS:
                 self.flMode = FailModes.TIMEOUT
                 run = False
+        if self.status == Status.SUCCESS:
+            self.result["success"] = True
+        return self.result
 
 
     def report_status( self ):
@@ -570,12 +630,7 @@ class SimExec:
 ########## MAIN ####################################################################################
 if __name__ == "__main__":
     plnr = SimExec()
-
-    for _ in range(5):
-        plnr.run_step() 
-    
-    # plnr.run_episode()
-    
+    pprint( plnr.run_episode() )
     plnr.report_status()
     
 
