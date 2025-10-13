@@ -4,18 +4,19 @@ from collections import deque
 from random import random, choice
 from enum import Enum
 from pprint import pprint
+from copy import deepcopy
 
 ### Special ### 
 import numpy as np
 
 ### ASPIRE::PDDLStream ### 
-from aspire.symbols import ObjPose, GraspObj, extract_pose_as_homog, euclidean_distance_between_symbols
+from aspire.symbols import ObjPose, GraspObj, euclidean_distance_between_symbols
 from aspire.env_config import env_var, env_sto
 from aspire.BlocksTask import set_blocks_env
 
 ### Local ### 
 from env_config import set_experiment_env
-from env_config import KNOWN_BLOCKS
+# from env_config import KNOWN_BLOCKS
 
 
 
@@ -50,11 +51,139 @@ def copy_observations( obsLst : list[SimBlock] ):
         rtnLst.append( obs.copy() )
     return list( rtnLst )
 
+########## EXPERIMENTAL DATA #######################################################################
+"""
+### Makespan Distribution [Steps], RGB ###
+	KC-KP
+	Mean: ___ 3.0
+	Median: _ 3.0
+	Std.Dev.: 0.0
+	SC-KP
+	Mean: ___ 9.666666666666666
+	Median: _ 8.0
+	Std.Dev.: 6.882229243862731
+	KC-SP
+	Mean: ___ 11.0
+	Median: _ 7.0
+	Std.Dev.: 7.419746058925964
+	SC-SP
+	Mean: ___ 11.45
+	Median: _ 9.0
+	Std.Dev.: 8.570151690606183
+
+### Makespan Distribution [Time], RGB ###
+	KC-KP
+	Mean: ___ 451.8967197418213
+	Median: _ 446.1805534362793
+	Std.Dev.: 56.51808618172577
+	SC-KP
+	Mean: ___ 1090.7812630534172
+	Median: _ 873.0658189058304
+	Std.Dev.: 677.1761763595428
+	KC-SP
+	Mean: ___ 1378.7196902224891
+	Median: _ 988.5193696022034
+	Std.Dev.: 1117.6213611473825
+	SC-SP
+	Mean: ___ 1117.5333013032612
+	Median: _ 982.4180154800415
+	Std.Dev.: 677.8997286287095
+
+### Makespan Distribution [Steps], RBW ###
+	KC-KP
+	Mean: ___ 3.1363636363636362
+	Median: _ 3.0
+	Std.Dev.: 0.6248966856757964
+	SC-KP
+	Mean: ___ 9.555555555555555
+	Median: _ 7.0
+	Std.Dev.: 6.693464658590681
+	KC-SP
+	Mean: ___ 6.6
+	Median: _ 5.0
+	Std.Dev.: 4.768647607026546
+	SC-SP
+	Mean: ___ 10.65
+	Median: _ 8.0
+	Std.Dev.: 7.491828882188915
+
+### Makespan Distribution [Time], RBW ###
+	KC-KP
+	Mean: ___ 391.08244509924026
+	Median: _ 377.42189955711365
+	Std.Dev.: 42.62549141327943
+	SC-KP
+	Mean: ___ 1772.619768301646
+	Median: _ 1249.6555206775665
+	Std.Dev.: 1268.537725692636
+	KC-SP
+	Mean: ___ 1080.037369602605
+	Median: _ 933.0967352390289
+	Std.Dev.: 673.8784369834951
+	SC-SP
+	Mean: ___ 1837.397778570652
+	Median: _ 1427.0049859285355
+	Std.Dev.: 1509.0870768442205
+"""
 
 
 ########## HELPER FUNCTIONS ########################################################################
-_NAMES  = ["A","B","C",]
-
+_VERBOSE = False
+_NAMES   = ["A","B","C",]
+_EXP_PROBS_TIMES = {
+    "RGB": {
+        "KC-KP" : {  
+            "ActionFailure" :  0.00,  
+            "classConfuse"  :  0.00,  
+            "t_search"      : 95.02,  
+            "t_action"      : 18.72,  
+        },
+        "SC-KP" : {  
+            "ActionFailure" :  0.1060,  
+            "classConfuse"  :  0.0573,  
+            "t_search"      : 92.46,  
+            "t_action"      : 13.73,  
+        },
+        "KC-SP" : {  
+            "ActionFailure" :  0.1439,  
+            "classConfuse"  :  0.0483,  
+            "t_search"      : 73.75,  
+            "t_action"      : 14.75,  
+        },
+        "SC-SP" : {  
+            "ActionFailure" :  0.2549,  
+            "classConfuse"  :  0.0598,  
+            "t_search"      : 84.55,  
+            "t_action"      : 12.38,  
+        },
+    }, 
+    "RBW": {
+        "KC-KP" : {  
+            "ActionFailure" :  0.0152,  
+            "classConfuse"  :  0.00,  
+            "t_search"      : 79.65,  
+            "t_action"      : 21.01,  
+        },
+        "SC-KP" : {  
+            "ActionFailure" :   0.1614,  
+            "classConfuse"  :   0.0589,  
+            "t_search"      : 120.59,  
+            "t_action"      :  14.36,  
+        },
+        "KC-SP" : {  
+            "ActionFailure" :   0.0991,  
+            "classConfuse"  :   0.0932,  
+            "t_search"      : 106.73,  
+            "t_action"      :  14.54,  
+        },
+        "SC-SP" : {  
+            "ActionFailure" :   0.1692,  
+            "classConfuse"  :   0.0464,  
+            "t_search"      : 122.45,  
+            "t_action"      :  13.66,  
+        },
+    }
+}
 
 
 ########## TRANSITION MODEL ########################################################################
@@ -65,12 +194,18 @@ class Engine:
     ##### Static Methods ##################################################
 
     ## Class Vars ##
-    _poses = set([i for i in range(3)])
+    _poses  = set([i for i in range(3)])
+    _bignum = 100000
+
+
+    @classmethod
+    def reset_poses( cls ):
+        cls._poses = set([i for i in range(3)])
 
 
     @staticmethod
     def roll_pose() -> int:
-        return int( 3 + random() * 1000 )
+        return int( 3 + random() * Engine._bignum )
 
 
     @staticmethod
@@ -95,13 +230,18 @@ class Engine:
 
     ##### General Methods #################################################
 
-    def __init__( self ):
+    def __init__( self, params_ = None ):
         """ Setup a New Episode """
-        self.prob = {  
-            "ActionFailure" : 0.10,  
-            "classConfuse"  : 0.10,  
-        }
+        self.reset_poses()
+        if params_ is None:
+            self.params = {  
+                "ActionFailure" : 0.10,  
+                "classConfuse"  : 0.10,  
+            }
+        else:
+            self.params = deepcopy( params_ )
         self.objs = Engine.init_blocks()
+
 
     def report( self ):
         """ Print what is happening with the objects """
@@ -129,7 +269,7 @@ class Engine:
 
         # Handle Class Confusion #
         for obj in rtnLst:
-            if random() < self.prob["classConfuse"]:
+            if random() < self.params["classConfuse"]:
                 other = obj
                 while id( other ) == id( obj ):
                     other = choice( rtnLst )
@@ -160,10 +300,11 @@ class Engine:
         def roll_success() -> bool:
             """ Return True if the die roll passes, Else apply failure transition and return False """
             nonlocal self, actObjc
-            if random() >= self.prob["ActionFailure"]:
+            if random() >= self.params["ActionFailure"]:
                 return True
             else:
-                print( f"ACTION FAILED: {actDesc}" )
+                if _VERBOSE: 
+                    print( f"ACTION FAILED: {actDesc}" )
                 actObjc.pose = Engine.rand_pose()
                 return False
         
@@ -189,10 +330,11 @@ class Engine:
 
         def roll_success( forceFail : bool = False ):
             nonlocal self, bgObjct
-            if (not forceFail) and (random() >= self.prob["ActionFailure"]):
+            if (not forceFail) and (random() >= self.params["ActionFailure"]):
                 return True
             else:
-                print( f"ACTION FAILED: {actDesc}" )
+                if _VERBOSE: 
+                    print( f"ACTION FAILED: {actDesc}" )
                 bgObjct.pose = Engine.rand_pose()
                 return False
 
@@ -219,10 +361,11 @@ class Engine:
         def roll_success( forceFail : bool = False ) -> bool:
             """ Return True if the die roll passes, Else apply failure transition and return False """
             nonlocal self, actObjc
-            if (not forceFail) and (random() >= self.prob["ActionFailure"]):
+            if (not forceFail) and (random() >= self.params["ActionFailure"]):
                 return True
             else:
-                print( f"ACTION FAILED: {actDesc}" )
+                if _VERBOSE: 
+                    print( f"ACTION FAILED: {actDesc}" )
                 actObjc.pose = Engine.rand_pose()
                 return False
 
@@ -455,9 +598,11 @@ class Solver:
         eLen = len( empty )
         plan = deque()
         if cLen >= gLen:
-            print( f"SOLVED {cLen}: Return empty plan!" )
+            if _VERBOSE: 
+                print( f"SOLVED {cLen}: Return empty plan!" )
         if rLen > 0:
-            print( f"INCORRECT: Need to undo {rLen} previous actions!" )
+            if _VERBOSE: 
+                print( f"INCORRECT: Need to undo {rLen} previous actions!" )
             for i in range( height-1, replc[0]-1, -1 ):
                 # ASSUME: `get_random_table_pose()` WILL GENERALLY NOT CHOOSE POSES COLLIDING WITH PREVIOUS RUNS
                 freePose = Engine.rand_pose()
@@ -466,7 +611,8 @@ class Solver:
                 else:
                     plan.append( ["Unstack", facts[i][1], facts[i][2], freePose,] )
         if eLen > 0:
-            print( f"EMPTY: Need to build {eLen} of the tower!" )
+            if _VERBOSE: 
+                print( f"EMPTY: Need to build {eLen} of the tower!" )
             # for i in range( eLen ):
             for i in empty:
                 if i == 0:
@@ -491,21 +637,16 @@ class FailModes( Enum ):
 
 class SimExec:
     """ Manages the simulation """
-    def __init__( self ):
+    def __init__( self, engParams : dict = None ):
         """ Set up the `Engine` and the `Solver` """
         self.obs    = list()
         self.oHist  = deque()
         self.facts  = list()
-        self.engine = Engine()
+        self.engine = Engine( engParams )
         self.solver = Solver()
         self.Nstp   = 0
         self.status = Status.INVALID
         self.flMode = FailModes.OKAY
-        # Running Times
-        self.t_s = {
-            "observe" : 10.0, 
-            "action"  : 30.0, 
-        }
         # Per-Episode Statistics
         self.result = { 
             "tRun"    : 0,
@@ -538,10 +679,11 @@ class SimExec:
         self.obs : list[GraspObj] = self.engine.noisy_sense()
         self.oHist.append( copy_observations( self.obs ) )
         self.result["conf"].append( self.n_changed_labels() )
-        self.result["tRun"] += self.t_s["observe"]
-        print( "# Observed: #" )
-        for ob in self.obs:
-            print( f"\t{ob}" )
+        self.result["tRun"] += self.engine.params["t_search"]
+        if _VERBOSE: 
+            print( "# Observed: #" )
+            for ob in self.obs:
+                print( f"\t{ob}" )
 
 
     def solve( self ):
@@ -568,8 +710,9 @@ class SimExec:
         if len( self.plan ):
             action = self.plan[0]
             result = False
-            self.result["tRun"] += self.t_s["action"]
-            print( f"Execute: {action} at Step {self.Nstp}" )
+            self.result["tRun"] += self.engine.params["t_action"]
+            if _VERBOSE: 
+                print( f"Execute: {action} at Step {self.Nstp}" )
             if action[0] == "Place":
                 result = self.engine.place( action )
             elif action[0] == "Stack":
@@ -581,7 +724,8 @@ class SimExec:
             if not result:
                 self.result["actnFail"] += 1
         else:
-            print( "NO PLAN TO EXECUTE" )
+            if _VERBOSE: 
+                print( "NO PLAN TO EXECUTE" )
 
 
     def run_step( self ):
@@ -599,9 +743,11 @@ class SimExec:
             return self.status
         if not len( plan ):
             self.status = Status.SUCCESS
-            print( "GOAL ACHIEVED" )
-        for action in plan:
-            print( f"\t{action}" )
+            if _VERBOSE: 
+                print( "GOAL ACHIEVED" )
+        if _VERBOSE: 
+            for action in plan:
+                print( f"\t{action}" )
         # 3. Execute One Action 
         self.exec_step()
         return self.status
@@ -619,6 +765,8 @@ class SimExec:
                 run = False
         if self.status == Status.SUCCESS:
             self.result["success"] = True
+        if self.result["success"] == True:
+            self.result["Nsteps"] -= 1
         return self.result
 
 
@@ -628,10 +776,37 @@ class SimExec:
     
 
 ########## MAIN ####################################################################################
+_N_EPISODES = 1000 # 100 # 1000
+_DIV_STATUS =   int( _N_EPISODES / 10 )
 if __name__ == "__main__":
-    plnr = SimExec()
-    pprint( plnr.run_episode() )
-    plnr.report_status()
+    for problem in _EXP_PROBS_TIMES.keys():
+        for scenario in _EXP_PROBS_TIMES[ problem ].keys():
+            stats = {
+                "tMS" : 0.0,
+                "sMS" : 0  ,
+                "rSC" : 0  ,
+                "rFL" : 0  ,
+            }
+            for i in range( _N_EPISODES ):
+                plnr  = SimExec( _EXP_PROBS_TIMES[ problem ][ scenario ] )
+                res_i = plnr.run_episode()
+                if i % _DIV_STATUS == 0:
+                    print('.',end='',flush=True)
+                if _VERBOSE: 
+                    pprint( res_i )
+                    plnr.report_status()
+                stats["tMS"] += res_i["tRun"  ]
+                stats["sMS"] += res_i["Nsteps"]
+                if res_i["success"]:
+                    stats["rSC"] += 1
+                else:
+                    stats["rFL"] += 1
+            print( f"\n##### {problem}::{scenario} Statistics ##### " )
+            print( f"\t Makespan [s]: _ {stats['tMS']/_N_EPISODES:.2f}" )
+            print( f"\t Makespan Steps: {stats['sMS']/_N_EPISODES:.2f}" )
+            print( f"\t Success Rate: _ {stats['rSC']/_N_EPISODES:.2f}" )
+            print()
+
     
 
 

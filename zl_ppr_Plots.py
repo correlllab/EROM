@@ -116,21 +116,6 @@ def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "outpu
         return plt.gca()
 
 
-
-# def make_scatter( X, Y, plotTitle, fName, showPlot = False ):
-#     """ Create Histogram """
-#     plt.clf()
-#     print()
-
-#     plt.scatter( X, Y )
-#     plt.title( plotTitle ) # Set the title
-#     plt.xlabel('Step')  # Setting the x-axis label
-#     plt.ylabel('Time') # Setting the y-axis label
-#     plt.savefig( fName )
-#     if showPlot:
-#         plt.show() 
-
-
 def p_str_has_any( string, qLst, cap = False ):
     """ Return True if `string` contains any member of `qLst` """
     for q in qLst:
@@ -176,13 +161,13 @@ def as_json( dataObj, asLeaf = False ):
         else:
             return obj
     rtnObj = make_serializable( dataObj, 0 )
-    pprint( rtnObj )
+    # pprint( rtnObj )
     return rtnObj
 
 
 
 ########## SAVE: DATA PROCESSING ###################################################################
-_SAVE_DATA = False
+_SAVE_DATA = True
 _LOAD_DATA = True 
 
 if _SAVE_DATA:
@@ -224,6 +209,7 @@ if _SAVE_DATA:
                 'tRun'   : deque(),
                 'sRun'   : deque(),
                 'tObs'   : deque(),
+                'tAct'   : deque(),
                 'oStp'   : {
                     "s": deque(),
                     "t": deque(),
@@ -273,6 +259,11 @@ if _SAVE_DATA:
                 obsTimes = deque()
                 obsBgn   = 0
                 obsEnd   = 0
+
+                # Action Performance
+                actTimes = deque()
+                actBgn   = 0
+                actEnd   = 0
 
                 # Confusion Tracking
                 symHist = deque()
@@ -325,6 +316,14 @@ if _SAVE_DATA:
                         symbols = datum["data"]
                         # os.system( 'kill %d' % os.getpid() ) 
 
+                    ##### Phase 4: Action #####
+                    if "BGN: Phase 4" in dtmMsg:
+                        actBgn = dtmT
+                    elif "END: Phase 4" in dtmMsg:
+                        actEnd = dtmT
+                        duration = actEnd - actBgn
+                        actTimes.append( duration )
+                        
                     ##### Phase 2: Conditions #####
 
                     elif "Conditions Grounded" in dtmMsg:
@@ -347,9 +346,6 @@ if _SAVE_DATA:
                             Nlabel = len( set([item.label for item in symbols]) )
                         if Nlabel < 3:
                             found = False
-                        
-                            
-
                         if len( symbols ):
                             if len( symHist ) and len( symHist[-1] ):
                                 symLast : list[GraspObj] = symHist[-1]
@@ -374,8 +370,6 @@ if _SAVE_DATA:
                             result['sDel']['s'].append( Nstp   ) 
                             result['sDel']['c'].append( Ndelta )
                         Ndelta = 0 # Reset confusions for the next step
-                        
-                        
 
                 Nstp = Nstp if (Nstp > 0) else math.nan
                 result['sRun'].append( Nstp )
@@ -387,6 +381,7 @@ if _SAVE_DATA:
                     result['rFal']['find'  ].append( NfailFind/Nstage2 )
                 result['rFal']['N'     ].append( Nstp              )
                 result['tObs'].extend( obsTimes )
+                result['tAct'].extend( actTimes )
 
                 tRun = data[-1]['t'] - data[0]['t']
                 end  =  False
@@ -459,11 +454,14 @@ if _LOAD_DATA:
             
             _FILTER_FACTOR = 2.5    
             result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
+            # result['tAct'] = filter_series( result['tAct'], _FILTER_FACTOR )
             result['tRun'] = filter_series( result['tRun'], _FILTER_FACTOR )
 
             make_histo( result['sRun'], f"{longTNam}, {suffix[1:]}\nMakespan Distribution [Steps]", f"{fName}_Histo-Steps{suffix}{plotExt}" )
             make_histo( result['tRun'], f"{longTNam}, {suffix[1:]}\nMakespan Distribution [Time]", f"{fName}_Histo-Time{suffix}{plotExt}" )
             make_histo( result['tObs'], f"{longTNam}, {suffix[1:]}\nObject Search Time Distribution", f"{fName}_Histo-Search{suffix}{plotExt}", 
+                        xLabel = 'Time [s]', forceYlim = False )
+            make_histo( result['tAct'], f"{longTNam}, {suffix[1:]}\nAction Execution Time Distribution", f"{fName}_Histo-Action{suffix}{plotExt}", 
                         xLabel = 'Time [s]', forceYlim = False )
             make_histo( result['rCon'], f"{longTNam}, {suffix[1:]}\nObject Confusion Distribution", f"{fName}_Histo-Confusion{suffix}{plotExt}", 
                         xLabel = 'Confusion Rate' )
