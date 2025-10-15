@@ -204,13 +204,16 @@ if _SAVE_DATA:
             MTF = 0.0
 
             result = {
-                'Ntrial' : 0,
-                'outcome': deque(),
-                'tRun'   : deque(),
-                'sRun'   : deque(),
-                'tObs'   : deque(),
-                'tAct'   : deque(),
-                'oStp'   : {
+                'Ntrial'  : 0,
+                'outcome' : deque(),
+                'p1pp2'   : deque(),
+                'tRun'    : deque(),
+                'sRun'    : deque(),
+                'tObs'    : deque(),
+                'tObsTot' : deque(),
+                'tActPass': deque(),
+                'tActFail': deque(),
+                'oStp'    : {
                     "s": deque(),
                     "t": deque(),
                 },
@@ -259,11 +262,16 @@ if _SAVE_DATA:
                 obsTimes = deque()
                 obsBgn   = 0
                 obsEnd   = 0
+                p1pp2    = 0
+                p1pp2Bgn = 0
+                p1pp2End = 0
 
                 # Action Performance
-                actTimes = deque()
-                actBgn   = 0
-                actEnd   = 0
+                actTimesPass = deque()
+                actTimesFail = deque()
+                actBgn       = 0
+                actEnd       = 0
+                actSuccess   = True
 
                 # Confusion Tracking
                 symHist = deque()
@@ -293,9 +301,10 @@ if _SAVE_DATA:
 
                     if ("BT END" in dtmMsg) and ("fail" in f"{dtmMsg}".lower()):
                         NfailActn += 1
+                        actSuccess = False
 
-                    if p_str_has_any( dtmMsg, ["BT END", "Planning Failure"], cap = False ):
-                        Nstp += 1
+                    # if p_str_has_any( dtmMsg, ["BT END", "Planning Failure"], cap = False ):
+                        
 
                     ##### Symbol Grounding #####
 
@@ -306,6 +315,10 @@ if _SAVE_DATA:
 
                     if "BGN: Phase 1" in dtmMsg:
                         obsBgn = dtmT
+                        if not p1pp2:
+                            Nstp    += 1
+                            p1pp2Bgn = dtmT
+                        p1pp2 += 1
                     elif "END: Phase 1" in dtmMsg:
                         obsEnd = dtmT
                         duration = obsEnd - obsBgn
@@ -318,11 +331,15 @@ if _SAVE_DATA:
 
                     ##### Phase 4: Action #####
                     if "BGN: Phase 4" in dtmMsg:
-                        actBgn = dtmT
+                        actBgn     = dtmT
+                        actSuccess = True
                     elif "END: Phase 4" in dtmMsg:
                         actEnd = dtmT
                         duration = actEnd - actBgn
-                        actTimes.append( duration )
+                        if actSuccess:
+                            actTimesPass.append( duration )
+                        else:
+                            actTimesFail.append( duration )
                         
                     ##### Phase 2: Conditions #####
 
@@ -337,7 +354,11 @@ if _SAVE_DATA:
                             NfailFind += 1
 
                     elif "BGN: Phase 2" in dtmMsg:
-
+                        if p1pp2:
+                            p1pp2End = dtmT
+                            result['tObsTot'].append( p1pp2End - p1pp2Bgn )
+                        result['p1pp2'].append( p1pp2 )
+                        p1pp2 = 0
                         
                         Nlabel   = 0
                         Ntotal  += len( symbols )
@@ -381,7 +402,8 @@ if _SAVE_DATA:
                     result['rFal']['find'  ].append( NfailFind/Nstage2 )
                 result['rFal']['N'     ].append( Nstp              )
                 result['tObs'].extend( obsTimes )
-                result['tAct'].extend( actTimes )
+                result['tActPass'].extend( actTimesPass )
+                result['tActFail'].extend( actTimesFail )
 
                 tRun = data[-1]['t'] - data[0]['t']
                 end  =  False
@@ -457,12 +479,18 @@ if _LOAD_DATA:
             # result['tAct'] = filter_series( result['tAct'], _FILTER_FACTOR )
             result['tRun'] = filter_series( result['tRun'], _FILTER_FACTOR )
 
+            print( "\n\n" + f"##### {longTNam}, {suffix[1:]} ################################################################"[:100] + '\n' )
+
+            ##### Paper Plots ####################
             make_histo( result['sRun'], f"{longTNam}, {suffix[1:]}\nMakespan Distribution [Steps]", f"{fName}_Histo-Steps{suffix}{plotExt}" )
             make_histo( result['tRun'], f"{longTNam}, {suffix[1:]}\nMakespan Distribution [Time]", f"{fName}_Histo-Time{suffix}{plotExt}" )
             make_histo( result['tObs'], f"{longTNam}, {suffix[1:]}\nObject Search Time Distribution", f"{fName}_Histo-Search{suffix}{plotExt}", 
                         xLabel = 'Time [s]', forceYlim = False )
-            make_histo( result['tAct'], f"{longTNam}, {suffix[1:]}\nAction Execution Time Distribution", f"{fName}_Histo-Action{suffix}{plotExt}", 
+            make_histo( result['tActPass'], f"{longTNam}, {suffix[1:]}\nSuccessful Action Execution Time Distribution", f"{fName}_Histo-ActionPass{suffix}{plotExt}", 
                         xLabel = 'Time [s]', forceYlim = False )
+            if len( result['tActFail'] ):
+                make_histo( result['tActFail'], f"{longTNam}, {suffix[1:]}\nFailed Action Execution Time Distribution", f"{fName}_Histo-ActionFail{suffix}{plotExt}", 
+                            xLabel = 'Time [s]', forceYlim = False )
             make_histo( result['rCon'], f"{longTNam}, {suffix[1:]}\nObject Confusion Distribution", f"{fName}_Histo-Confusion{suffix}{plotExt}", 
                         xLabel = 'Confusion Rate' )
             make_multi_histo( 
@@ -471,6 +499,10 @@ if _LOAD_DATA:
                 f"{longTNam}, {suffix[1:]}\nDistribution of Action and Planning Failure Rates, Per Episode", 
                 f"{fName}_Histo-Failure{suffix}{plotExt}"
             )
+
+            ##### Troubleshooting Plots ##########
+            make_histo( result['tObsTot'], f"{longTNam}, {suffix[1:]}\nTotal Observation Time [s]", f"{fName}_Histo-tObsTot{suffix}{plotExt}", forceYlim = False )
+            make_histo( result['p1pp2']  , f"{longTNam}, {suffix[1:]}\nTotal Observation Steps", f"{fName}_Histo-p1pp2{suffix}{plotExt}"     , forceYlim = False )
 
         labels = deque()
         for test in tests:
@@ -483,6 +515,7 @@ if _LOAD_DATA:
                 series.append( totRes[ setNam ][ lbl ][key] )
             return list( series )
 
+        print( "\n\n" + f"##### {suffix[1:]} ##################################################################################"[:100] + '\n' )
 
         make_multi_histo( 
             get_series( labels, 'sRun' ), 
@@ -525,6 +558,7 @@ if _LOAD_DATA:
     # [ ] 
     ##### Big Subplots ########################################################
     for dataName, dataset in totRes.items():
+        print( "\n\n" + f"##### {dataName} ##################################################################################"[:100] + '\n' )
         plt.clf()
         for i in range(4):
             plt.subplot(2, 2, i+1)
