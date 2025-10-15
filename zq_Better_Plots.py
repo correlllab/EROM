@@ -484,23 +484,23 @@ if _SAVE_DATA:
                 
                 ##### Per-Episode Accounting ##################################
                 ### Steps ###
-                results["Nstep"].append()
-                results["tStep"].extend()
+                results["Nstep"].append( Nstep )
+                results["tStep"].extend( tStepDqu )
                 ### 1. Object Search ###
-                results["tSearch"].extend()
+                results["tSearch"].extend( tSearchDqu )
                 ### 2. Symbol Grounding ###
-                results["tGround"].extend()
-                results["rGround"].append()
-                results["rConfuse"].append()
+                results["tGround"].extend( tGroundDqu )
+                results["rGround"].append( Nground / Nstep )
+                results["rConfuse"].append( totConfuse / totFound )
                 ### 3. Planning ###
-                results["tPlan"].extend()
-                results["rPlan"].append()
-                results["rPlanFail"].append()
+                results["tPlan"].extend( tPlanDqu )
+                results["rPlan"].append( Nplan / Nstep )
+                results["rPlanFail"].append( NfailPlan / Nplan )
                 ### 4. Acting ###
-                results["tAct"].extend()
-                results["rAct"].append()
-                results["rActFail"].append()
+                results["tAct"].extend( tActionDqu )
+                results["rAct"].append( Naction / Nstep )
+                results["rActFail"].append( NfailActn / Naction )
                 ### 5. Resetting ###
-                results["tReset"].extend()
-                results["rReset"].append()
+                results["tReset"].extend( tResetDqu )
+                results["rReset"].append( Nreset / Nstep )
 
