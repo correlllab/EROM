@@ -797,7 +797,7 @@ class TaskPlanner:
             print( f"Phase 2, {self.status} ..." )
 
             self.memory.history.append( msg = "BGN: Phase 2" )
-            self.phase_2_Conditions()
+            self.phase_2_Conditions() # Cheater applied HERE
             self.memory.history.append( msg = "END: Phase 2", datum = deep_copy_memory_list( self.symPln.symbols ) )
 
             report_time( "Conditions GROUNDED!" )
