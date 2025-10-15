@@ -225,12 +225,18 @@ def extract_pose_from_str( poseStr : str ):
 class SymbolHistory:
     """ Simple class for tracking Confusion and Other Symbol Problems """
     def __init__( self ):
-        self.hist : Deque[GraspObj] = deque()
+        self.hist : Deque[GraspObj]            = deque()
+        self.plns : Deque[dict[str,list[str]]] = deque()
 
 
-    def ingest( self, objList : list[GraspObj] ):
+    def ingest_frame( self, objList : list[GraspObj] ):
         """ Log symbols for eval later """
         self.hist.append( deep_copy_memory_list( objList ) )
+
+
+    def ingest_plan( self, plan : dict[str,list[str]] ):
+        """ Log plan for eval later """
+        self.plns.append( deepcopy( plan ) )
 
 
     @staticmethod
@@ -252,21 +258,23 @@ class SymbolHistory:
         return {"src" : src, "dst" : dst,}
     
 
-    def last_frame_confusion( self, action : dict = None ):
-        """ Return a count of the unmoved blocks that have changed identities """
+    def last_frame_confusion( self ):
+        """ Return a count of the unmoved blocks that have changed identities, Also return object count last step """
+        # Init
         move = None
-        if action is not None:
-            move = SymbolHistory.action_2_move( action )
+        if len( self.plns ):
+            move = SymbolHistory.action_2_move( self.plns[-1] )
         currObjs : list[GraspObj] =  self.hist[-1] if (len(self.hist) >= 1) else list()
         prevObjs : list[GraspObj] =  self.hist[-2] if (len(self.hist) >= 2) else list()
+
         # Take action into account!
         if move is not None:
             for objPrv in prevObjs:
                 if euclidean_distance_between_symbols( objPrv, move["src"] ) <= env_var("_ACCEPT_POSN_ERR"):
                     objPrv.pose = ObjPose( move["dst"] )
-        Ncurr    = len( currObjs )
-        closest  : dict[int,dict[str,GraspObj]]= dict() 
+        
         # For each previous object, Search for a matching current object
+        closest : dict[int,dict[str,GraspObj]] = dict() 
         for obj_j in prevObjs:
             dMin = 6e10
             oMin = None
@@ -278,12 +286,17 @@ class SymbolHistory:
                         oMin = obj_i
             if oMin is not None:
                 closest[ id(oMin) ] = { "prev" : obj_j, "curr" : oMin } 
+        
         # Evaluate Matches
+        Ncurr  = len( currObjs )
         Nconf = 0
         for pair in closest.values():
             if pair["prev"].label != pair["curr"].label:
                 Nconf += 1
+        
+        # Return confused and total
         return Nconf, Ncurr
+
 
 
 ########## SAVE: DATA PROCESSING ###################################################################
@@ -292,7 +305,6 @@ _LOAD_DATA = True
 
 if _SAVE_DATA:
     totRes = dict()
-
 
     for iii, paths in enumerate( datasets ):
         setNam = dataLabels[iii]
@@ -315,47 +327,28 @@ if _SAVE_DATA:
                 continue
 
             ########## ANALYSIS ####################################################################
-
-            ##### Per-Episode Accounting ##################################
-            
-            ### Steps ###
-            Nstep    = 0
-            tStepBgn = 0
-            tStepEnd = 0
-            tStepDqu = deque()
-
-            ### 1. Object Search ###
-            tSearchBgn = 0
-            tSearchEnd = 0
-            tSearchDqu = deque()
-
-            ### 2. Symbol Grounding ###
-            Nground    = 0
-            tGroundBgn = 0
-            tGroundEnd = 0
-            tGroundDqu = deque()
-            symbols_t  = list()
-
-            ### 3. Planning ###
-            Nplan     = 0
-            tPlanBgn  = 0
-            tPlanEnd  = 0
-            tPlanDqu  = deque()
-            NfailPlan = 0
-
-            ### 4. Acting ###
-            Naction    = 0
-            tActionBgn = 0
-            tActionEnd = 0
-            tActionDqu = deque()
-            NfailActn  = 0
-
-            ### 5. Resetting ###
-            Nreset    = 0
-            tResetBgn = 0
-            tResetEnd = 0
-            tResetDqu = deque()
-
+            results = {
+                ### Steps ###
+                "Nstep": deque(),
+                "tStep": deque(),
+                ### 1. Object Search ###
+                "tSearch": deque(),
+                ### 2. Symbol Grounding ###
+                "tGround" : deque(),
+                "rGround" : deque(),
+                "rConfuse": deque(),
+                ### 3. Planning ###
+                "tPlan"    : deque(),
+                "rPlan"    : deque(),
+                "rPlanFail": deque(),
+                ### 4. Acting ###
+                "tAct"    : deque(),
+                "rAct"    : deque(),
+                "rActFail": deque(),
+                ### 5. Resetting ###
+                "tReset": deque(),
+                "rReset": deque(),
+            }
 
             ##### Read Data ###############################################
 
@@ -369,6 +362,49 @@ if _SAVE_DATA:
                 except EOFError as e:
                     print( f"LOAD ERROR: {e}" )
                     continue
+
+                ##### Per-Episode Accounting ##################################
+            
+                ### Steps ###
+                Nstep    = 0
+                tStepBgn = 0
+                tStepEnd = 0
+                tStepDqu = deque()
+
+                ### 1. Object Search ###
+                tSearchBgn = 0
+                tSearchEnd = 0
+                tSearchDqu = deque()
+
+                ### 2. Symbol Grounding ###
+                Nground    = 0
+                tGroundBgn = 0
+                tGroundEnd = 0
+                tGroundDqu = deque()
+                symbols_t  = list()
+                symHst     = SymbolHistory()
+                totFound   = 0
+                totConfuse = 0
+
+                ### 3. Planning ###
+                Nplan     = 0
+                tPlanBgn  = 0
+                tPlanEnd  = 0
+                tPlanDqu  = deque()
+                NfailPlan = 0
+
+                ### 4. Acting ###
+                Naction    = 0
+                tActionBgn = 0
+                tActionEnd = 0
+                tActionDqu = deque()
+                NfailActn  = 0
+
+                ### 5. Resetting ###
+                Nreset    = 0
+                tResetBgn = 0
+                tResetEnd = 0
+                tResetDqu = deque()
 
                 ##### Per-Message Accounting #####
                 # ASSUMPTION: "BGN: ..." / "END: ..." MESSAGES ALWAYS APPEAR IN THE CORRECT ORDER! 
@@ -401,9 +437,11 @@ if _SAVE_DATA:
                         tGroundEnd = dtmT
                         tGroundDqu.append( tGroundEnd - tGroundBgn )
                         symbols_t = dtmDat[:]
-
-                    if len( symbols_t ):
-                        pass
+                        symHst.ingest_frame( dtmDat[:] )
+                        if len( symbols_t ):
+                            Nconf, Nfram = symHst.last_frame_confusion()
+                            totFound   += Nfram
+                            totConfuse += Nconf
 
 
                     ##### Phase 3: Planning ###############################
@@ -417,8 +455,8 @@ if _SAVE_DATA:
                     if "END: Phase 3" in dtmMsg:
                         tPlanEnd = dtmT
                         tPlanDqu.append( tPlanEnd - tPlanBgn )
-                        pprint( dtmDat )
-                        crash_out()
+                        if len( dtmDat ):
+                            symHst.ingest_plan( dtmDat )
                         
 
 
@@ -443,4 +481,26 @@ if _SAVE_DATA:
                     if "END: Phase 5" in dtmMsg:
                         tResetEnd = dtmT
                         tResetDqu.append( tResetEnd - tResetBgn )
+                
+                ##### Per-Episode Accounting ##################################
+                ### Steps ###
+                results["Nstep"].append()
+                results["tStep"].extend()
+                ### 1. Object Search ###
+                results["tSearch"].extend()
+                ### 2. Symbol Grounding ###
+                results["tGround"].extend()
+                results["rGround"].append()
+                results["rConfuse"].append()
+                ### 3. Planning ###
+                results["tPlan"].extend()
+                results["rPlan"].append()
+                results["rPlanFail"].append()
+                ### 4. Acting ###
+                results["tAct"].extend()
+                results["rAct"].append()
+                results["rActFail"].append()
+                ### 5. Resetting ###
+                results["tReset"].extend()
+                results["rReset"].append()
 
