@@ -370,7 +370,7 @@ class TaskPlanner:
             if env_var("_VERBOSE"):
                 print( f"\tNO OBJECTS DETERMINIZED" )
 
-        self.blcMod.instantiate_conditions( self.robot )
+        self.blcMod.instantiate_conditions( self.robot ) # This both wipes and populates `self.symPln.facts`
 
         def cond_as_struct( cond ):
             rtnLst = deque()
@@ -790,6 +790,7 @@ class TaskPlanner:
 
             self.cheater.log_beliefs( self.memory.bMem.beliefs )
 
+            # FIXME: THIS DOES **NOT** REPORT THE RESULTS OF A SPECIAL SEARCH
             self.memory.history.append( msg = "END: Phase 1", datum = deep_copy_memory_list( reportSymbols[:] ) )
 
             ##### Phase 2 ########################

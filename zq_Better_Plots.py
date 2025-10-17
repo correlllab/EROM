@@ -181,9 +181,15 @@ def extract_pose_from_str( poseStr : str ):
 
     def store_num():
         """ Add the number to the row """
-        nonlocal row, numStr
+        nonlocal row, numStr, poseStr
         if len( numStr ):
-            row.append( float( numStr.strip() ) )
+            try:
+                row.append( float( numStr.strip() ) )
+            except ValueError as e:
+                print( f"BAD: {e}" )
+                print( numStr  )
+                print( poseStr )
+                crash_out()
         numStr = ""
 
     def store_row():
@@ -207,8 +213,11 @@ def extract_pose_from_str( poseStr : str ):
                 store_num()
         elif char == '\n':
             pass
-        else:
+        elif depth == 2:
             numStr += char
+        else:
+            pass
+            # print( f"`extract_pose_from_str()`, BAD STATE:\n{char}\n{poseStr}\n" )
 
     try:
         return np.array( nstLst )
@@ -216,8 +225,7 @@ def extract_pose_from_str( poseStr : str ):
         traceback.print_exc()
         print( f"BAD: {e}" )
         crash_out()
-            
-        
+
 
 
 ########## HELPER CLASSES ##########################################################################
@@ -300,207 +308,321 @@ class SymbolHistory:
 
 
 ########## SAVE: DATA PROCESSING ###################################################################
-_SAVE_DATA = True
+_SAVE_DATA = False
 _LOAD_DATA = True 
 
 if _SAVE_DATA:
-    totRes = dict()
+    try:
+        totRes = dict()
 
-    for iii, paths in enumerate( datasets ):
-        setNam = dataLabels[iii]
-        suffix = "_" + setNam
-        skip   = False
-        totRes[ setNam ] = dict()
+        for iii, paths in enumerate( datasets ):
+            setNam = dataLabels[iii]
+            suffix = "_" + setNam
+            skip   = False
+            totRes[ setNam ] = dict()
 
-        for ii, test in enumerate( tests ):
-            ##### Init ################################################################
-            path     = paths[ii]
-            fName    = fNames[ii]
-            longTNam = longTestNames[ii]
+            for ii, test in enumerate( tests ):
+                ##### Init ################################################################
+                path     = paths[ii]
+                fName    = fNames[ii]
+                longTNam = longTestNames[ii]
 
-            ##### Load ################################################################
-            try:
-                pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
-            except FileNotFoundError as e:
-                print( f"\n404, SKIP THIS TEST: {e}\n" )
-                skip = True
-                continue
-
-            ########## ANALYSIS ####################################################################
-            results = {
-                ### Steps ###
-                "Nstep": deque(),
-                "tStep": deque(),
-                ### 1. Object Search ###
-                "tSearch": deque(),
-                ### 2. Symbol Grounding ###
-                "tGround" : deque(),
-                "rGround" : deque(),
-                "rConfuse": deque(),
-                ### 3. Planning ###
-                "tPlan"    : deque(),
-                "rPlan"    : deque(),
-                "rPlanFail": deque(),
-                ### 4. Acting ###
-                "tAct"    : deque(),
-                "rAct"    : deque(),
-                "rActFail": deque(),
-                ### 5. Resetting ###
-                "tReset": deque(),
-                "rReset": deque(),
-            }
-
-            ##### Read Data ###############################################
-
-            for dPth in pkls:
-                print( f"About to open {dPth} ..." )
-                data = list()
-
+                ##### Load ################################################################
                 try:
-                    with open( dPth, 'rb' ) as f:
-                        data = pickle.load( f )
-                except EOFError as e:
-                    print( f"LOAD ERROR: {e}" )
+                    pkls = [os.path.join( path, item ) for item in os.listdir( path ) if ".pkl" in f"{item}".lower()]
+                except FileNotFoundError as e:
+                    print( f"\n404, SKIP THIS TEST: {e}\n" )
+                    skip = True
                     continue
 
-                ##### Per-Episode Accounting ##################################
-            
-                ### Steps ###
-                Nstep    = 0
-                tStepBgn = 0
-                tStepEnd = 0
-                tStepDqu = deque()
+                ########## ANALYSIS ####################################################################
+                results = {
+                    ### Steps ###
+                    "Nstep"   : deque(),
+                    "tStep"   : deque(),
+                    "tEpisd"  : deque(),
+                    "rSuccess": deque(),
+                    ### 1. Object Search ###
+                    "tSearch": deque(),
+                    ### 2. Symbol Grounding ###
+                    "tGround"  : deque(),
+                    "rGround"  : deque(),
+                    "rConfuse" : deque(),
+                    "rFindFail": deque(),
+                    ### 3. Planning ###
+                    "tPlan"    : deque(),
+                    "rPlan"    : deque(),
+                    "rPlanFail": deque(),
+                    ### 4. Acting ###
+                    "tAct"    : deque(),
+                    "rAct"    : deque(),
+                    "rActFail": deque(),
+                    ### 5. Resetting ###
+                    "tReset": deque(),
+                    "rReset": deque(),
+                }
 
-                ### 1. Object Search ###
-                tSearchBgn = 0
-                tSearchEnd = 0
-                tSearchDqu = deque()
+                ##### Read Data ###############################################
 
-                ### 2. Symbol Grounding ###
-                Nground    = 0
-                tGroundBgn = 0
-                tGroundEnd = 0
-                tGroundDqu = deque()
-                symbols_t  = list()
-                symHst     = SymbolHistory()
-                totFound   = 0
-                totConfuse = 0
+                for dPth in pkls:
+                    print( f"About to open {dPth} ..." )
+                    data = list()
 
-                ### 3. Planning ###
-                Nplan     = 0
-                tPlanBgn  = 0
-                tPlanEnd  = 0
-                tPlanDqu  = deque()
-                NfailPlan = 0
+                    try:
+                        with open( dPth, 'rb' ) as f:
+                            data = pickle.load( f )
+                    except EOFError as e:
+                        print( f"LOAD ERROR: {e}" )
+                        continue
 
-                ### 4. Acting ###
-                Naction    = 0
-                tActionBgn = 0
-                tActionEnd = 0
-                tActionDqu = deque()
-                NfailActn  = 0
+                    ##### Per-Episode Accounting ##################################
+                
+                    ### Steps ###
+                    Nstep    = 0
+                    tStepBgn = 0
+                    tStepEnd = 0
+                    tStepDqu = deque()
 
-                ### 5. Resetting ###
-                Nreset    = 0
-                tResetBgn = 0
-                tResetEnd = 0
-                tResetDqu = deque()
+                    ### 1. Object Search ###
+                    tSearchBgn = 0
+                    tSearchEnd = 0
+                    tSearchDqu = deque()
 
-                ##### Per-Message Accounting #####
-                # ASSUMPTION: "BGN: ..." / "END: ..." MESSAGES ALWAYS APPEAR IN THE CORRECT ORDER! 
-                for datum in data:
-                    dtmMsg = datum['msg']
-                    dtmT   = datum['t']
-                    dtmDat = datum['data']
+                    ### 2. Symbol Grounding ###
+                    Nground    = 0
+                    tGroundBgn = 0
+                    tGroundEnd = 0
+                    tGroundDqu = deque()
+                    symbols_t  = list()
+                    symHst     = SymbolHistory()
+                    totFound   = 0
+                    totConfuse = 0
+                    NfailFind  = 0
 
-                    ##### Phase 1: Perception #############################
-                    if "BGN: Phase 1" in dtmMsg:
-                        # ASSUMPTION: PHASE 1 MESSAGE SENT ONLY ONCE PER STEP, See `p1pp2`
-                        Nstep += 1
-                        if tStepBgn > 0:
-                            tStepEnd = dtmT
-                            tStepDqu.append( tStepEnd - tStepBgn )
-                        tStepBgn   = dtmT
-                        tSearchBgn = dtmT
+                    ### 3. Planning ###
+                    Nplan     = 0
+                    tPlanBgn  = 0
+                    tPlanEnd  = 0
+                    tPlanDqu  = deque()
+                    NfailPlan = 0
 
-                    if "END: Phase 1" in dtmMsg:
-                        tSearchEnd = dtmT
-                        tSearchDqu.append( tSearchEnd - tSearchBgn )
+                    ### 4. Acting ###
+                    Naction    = 0
+                    tActionBgn = 0
+                    tActionEnd = 0
+                    tActionDqu = deque()
+                    NfailActn  = 0
 
+                    ### 5. Resetting ###
+                    Nreset    = 0
+                    tResetBgn = 0
+                    tResetEnd = 0
+                    tResetDqu = deque()
+
+                    ##### Per-Message Accounting #####
+                    # ASSUMPTION: "BGN: ..." / "END: ..." MESSAGES ALWAYS APPEAR IN THE CORRECT ORDER! 
+                    for datum in data:
+                        dtmMsg = datum['msg']
+                        dtmT   = datum['t']
+                        dtmDat = datum['data']
+
+                        ##### Phase 1: Perception #############################
+                        if "BGN: Phase 1" in dtmMsg:
+                            # ASSUMPTION: PHASE 1 MESSAGE SENT ONLY ONCE PER STEP, See `p1pp2`
+                            Nstep += 1
+                            if tStepBgn > 0:
+                                tStepEnd = dtmT
+                                tStepDqu.append( tStepEnd - tStepBgn )
+                            tStepBgn   = dtmT
+                            tSearchBgn = dtmT
+
+                        if "END: Phase 1" in dtmMsg:
+                            tSearchEnd = dtmT
+                            tSearchDqu.append( tSearchEnd - tSearchBgn )
+
+                        
+                        ##### Phase 2: Grounding ##############################
+                        if "BGN: Phase 2" in dtmMsg:
+                            Nground   += 1
+                            tGroundBgn = dtmT
+
+                        if "Conditions Grounded" in dtmMsg:
+                            symSet   = set([])
+                            for item in dtmDat:
+                                if item[0] == "GraspObj":
+                                    symSet.add( item[1] )
+
+                            if len( symSet ) < 3:
+                                # print( symSet ) # It's all or nothing, it seems
+                                # print( dtmDat )
+                                NfailFind += 1
+
+                        if "END: Phase 2" in dtmMsg:
+                            tGroundEnd = dtmT
+                            tGroundDqu.append( tGroundEnd - tGroundBgn )
+                            symbols_t = dtmDat[:]
+                            symHst.ingest_frame( dtmDat[:] )
+                            if len( symbols_t ):
+                                Nconf, Nfram = symHst.last_frame_confusion()
+                                totFound   += Nfram
+                                totConfuse += Nconf
+
+
+                        ##### Phase 3: Planning ###############################
+                        if "BGN: Phase 3" in dtmMsg:
+                            Nplan += 1
+                            tPlanBgn = dtmT
+
+                        if "Planning Failure" in dtmMsg:
+                            NfailPlan += 1
+
+                        if "END: Phase 3" in dtmMsg:
+                            tPlanEnd = dtmT
+                            tPlanDqu.append( tPlanEnd - tPlanBgn )
+                            if len( dtmDat ):
+                                symHst.ingest_plan( dtmDat )
+                            
+
+
+                        ##### Phase 4: Execution ##############################
+                        if "BGN: Phase 4" in dtmMsg:
+                            Naction   += 1
+                            tActionBgn = dtmT
+
+                        if ("BT END" in dtmMsg) and ("fail" in f"{dtmMsg}".lower()):
+                            NfailActn += 1
+
+                        if "END: Phase 4" in dtmMsg:
+                            tActionEnd = dtmT
+                            tActionDqu.append( tActionEnd - tActionBgn )
+
+
+                        ##### Phase 5: Reset ##################################
+                        if "BGN: Phase 5" in dtmMsg:
+                            Nreset   += 1
+                            tResetBgn = dtmT
+
+                        if "END: Phase 5" in dtmMsg:
+                            tResetEnd = dtmT
+                            tResetDqu.append( tResetEnd - tResetBgn )
                     
-                    ##### Phase 2: Grounding ##############################
-                    if "BGN: Phase 2" in dtmMsg:
-                        Nground   += 1
-                        tGroundBgn = dtmT
+                    ##### Per-Episode Accounting ##################################
+                    end   =  False
+                    resEp = 0
+                    for i in range(1,11):
+                        try:
+                            msg = data[-i]['msg']
+                        except IndexError as e:
+                            print(e)
+                            break
+                        if ("Status.FAILURE" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                            resEp = 0
+                            print( f"FAILURE" )
+                            end = True
+                            break
+                        elif ("Status.SUCCESS" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                            resEp = 1
+                            print( f"SUCCESS" )
+                            end = True
+                            break
+                    if not end:
+                        resEp = 0
+                        print( f"FAILURE" )
 
-                    if "END: Phase 2" in dtmMsg:
-                        tGroundEnd = dtmT
-                        tGroundDqu.append( tGroundEnd - tGroundBgn )
-                        symbols_t = dtmDat[:]
-                        symHst.ingest_frame( dtmDat[:] )
-                        if len( symbols_t ):
-                            Nconf, Nfram = symHst.last_frame_confusion()
-                            totFound   += Nfram
-                            totConfuse += Nconf
+                    ### Steps ###
+                    results["Nstep"].append( Nstep )
+                    results["tStep"].extend( tStepDqu )
+                    results["tEpisd"].append( data[-1]['t'] - data[0]['t'] )
+                    results["rSuccess"].append( resEp )
+                    ### 1. Object Search ###
+                    results["tSearch"].extend( tSearchDqu )
+                    ### 2. Symbol Grounding ###
+                    results["tGround"].extend( tGroundDqu )
+                    results["rGround"].append( Nground / Nstep )
+                    results["rConfuse"].append( totConfuse / totFound )
+                    results["rFindFail"].append( NfailFind / Nground )
+                    ### 3. Planning ###
+                    results["tPlan"].extend( tPlanDqu )
+                    results["rPlan"].append( Nplan / Nstep )
+                    results["rPlanFail"].append( NfailPlan / Nplan )
+                    ### 4. Acting ###
+                    results["tAct"].extend( tActionDqu )
+                    results["rAct"].append( Naction / Nstep )
+                    results["rActFail"].append( NfailActn / Naction )
+                    ### 5. Resetting ###
+                    results["tReset"].extend( tResetDqu )
+                    results["rReset"].append( Nreset / Nstep )
 
+                # pprint( results )
+                totRes[ setNam ][ test ] = deepcopy( results )
 
-                    ##### Phase 3: Planning ###############################
-                    if "BGN: Phase 3" in dtmMsg:
-                        Nplan += 1
-                        tPlanBgn = dtmT
+    except KeyboardInterrupt:
+        crash_out()
 
-                    if "Planning Failure" in dtmMsg:
-                        NfailPlan += 1
-
-                    if "END: Phase 3" in dtmMsg:
-                        tPlanEnd = dtmT
-                        tPlanDqu.append( tPlanEnd - tPlanBgn )
-                        if len( dtmDat ):
-                            symHst.ingest_plan( dtmDat )
+    ##### Store Results ###################################################
+    with open( _JSON_PATH, 'w' ) as f:
+        json.dump( as_json( totRes ), f, indent = 2 )
                         
 
 
-                    ##### Phase 4: Execution ##############################
-                    if "BGN: Phase 4" in dtmMsg:
-                        Naction   += 1
-                        tActionBgn = dtmT
 
-                    if ("BT END" in dtmMsg) and ("fail" in f"{dtmMsg}".lower()):
-                        NfailActn += 1
+########## LOAD: GRAPHICS ##########################################################################
 
-                    if "END: Phase 4" in dtmMsg:
-                        tActionEnd = dtmT
-                        tActionDqu.append( tActionEnd - tActionBgn )
+if _LOAD_DATA:
+    try:
+        with open( _JSON_PATH, 'r' ) as f:
+            totRes = json.load( f )
+
+        for iii, paths in enumerate( datasets ):
+            setNam = dataLabels[iii]
+            suffix = "_" + setNam
+
+            for ii, test in enumerate( tests ):
+                ##### Init ################################################################
+                path     = paths[ii]
+                fName    = fNames[ii]
+                longTNam = longTestNames[ii]
+                results  = totRes[ setNam ][ test ]
+
+                _FILTER_FACTOR = 2.5    
+                results['tSearch'] = filter_series( results['tSearch'], _FILTER_FACTOR )
+                results['tEpisd']  = filter_series( results['tEpisd'], _FILTER_FACTOR )
 
 
-                    ##### Phase 5: Reset ##################################
-                    if "BGN: Phase 5" in dtmMsg:
-                        Nreset   += 1
-                        tResetBgn = dtmT
-
-                    if "END: Phase 5" in dtmMsg:
-                        tResetEnd = dtmT
-                        tResetDqu.append( tResetEnd - tResetBgn )
+                ##### Sanity Checks ##################
+                print( f"Scenario normally takes {np.mean(results['Nstep'])} steps!, Success Rate: {np.mean(results['rSuccess']):.3f}" )
+                print( f"Phase 1: 1.000 --> Phase 2: {np.mean(results['rGround']):.3f} --> Phase 3: {np.mean(results['rPlan']):.3f} --> Phase 4: {np.mean(results['rAct']):.3f} --> Phase 5: {np.mean(results['rReset']):.3f}" )
+                # print( f'{np.mean(results["rFindFail"]):.3f} + {np.mean(results["rPlan"]):.3f} + {(1.0-np.mean(results["rSuccess"]))/np.mean(results["Nstep"])} == 1.000: Error: {1.0 - np.mean(results["rFindFail"]) - np.mean(results["rPlan"]) - (1.0-np.mean(results["rSuccess"]))/np.mean(results["Nstep"])}' )
                 
-                ##### Per-Episode Accounting ##################################
-                ### Steps ###
-                results["Nstep"].append( Nstep )
-                results["tStep"].extend( tStepDqu )
-                ### 1. Object Search ###
-                results["tSearch"].extend( tSearchDqu )
-                ### 2. Symbol Grounding ###
-                results["tGround"].extend( tGroundDqu )
-                results["rGround"].append( Nground / Nstep )
-                results["rConfuse"].append( totConfuse / totFound )
-                ### 3. Planning ###
-                results["tPlan"].extend( tPlanDqu )
-                results["rPlan"].append( Nplan / Nstep )
-                results["rPlanFail"].append( NfailPlan / Nplan )
-                ### 4. Acting ###
-                results["tAct"].extend( tActionDqu )
-                results["rAct"].append( Naction / Nstep )
-                results["rActFail"].append( NfailActn / Naction )
-                ### 5. Resetting ###
-                results["tReset"].extend( tResetDqu )
-                results["rReset"].append( Nreset / Nstep )
+                # fullCount = deque()
+                # for i in range( len( results["rFindFail"] ) ):
+                #     fullCount.append(
+                #         results["rFindFail"][i] + results["rPlan"][i]
+                #     )
+                skipCount = deque()
+                for i in range( len( results["Nstep"] ) ):
+                    skip = 0.0
+                    # skip = -1 / results["Nstep"][i]
+                    # skip = -1 
+                    if results["rSuccess"][i]:
+                        skip = 1 / results["Nstep"][i]
+                    skipCount.append( skip )
+                    
+                
+                # print( f'{np.mean(results["rFindFail"]):.3f} + {np.mean(results["rPlan"]):.3f} == 1.000: Error: {1.0 - np.mean(results["rFindFail"]) - np.mean(results["rPlan"])}' )
+                print( f'{np.mean(results["rFindFail"]):.3f} + {np.mean(results["rPlan"]):.3f} + {np.mean(skipCount)} == 1.000: Error: {1.0 - np.mean(results["rFindFail"]) - np.mean(results["rPlan"]) - np.mean(skipCount)}' )
 
+                ##### Paper Plots ####################
+                make_histo( results['Nstep'], f"{longTNam}, {suffix[1:]}\nMakespan Distribution [Steps]", f"{fName}_Histo-Steps{suffix}{plotExt}" )
+                make_histo( results['tEpisd'], f"{longTNam}, {suffix[1:]}\nMakespan Distribution [Time]", f"{fName}_Histo-Time{suffix}{plotExt}" )
+                make_histo( results['tSearch'], f"{longTNam}, {suffix[1:]}\nObject Search Time Distribution", f"{fName}_Histo-Search{suffix}{plotExt}", 
+                            xLabel = 'Time [s]', forceYlim = False )
+                make_histo( results['tAct'], f"{longTNam}, {suffix[1:]}\nAction Execution Time Distribution", f"{fName}_Histo-ActionPass{suffix}{plotExt}", 
+                            xLabel = 'Time [s]', forceYlim = False )
+    except KeyboardInterrupt:
+        crash_out()
+
+
+
+########## EXIT ####################################################################################
+crash_out()

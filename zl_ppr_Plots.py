@@ -476,7 +476,6 @@ if _LOAD_DATA:
             
             _FILTER_FACTOR = 2.5    
             result['tObs'] = filter_series( result['tObs'], _FILTER_FACTOR )
-            # result['tAct'] = filter_series( result['tAct'], _FILTER_FACTOR )
             result['tRun'] = filter_series( result['tRun'], _FILTER_FACTOR )
 
             print( "\n\n" + f"##### {longTNam}, {suffix[1:]} ################################################################"[:100] + '\n' )
