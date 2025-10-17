@@ -505,6 +505,7 @@ if _SAVE_DATA:
                         if "END: Phase 5" in dtmMsg:
                             tResetEnd = dtmT
                             tResetDqu.append( tResetEnd - tResetBgn )
+                            
                     
                     ##### Per-Episode Accounting ##################################
                     end   =  False

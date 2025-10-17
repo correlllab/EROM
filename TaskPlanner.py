@@ -919,19 +919,11 @@ def experiment_prep( beginPlanPose = None ):
     
 
 ########## MAIN ####################################################################################
-# from timeit import timeit
-
 _TROUBLESHOOT = 0
-_TRACK_PERF   = 0
-
-
 _SHOT_6 = repair_pose( np.array( [[-0.07,  -0.951, -0.3 ,  -0.059],
                                   [-0.995,  0.086 ,-0.04 , -0.38 ],
                                   [ 0.064,  0.296 ,-0.953,  0.457],
                                   [ 0.   ,  0.    , 0.   ,  1.   ],] ))
- 
-
-# _EXP_BGN_POSES = [_SHOT_6, _SHOT_6]
 _EXP_BGN_POSES = [_SHOT_6,]
 
 
