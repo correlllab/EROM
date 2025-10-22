@@ -141,8 +141,6 @@ def filter_series( series, stdFactor = 2.0 ):
             nuSeries.append( datum )
     return list( nuSeries )
 
-_D_THRESH_M = env_var("_BLOCK_SCALE")*0.75
-
 
 def as_json( dataObj, asLeaf = False ):
     """ Convert the dataclass into a struct that can be JSON serialized """
@@ -308,7 +306,7 @@ class SymbolHistory:
 
 
 ########## SAVE: DATA PROCESSING ###################################################################
-_SAVE_DATA = False
+_SAVE_DATA = True
 _LOAD_DATA = True 
 
 if _SAVE_DATA:
@@ -405,6 +403,8 @@ if _SAVE_DATA:
                     tPlanEnd  = 0
                     tPlanDqu  = deque()
                     NfailPlan = 0
+                    pNewStep  = False # Has a new step begun?
+                    pTryPlan  = False # Did we try to plan this step?
 
                     ### 4. Acting ###
                     Naction    = 0
@@ -435,6 +435,12 @@ if _SAVE_DATA:
                                 tStepDqu.append( tStepEnd - tStepBgn )
                             tStepBgn   = dtmT
                             tSearchBgn = dtmT
+                            
+                            # WARNING: THIS SMELLS
+                            if pNewStep and (not pTryPlan):
+                                NfailFind += 1
+                            pNewStep = True
+                            pTryPlan = False
 
                         if "END: Phase 1" in dtmMsg:
                             tSearchEnd = dtmT
@@ -447,15 +453,16 @@ if _SAVE_DATA:
                             tGroundBgn = dtmT
 
                         if "Conditions Grounded" in dtmMsg:
-                            symSet   = set([])
-                            for item in dtmDat:
-                                if item[0] == "GraspObj":
-                                    symSet.add( item[1] )
+                            pass
+                            # symSet   = set([])
+                            # for item in dtmDat:
+                            #     if item[0] == "GraspObj":
+                            #         symSet.add( item[1] )
 
-                            if len( symSet ) < 3:
-                                # print( symSet ) # It's all or nothing, it seems
-                                # print( dtmDat )
-                                NfailFind += 1
+                            # if len( symSet ) < 3:
+                            #     # print( symSet ) # It's all or nothing, it seems
+                            #     # print( dtmDat )
+                            #     NfailFind += 1
 
                         if "END: Phase 2" in dtmMsg:
                             tGroundEnd = dtmT
@@ -472,6 +479,9 @@ if _SAVE_DATA:
                         if "BGN: Phase 3" in dtmMsg:
                             Nplan += 1
                             tPlanBgn = dtmT
+                            if pNewStep:
+                                pNewStep = False
+                                pTryPlan = True
 
                         if "Planning Failure" in dtmMsg:
                             NfailPlan += 1
@@ -529,6 +539,7 @@ if _SAVE_DATA:
                     if not end:
                         resEp = 0
                         print( f"FAILURE" )
+                        
 
                     ### Steps ###
                     results["Nstep"].append( Nstep )
