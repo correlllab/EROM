@@ -51,159 +51,33 @@ def copy_observations( obsLst : list[SimBlock] ):
         rtnLst.append( obs.copy() )
     return list( rtnLst )
 
-########## EXPERIMENTAL DATA #######################################################################
-"""
-### Makespan Distribution [Steps], RGB ###
-	KC-KP
-	Mean: ___ 3.0
-	Median: _ 3.0
-	Std.Dev.: 0.0
-	SC-KP
-	Mean: ___ 9.666666666666666
-	Median: _ 8.0
-	Std.Dev.: 6.882229243862731
-	KC-SP
-	Mean: ___ 11.0
-	Median: _ 7.0
-	Std.Dev.: 7.419746058925964
-	SC-SP
-	Mean: ___ 11.45
-	Median: _ 9.0
-	Std.Dev.: 8.570151690606183
-
-### Makespan Distribution [Time], RGB ###
-	KC-KP
-	Mean: ___ 451.8967197418213
-	Median: _ 446.1805534362793
-	Std.Dev.: 56.51808618172577
-	SC-KP
-	Mean: ___ 1090.7812630534172
-	Median: _ 873.0658189058304
-	Std.Dev.: 677.1761763595428
-	KC-SP
-	Mean: ___ 1378.7196902224891
-	Median: _ 988.5193696022034
-	Std.Dev.: 1117.6213611473825
-	SC-SP
-	Mean: ___ 1117.5333013032612
-	Median: _ 982.4180154800415
-	Std.Dev.: 677.8997286287095
-
-### Makespan Distribution [Steps], RBW ###
-	KC-KP
-	Mean: ___ 3.1363636363636362
-	Median: _ 3.0
-	Std.Dev.: 0.6248966856757964
-	SC-KP
-	Mean: ___ 9.555555555555555
-	Median: _ 7.0
-	Std.Dev.: 6.693464658590681
-	KC-SP
-	Mean: ___ 6.6
-	Median: _ 5.0
-	Std.Dev.: 4.768647607026546
-	SC-SP
-	Mean: ___ 10.65
-	Median: _ 8.0
-	Std.Dev.: 7.491828882188915
-
-### Makespan Distribution [Time], RBW ###
-	KC-KP
-	Mean: ___ 391.08244509924026
-	Median: _ 377.42189955711365
-	Std.Dev.: 42.62549141327943
-	SC-KP
-	Mean: ___ 1772.619768301646
-	Median: _ 1249.6555206775665
-	Std.Dev.: 1268.537725692636
-	KC-SP
-	Mean: ___ 1080.037369602605
-	Median: _ 933.0967352390289
-	Std.Dev.: 673.8784369834951
-	SC-SP
-	Mean: ___ 1837.397778570652
-	Median: _ 1427.0049859285355
-	Std.Dev.: 1509.0870768442205
-"""
 
 
 ########## HELPER FUNCTIONS ########################################################################
 _STATS_PATH = "data/allData.txt"
-_STATS_DICT = dict()
+_STATS_DICT : dict[str,dict[str,dict]] = dict()
 with open( _STATS_PATH, 'r' ) as f:
     _STATS_DICT = json.load( f )
 _VERBOSE = False
 _NAMES   = ["A","B","C",]
-_EXP_PROBS_TIMES = {
-    "RGB": {
-        "KC-KP" : {  
-            "ActionFailure" :  0.00,  
-            "planFailure"   :  0.00,  
-            "searchFailure" :  0.00,  
-            "classConfuse"  :  0.00,  
-            "t_search"      : 97.85,  
-            "t_action"      : 18.72,  
-        },
-        "SC-KP" : {  
-            "ActionFailure" :  0.1060,  
-            "planFailure"   :  0.2002,  
-            "searchFailure" :  0.0508,  
-            "classConfuse"  :  0.0573,  
-            "t_search"      : 99.55,  
-            "t_action"      : 13.73,  
-        },
-        "KC-SP" : {  
-            "ActionFailure" :  0.1439,  
-            "planFailure"   :  0.2589,  
-            "searchFailure" :  0.0464,  
-            "classConfuse"  :  0.0483,  
-            "t_search"      : 92.71,  
-            "t_action"      : 14.75,  
-        },
-        "SC-SP" : {  
-            "ActionFailure" :  0.2549,  
-            "planFailure"   :  0.1617,  
-            "searchFailure" :  0.0035,  
-            "classConfuse"  :  0.0598,  
-            "t_search"      : 95.81,  
-            "t_action"      : 12.38,  
-        },
-    }, 
-    "RBW": {
-        "KC-KP" : {  
-            "ActionFailure" :  0.0152,  
-            "planFailure"   :  0.0076,  
-            "searchFailure" :  0.0032,  
-            "classConfuse"  :  0.00,  
-            "t_search"      : 83.43,  
-            "t_action"      : 21.01,  
-        },
-        "SC-KP" : {  
-            "ActionFailure" :   0.1614,  
-            "planFailure"   :   0.2396,  
-            "searchFailure" :   0.0670,  
-            "classConfuse"  :   0.0589,  
-            "t_search"      : 136.24,  
-            "t_action"      :  14.36,  
-        },
-        "KC-SP" : {  
-            "ActionFailure" :   0.0991,  
-            "planFailure"   :   0.2774,  
-            "searchFailure" :   0.1309,  
-            "classConfuse"  :   0.0932,  
-            "t_search"      : 125.68,  
-            "t_action"      :  14.54,  
-        },
-        "SC-SP" : {  
-            "ActionFailure" :   0.1692,  
-            "planFailure"   :   0.2764,  
-            "searchFailure" :   0.0744,  
-            "classConfuse"  :   0.0464,  
-            "t_search"      : 134.21,  
-            "t_action"      :  13.66,  
-        },
-    }
-}
+
+_EXP_PROBS_TIMES = dict()
+
+for problem in _STATS_DICT.keys():
+    _EXP_PROBS_TIMES[ problem ] = dict()
+    for scenario in _STATS_DICT[ problem ].keys():
+        _EXP_PROBS_TIMES[ problem ][ scenario ] = dict()
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["ActionFailure"] = np.mean( _STATS_DICT[ problem ][ scenario ]["rActFail" ] )
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["planFailure"  ] = np.mean( _STATS_DICT[ problem ][ scenario ]["rPlanFail"] )
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["searchFailure"] = np.mean( _STATS_DICT[ problem ][ scenario ]["rFindFail"] )
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["classConfuse" ] = np.mean( _STATS_DICT[ problem ][ scenario ]["rConfuse" ] )
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["t_search"     ] = np.mean( _STATS_DICT[ problem ][ scenario ]["tSearch"  ] )
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["t_action"     ] = np.mean( _STATS_DICT[ problem ][ scenario ]["tAct"     ] )
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["t_reset"      ] = np.mean( _STATS_DICT[ problem ][ scenario ]["tReset"   ] )
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["t_makespan"   ] = np.mean( _STATS_DICT[ problem ][ scenario ]["tEpisd"   ] )
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["N_steps"      ] = np.mean( _STATS_DICT[ problem ][ scenario ]["Nstep"    ] )
+        _EXP_PROBS_TIMES[ problem ][ scenario ]["r_success"    ] = np.mean( _STATS_DICT[ problem ][ scenario ]["rSuccess" ] )
+
 
 
 ########## TRANSITION MODEL ########################################################################
@@ -559,34 +433,6 @@ class Solver:
         return None
     
 
-    def p_fact_collide( self, qPose, facts ):
-        """ Will the `q` collide with any of the current `facts` """
-        for fact in facts:
-            if (fact[0] == "GraspObj") and (euclidean_distance_between_symbols( qPose, fact[2] ) <= env_var("_ACCEPT_POSN_ERR")):
-                return True
-        return False
-
-
-    def get_random_table_pose( self, facts : list[list], scale = 1.000 ):
-        """ Get a table `ObjPose` that does not interfere with any of the current blocks """
-        hlfScl = scale / 2.0
-
-        def gen():
-            """ Return a Random Pose """
-            p = np.eye(4)
-            x = -hlfScl + scale*random()
-            y = -hlfScl + scale*random()
-            p[0:3,3] = [x,y,env_var("_BLOCK_SCALE")/2.0,]
-            return ObjPose(p)
-        
-        collide = True
-        rtnPose = None
-        while collide:
-            rtnPose = gen()
-            collide = self.p_fact_collide( rtnPose, facts )
-        return rtnPose
-    
-
     def p_goal_objects_present( self, obsL, goal ):
         """ Check that all the goal objects are present """
         gSet = set([g[1] for g in goal if g[0] == "GraspObj"])
@@ -654,6 +500,7 @@ _MAX_ALLOWED_STEPS = 30
 
 class FailModes( Enum ):
     """ Ways the planner can fail """
+    SEARCH   = "SEARCH FAILURE"
     PLANNING = "PLANNING FAILURE"
     ACTION   = "ACTION FAILURE"
     GOAL     = "GOAL OBJECTS NOT PRESENT"
@@ -666,6 +513,7 @@ class SimExec:
     def __init__( self, engParams : dict = None, roller : StatsRoller = None ):
         """ Set up the `Engine` and the `Solver` """
         self.obs    = list()
+        self.plan   = None
         self.oHist  = deque()
         self.facts  = list()
         self.engine = Engine( engParams )
@@ -703,13 +551,17 @@ class SimExec:
 
     def observe( self ):
         """ Simulate one run of the Perception Stack with possible confusion """
-        self.obs : list[GraspObj] = self.engine.noisy_sense()
+        if random() < self.engine.params["searchFailure"]:
+            self.obs = list()
+        else:
+            self.obs : list[GraspObj] = self.engine.noisy_sense()
         self.oHist.append( copy_observations( self.obs ) )
         self.result["conf"].append( self.n_changed_labels() )
 
         # self.result["tRun"] += self.engine.params["t_search"]
         if self.roller is not None:
-            self.result["tRun"] += self.roller.roll_from( "tObsTot" )
+            # self.result["tRun"] += self.roller.roll_from( "tObsTot" )
+            self.result["tRun"] += self.roller.roll_from( "tSearch" )
         else:
             # ASSUMPTION: SEARCH TIME KIND OF LOOKS LIKE A POISSON DISTRIBUTION
             self.result["tRun"] += np.random.poisson( self.engine.params["t_search"] )
@@ -723,7 +575,7 @@ class SimExec:
     def solve( self ):
         """ Get a plan given the current state """
         # self.plan = self.solver.solve( self.solver.ground_facts( self.engine .obss ), env_var("_GOAL_SIM") )
-        if random() < (self.engine.params["planFailure"] + self.engine.params["searchFailure"]):
+        if random() < (self.engine.params["planFailure"] ):
             self.plan = None
         else:    
             self.facts = self.solver.ground_facts( self.obs )
@@ -756,6 +608,10 @@ class SimExec:
                 print( "NO PLAN TO EXECUTE" )
 
 
+    def reset_exp( self ):
+        self.result["tRun"] += self.engine.params["t_reset"]
+
+
     def run_step( self ):
         """ Run entire cycle for one step of the plan """
         self.status = Status.RUNNING
@@ -764,11 +620,17 @@ class SimExec:
         self.Nstp += 1
         # 1. Observe 
         self.observe()
+        if not len( self.obs ):
+            self.status = Status.FAILURE
+            self.flMode = FailModes.SEARCH
+            self.reset_exp()
+            return self.status
         # 2. Plan 
         plan = self.solve()
         if plan is None:
             self.status = Status.FAILURE
             self.flMode = FailModes.GOAL
+            self.reset_exp()
             return self.status
         if not len( plan ):
             self.status = Status.SUCCESS
@@ -780,6 +642,7 @@ class SimExec:
                 print( f"\t{action}" )
         # 3. Execute One Action 
         self.exec_step()
+        self.reset_exp()
         return self.status
     
 
@@ -835,9 +698,12 @@ if __name__ == "__main__":
                 else:
                     stats["rFL"] += 1
             print( f"\n##### {problem}::{scenario} Statistics ##### " )
-            print( f"\t Makespan [s]: _ {stats['tMS']/_N_EPISODES:.2f}" )
-            print( f"\t Makespan Steps: {stats['sMS']/_N_EPISODES:.2f}" )
-            print( f"\t Success Rate: _ {stats['rSC']/_N_EPISODES:.2f}" )
+            print( f"\t Makespan [s]: _" + f"{stats['tMS']/_N_EPISODES:.2f}".rjust(8) )
+            print( f"\t Actual [s]: ___" + f"{_EXP_PROBS_TIMES[ problem ][ scenario ]['t_makespan']:.2f}".rjust(8) )
+            print( f"\t Makespan Steps:" + f"{stats['sMS']/_N_EPISODES:.2f}".rjust(8) )
+            print( f"\t Actual Steps: _" + f"{_EXP_PROBS_TIMES[ problem ][ scenario ]['N_steps']:.2f}".rjust(8) )
+            print( f"\t Success Rate: _" + f"{stats['rSC']/_N_EPISODES:.2f}".rjust(8) )
+            print( f"\t Actual Rate: __" + f"{_EXP_PROBS_TIMES[ problem ][ scenario ]['r_success']:.2f}".rjust(8) )
             print()
 
     

@@ -264,7 +264,7 @@ class SymbolHistory:
         return {"src" : src, "dst" : dst,}
     
 
-    def last_frame_confusion( self ):
+    def last_frame_confusion( self, actionSuccess = True ):
         """ Return a count of the unmoved blocks that have changed identities, Also return object count last step """
         # Init
         move = None
@@ -274,7 +274,7 @@ class SymbolHistory:
         prevObjs : list[GraspObj] =  self.hist[-2] if (len(self.hist) >= 2) else list()
 
         # Take action into account!
-        if move is not None:
+        if (move is not None) and actionSuccess:
             for objPrv in prevObjs:
                 if euclidean_distance_between_symbols( objPrv, move["src"] ) <= env_var("_ACCEPT_POSN_ERR"):
                     objPrv.pose = ObjPose( move["dst"] )
@@ -412,6 +412,7 @@ if _SAVE_DATA:
                     tActionEnd = 0
                     tActionDqu = deque()
                     NfailActn  = 0
+                    actionFail = False
 
                     ### 5. Resetting ###
                     Nreset    = 0
@@ -439,8 +440,10 @@ if _SAVE_DATA:
                             # WARNING: THIS SMELLS
                             if pNewStep and (not pTryPlan):
                                 NfailFind += 1
-                            pNewStep = True
-                            pTryPlan = False
+                                symHst.ingest_frame( list() )
+                            pNewStep   = True
+                            pTryPlan   = False
+                            actionFail = False
 
                         if "END: Phase 1" in dtmMsg:
                             tSearchEnd = dtmT
@@ -470,7 +473,7 @@ if _SAVE_DATA:
                             symbols_t = dtmDat[:]
                             symHst.ingest_frame( dtmDat[:] )
                             if len( symbols_t ):
-                                Nconf, Nfram = symHst.last_frame_confusion()
+                                Nconf, Nfram = symHst.last_frame_confusion( actionSuccess = (not actionFail) )
                                 totFound   += Nfram
                                 totConfuse += Nconf
 
@@ -498,9 +501,12 @@ if _SAVE_DATA:
                         if "BGN: Phase 4" in dtmMsg:
                             Naction   += 1
                             tActionBgn = dtmT
+                            actionFail = False
 
-                        if ("BT END" in dtmMsg) and ("fail" in f"{dtmMsg}".lower()):
-                            NfailActn += 1
+                        if ("BT END" in dtmMsg):
+                            if ("fail" in f"{dtmMsg}".lower()):
+                                NfailActn += 1
+                                actionFail = True
 
                         if "END: Phase 4" in dtmMsg:
                             tActionEnd = dtmT
@@ -539,7 +545,7 @@ if _SAVE_DATA:
                     if not end:
                         resEp = 0
                         print( f"FAILURE" )
-                        
+
 
                     ### Steps ###
                     results["Nstep"].append( Nstep )
