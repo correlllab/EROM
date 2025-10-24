@@ -585,7 +585,8 @@ class LUMP:
         self.qLimHi       = [ np.pi for _ in range(6)]
         self.qLimLo[5]   -= np.pi*0.75
         self.qLimHi[5]   += np.pi*0.75
-        self.load_cache()
+        if robot is not None:
+            self.load_cache()
 
 
     # def __del__( self ):

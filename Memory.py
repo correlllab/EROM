@@ -392,7 +392,7 @@ class Memory:
 
     ##### Begin / End ############################
 
-    def __init__( self, robot : UR5_Interface, suppressRecord : bool = False ):
+    def __init__( self, robot : UR5_Interface = None, suppressRecord : bool = False ):
         """ Set up for logging and tracking """
         self.record  = not bool( suppressRecord )
         if self.record:

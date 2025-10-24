@@ -4,11 +4,12 @@ from collections import deque
 
 import numpy as np
 
-import vispy
+import imageio, vispy
 # print(vispy.sys_info())
-# vispy.use('pyglet')
-# vispy.use('glfw')
+# vispy.use('jupyter_rfb')
+# vispy.use('pyqt6')
 from vispy import scene, gloo, visuals
+from vispy.gloo.util import _screenshot
 from vispy.visuals import transforms
 from vispy.visuals.collections import PointCollection
 from vispy.color import Color
@@ -38,27 +39,39 @@ def set_render_env():
 
 ########## DISPLAY WINDOW ##########################################################################
 
-def vispy_geo_list_window( geoLst : list, robotPose = None, xtra = None ):
-    canvas = scene.SceneCanvas( keys='interactive', size=(1000, 900), show=True )
+def vispy_geo_list_window( geoLst : list, robotPose = None, xtra = None, saveAs = "" ):
+    canvas = scene.SceneCanvas( keys='interactive', bgcolor='white', size=(1000, 900), show = (not len(saveAs)) )
     # Enable backface culling
-    gloo.set_state( cull_face = True )
+    # gloo.set_state( cull_face = True )
     # vispy.gloo.wrappers.set_state( cull_face = True )
     # vispy.gloo.wrappers.set_cull_face( mode = 'back' )
 
     # Set up a viewbox to display the cube with interactive arcball
     view = canvas.central_widget.add_view()
-    view.bgcolor = '#ffffff'
+    # view.bgcolor = '#ffffff'
 
-    view.camera = scene.ArcballCamera() #'arcball'
-    view.camera.up = 'z' #np.array( [0.0, 0.0, 1.0] )
-    view.camera.center = np.array([
-        env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
-        env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, 
-        0.0,
-    ])
-    view.camera.distance = 0.75
+    if not len( saveAs ):
+        view.bgcolor = '#ffffff'
+        view.camera = scene.ArcballCamera() #'arcball'
+        view.camera.up = 'z' #np.array( [0.0, 0.0, 1.0] )
+        view.camera.center = np.array([
+            env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
+            env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, 
+            0.0,
+        ])
+        view.camera.distance = 0.75
+        view.padding = 100
+    else:
+        view.camera = 'arcball'
+        view.camera.up = '+z' #np.array( [0.0, 0.0, 1.0] )
+        view.camera.center = np.array([
+            env_var("_MIN_X_OFFSET") + env_var("_X_WRK_SPAN")/2.0, 
+            env_var("_MIN_Y_OFFSET") + env_var("_Y_WRK_SPAN")/2.0, 
+            0.0,
+        ])
+        view.camera.set_range(x=[-3, 3])
 
-    view.padding = 100
+    
     view.add( scene.visuals.XYZAxis() )
 
     def add_pose( pose ):
@@ -87,7 +100,17 @@ def vispy_geo_list_window( geoLst : list, robotPose = None, xtra = None ):
     for geo in geoLst:
         view.add( geo )
     
-    canvas.app.run()
+    if len( saveAs ):
+        im = canvas.render( alpha = False )
+        imGL = _screenshot()
+        print( type(imGL) )
+        print( imGL.shape )
+        print( dir(imGL) )
+        # image_uint8 = (im * 255).astype(np.uint8)
+        imageio.imwrite( saveAs, im )
+        return im
+    else:
+        canvas.app.run()
 
 
 
@@ -506,7 +529,7 @@ def scan_list_geo( objs : list[GraspObj], noTable = True ):
 
 ########## RENDER MEMORY ###########################################################################
 
-def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = None, robotPose = None, xtra = None ):
+def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = None, robotPose = None, xtra = None, saveAs = "" ):
     """ Render the memory """
     if objs is not None:
         objLst       = reading_list_geo( objs )
@@ -518,13 +541,13 @@ def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = Non
         objLst.extend( symbol_list_geo( syms, noTable = (not missingTable) ) )
     if removed is not None:
         objLst.extend( target_list_geo( removed ) )
-    vispy_geo_list_window( objLst, robotPose, xtra )
+    return vispy_geo_list_window( objLst, robotPose, xtra, saveAs )
 
 
-def render_scan_list( objs : list[GraspObj], robotPose = None ):
+def render_scan_list( objs : list[GraspObj], robotPose = None, saveAs = "" ):
     """ Render the memory """
     objLst = scan_list_geo( objs, noTable = False )
-    vispy_geo_list_window( objLst, robotPose )
+    vispy_geo_list_window( objLst, robotPose, saveAs = saveAs )
 
 
 

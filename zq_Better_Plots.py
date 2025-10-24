@@ -63,7 +63,6 @@ import matplotlib.pyplot as plt
 
 
 _TITLE_FONT_SIZE = 13
-_TITLE_SMOL_SIZE = 10
 _N_TRIALS        = 20
 _TIGHT_MARGIN    =  0.05
 
@@ -116,16 +115,6 @@ def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "outpu
     if savefig:
         plt.savefig( fName )
         return plt.gca()
-
-
-def p_str_has_any( string, qLst, cap = False ):
-    """ Return True if `string` contains any member of `qLst` """
-    for q in qLst:
-        if cap and (q in string):
-            return True
-        elif (not cap) and (f"{q}".lower() in f"{string}".lower()):
-            return True
-    return False
 
 
 def filter_series( series, stdFactor = 2.0 ):
@@ -245,23 +234,34 @@ class SymbolHistory:
         self.plns.append( deepcopy( plan ) )
 
 
+    def ingest_empty( self ):
+        """ Something bad happened! """
+        self.ingest_frame( list() )
+        self.ingest_plan( list() )
+
+
     @staticmethod
-    def action_2_move( action : dict[str,list[str]] ):
+    def action_2_move( action : dict[str,list[str]] = None ):
         """ Express the action as a move from one pose to another """
+        if action is None:
+            return None
         if 'next' in action:
             seq = action['next']
         elif 'plan' in action:
             seq = action['plan'][:4]
         else:
             return None
-        src = np.eye(4)
-        dst = np.eye(4)
+        src = None
+        dst = None
         for bhv in seq:
             if "Pick" in bhv[:10]:
                 src = extract_pose_from_str( bhv )
             elif ("Place" in bhv[:10]) or ("Stack" in bhv[:10]):
                 dst = extract_pose_from_str( bhv )
-        return {"src" : src, "dst" : dst,}
+        if (src is not None) and (dst is not None):
+            return {"src" : src, "dst" : dst,}
+        else:
+            return None
     
 
     def last_frame_confusion( self, actionSuccess = True ):
@@ -440,7 +440,7 @@ if _SAVE_DATA:
                             # WARNING: THIS SMELLS
                             if pNewStep and (not pTryPlan):
                                 NfailFind += 1
-                                symHst.ingest_frame( list() )
+                                symHst.ingest_empty()
                             pNewStep   = True
                             pTryPlan   = False
                             actionFail = False
