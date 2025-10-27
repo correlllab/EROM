@@ -2,6 +2,7 @@ import os, pickle, time, subprocess, math
 now = time.time 
 from collections import deque, defaultdict
 from datetime import datetime
+from copy import deepcopy
 
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
@@ -404,3 +405,83 @@ class PoseCheater:
         self.symbols.append( rtnSym )
         return rtnSym
         
+
+
+########## GROUND TRUTH EXTRACTOR ##################################################################
+
+##### Block Masks ######################################################### 
+
+def red_block_mask( img : np.ndarray ) -> np.ndarray:
+    """ Return a mask that segments the Red Block """
+    pass
+
+
+def blu_block_mask( img : np.ndarray ) -> np.ndarray:
+    """ Return a mask that segments the Blue Block """
+    pass
+
+
+def grn_block_mask( img : np.ndarray ) -> np.ndarray:
+    """ Return a mask that segments the Green Block """
+    pass
+
+
+def blk_block_mask( img : np.ndarray ) -> np.ndarray:
+    """ Return a mask that segments the Black Block """
+    pass
+
+
+def wht_block_mask( img : np.ndarray ) -> np.ndarray:
+    """ Return a mask that segments the White Block """
+    pass
+
+
+
+##### "Ground Truth" Tracker ############################################## 
+
+class OCV_State_Tracker:
+    """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
+    def __init__( self ):
+        """ Set up tracking """
+        self.scenes  = deque() # Sequence of reconstruction data
+        self.states  = deque() # Sequence of States
+        self.changes = deque() # Sequence of Transitions
+        self.current = dict() #- All data relating to the current state
+
+    def new_scene( self ):
+        """ Init Empty State Reconstruction """
+        if len( self.current ):
+            self.scenes.append( deepcopy( self.current ) )
+        self.current = {
+            "???": None,
+        }
+
+
+    def mask_to_ray( self ):
+        # FIXME: IS THERE RAY DATA ALREADY THERE?????????? COMPARE ???????
+        pass
+
+
+    def process_observation( self, obsData, goalLabels : list[str] ):
+        """ Transform observation data into information about the current state """
+        pass
+
+
+    def infer_current_state( self ) -> list[GraspObj]:
+        """ Return a list of blocks, classes, and poses """
+        pass
+
+
+    def compare_states( self, ocvState : list[GraspObj], eromState : list[GraspObj] ):
+        """ Return a list of object-wise differences between the two states """
+        pass
+
+
+    def episode_report( self, epPklPath : str ):
+        """ Write a file that describes the results of each step of the episode, Prefer plain JSON """
+        pass
+
+
+    def diagnose_diff( self ):
+        # FIXME: TRY TO DISCERN WHY THE DIFFERENCES OCCURRED????
+        pass
