@@ -441,6 +441,7 @@ def wht_block_mask( img : np.ndarray ) -> np.ndarray:
 
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
+    # NOTE: I NEVER DID ANY GROUND TRUTH ANNOTATION OF EXPERIMENTAL DATA, SO I HAVE TO BUILD IT!
     def __init__( self ):
         """ Set up tracking """
         self.scenes  = deque() # Sequence of reconstruction data
@@ -453,7 +454,18 @@ class OCV_State_Tracker:
         if len( self.current ):
             self.scenes.append( deepcopy( self.current ) )
         self.current = {
-            "???": None,
+            "images": dict(),
+            "PCDs"  : dict(),
+        }
+
+    @staticmethod
+    def make_ray() -> dict:
+        return {
+            "camPose": None,
+            "imageID": None,
+            "label"  : None,
+            "rayOrg" : None,
+            "rayDir" : None,
         }
 
 
