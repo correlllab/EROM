@@ -559,25 +559,6 @@ class OCV_State_Tracker:
         return clstMx      
 
 
-
-
-    def TEST_FUNC( self, blockName : str, imgArr : np.ndarray ):
-        """ Search for the block, I guess! """
-        print( f"Attempt to segment {blockName}" )
-        blcMsk = self.maskFunc[ blockName ]( imgArr )
-        plt.figure()
-        plt.imshow( blcMsk )
-        print( f"Obtained a mask w dims: {blcMsk.shape}" )
-        clstrs = cluster_mask_arr( blcMsk )
-        print( f"There are {len(clstrs)} clusters" )
-        for i, clstr in enumerate( clstrs ):
-            print( np.count_nonzero( clstr ), get_nonzero_mask_bbox( clstr ) )
-            plt.figure()
-            plt.imshow( clstr )
-            if i >= 10:
-                break
-
-
     def new_scene( self ):
         """ Init Empty State Reconstruction """
         if len( self.current ):
