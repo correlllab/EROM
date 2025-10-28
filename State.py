@@ -13,8 +13,11 @@ from skimage.measure import label # python3.10 -m pip install scikit-image --use
 import cv2
 
 from utils import deep_copy_memory_list, snap_z_to_nearest_block_unit_above_zero
-from aspire.env_config import env_var
+from aspire.env_config import env_var, set_camera_env, set_object_env
 from aspire.symbols import ( ObjPose, GraspObj, euclidean_distance_between_symbols, extract_pose_as_homog )
+
+set_object_env()
+set_camera_env()
 
 ########## LOGGER ##################################################################################
 
@@ -417,7 +420,7 @@ def red_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Red Block """
     # Convert BGR to HSV
     hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
-    lower     = np.array( [ 85, 100, 100,] )  # Example: lower bound for RED
+    lower     = np.array( [120, 120, 120,] )  # Example: lower bound for RED
     upper     = np.array( [255, 255, 255,] ) # Example: upper bound for RED
     # Create a mask for blue color
     return cv2.inRange( hsv_image, lower, upper)
@@ -463,46 +466,6 @@ def wht_block_mask( img : np.ndarray ) -> np.ndarray:
     return cv2.inRange( hsv_image, lower, upper)
 
 
-from scipy.ndimage import convolve
-
-
-def flood_fill_positive_thresh_mask( arr2D : np.ndarray, start : list[int], thresh = 0.005 ):
-    """ WARNING: PROBABLY SLOW """
-    kernel   = [[-1,-1,],
-                [ 0,-1,],
-                [ 1,-1,],
-                [-1, 1,],
-                [ 0, 1,],
-                [ 1, 1,],
-                [-1, 0,],
-                [ 1, 0,],]
-    rtnMsk   = np.zeros( arr2D.shape )
-    frontier = deque([start,])
-    visited  = set([])
-    Mrows    = arr2D.shape[0]
-    Ncols    = arr2D.shape[1]
-    # DFS search for kernel pixels above `thresh`
-    while len( frontier ):
-        loc  = frontier.popleft()
-        i, j = loc
-        if not loc in visited:
-            visited.add( loc )
-            if arr2D[i,j] >= thresh:
-                rtnMsk[i,j] = 1
-                for k in kernel:
-                    addr = (i+k[0], j+k[1],)
-                    if (addr[0] < 0) or (addr[0] >= Mrows):
-                        continue
-                    if (addr[1] < 0) or (addr[1] >= Ncols):
-                        continue
-                    if not addr in visited:
-                        frontier.append( addr )       
-    return rtnMsk 
-
-
-
-
-
 def cluster_mask_arr( arrMsk : np.ndarray ):
     """ Get cluster masks """
     clusters = deque()
@@ -514,27 +477,23 @@ def cluster_mask_arr( arrMsk : np.ndarray ):
     clusters = list( clusters )
     clusters.sort( key = lambda x: np.count_nonzero(x), reverse = True )
     return clusters
-    # kernel = np.array([[1, 1, 1],
-    #                    [1, 0, 1],
-    #                    [1, 1, 1]])
-
-    # # Convolve the binary array with the kernel
-    # # This will sum the values of the neighbors for each pixel
-    # neighbor_sums = convolve( arr.astype(float), kernel, mode='constant', cval=0.0)
-
-    # # Create a mask where the sum of neighbors is exactly 4
-    # nghbrMask = (neighbor_sums >= 4)
-    # clusters  = deque()
-
-    # M = nghbrMask.shape[0]
-    # N = nghbrMask.shape[1]
-
-    # def p_in_cluster():
-    #     nonlocal clusters
 
 
+def get_nonzero_mask_bbox( mask ):
+    """ Calculates the bounding box of non-zero elements in a 2D NumPy array (mask)."""
+    # Get the row and column indices of non-zero elements
+    rows, cols = np.where( mask )
 
-# def cluster_bbox(  )
+    if rows.size == 0:  # No non-zero elements found
+        return None
+
+    # Calculate the minimum and maximum row and column indices
+    y_min = int( np.min( rows ) )
+    y_max = int( np.max( rows ) )
+    x_min = int( np.min( cols ) )
+    x_max = int( np.max( cols ) )
+
+    return [[y_min, x_min,], [y_max, x_max,]]
 
 
 
@@ -559,6 +518,49 @@ class OCV_State_Tracker:
         }
 
 
+    def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray ):
+        """ Search for the block, I guess! """
+        _CLUST_MIN = 1000
+        _DIST_MIN  =    0.070
+        _DIST_MAX  =    1.250
+        _SCAL_MIN =    0.500
+        _SCAL_MAX  = _SCAL_MIN + 1.0 
+        blcMsk = self.maskFunc[ blockName ]( imgArr )
+        clstrs = cluster_mask_arr( blcMsk )
+        pixMax = -6e10
+        clstMx = None
+        print( depArr[0,0] )
+        for clstr in clstrs:
+            # Test 1: Sufficient Points 
+            Npix_i = np.count_nonzero( clstr )
+            print( f"Block mask of {Npix_i} points!" )
+            if Npix_i < _CLUST_MIN:
+                break # We sorted clusters descending
+            # Test 2: Reasonable distance
+            depMsk_i = depArr[clstr].sum() / np.count_nonzero( depArr[clstr] )
+            print( f"Block mask is {depMsk_i} away!" )
+            if (depMsk_i < _DIST_MIN) or (depMsk_i > _DIST_MAX):
+                continue
+            # Test 3: Expected size
+            bbox_i = get_nonzero_mask_bbox( clstr )
+            span_i = [bbox_i[1][0]-bbox_i[0][0], bbox_i[1][1]-bbox_i[0][1],]
+            print( f"Span is {span_i}" )
+            angl_i = [ np.deg2rad( (span_i[0]/imgArr.shape[0])*env_var("_D405_FOV_V_DEG") ),
+                       np.deg2rad( (span_i[1]/imgArr.shape[1])*env_var("_D405_FOV_H_DEG") ), ] 
+            print( f"Arc is {angl_i}" )
+            dims_i = [ 2.0 * np.tan( angl_i[0]/2.0 ) * depMsk_i, 
+                       2.0 * np.tan( angl_i[1]/2.0 ) * depMsk_i, ] 
+            scal_i = np.array( dims_i ) / env_var("_BLOCK_SCALE")
+            print( f"Scale is {scal_i}" )
+            if (_SCAL_MIN <= scal_i[0] <= _SCAL_MAX) and (_SCAL_MIN <= scal_i[1] <= _SCAL_MAX):
+                if Npix_i > pixMax:
+                    pixMax = Npix_i
+                    clstMx = clstr
+        return clstMx      
+
+
+
+
     def TEST_FUNC( self, blockName : str, imgArr : np.ndarray ):
         """ Search for the block, I guess! """
         print( f"Attempt to segment {blockName}" )
@@ -569,7 +571,7 @@ class OCV_State_Tracker:
         clstrs = cluster_mask_arr( blcMsk )
         print( f"There are {len(clstrs)} clusters" )
         for i, clstr in enumerate( clstrs ):
-            print( np.count_nonzero( clstr ) )
+            print( np.count_nonzero( clstr ), get_nonzero_mask_bbox( clstr ) )
             plt.figure()
             plt.imshow( clstr )
             if i >= 10:
