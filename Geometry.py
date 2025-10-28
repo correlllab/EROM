@@ -9,6 +9,27 @@ from aspire.env_config import env_var
 from aspire.symbols import ( GraspObj, extract_pose_as_homog, )
 
 
+########## 3D GEOMETRY #############################################################################
+
+def closest_ray_points( A_org, A_dir, B_org, B_dir ):
+    """ Return (closest on ray A to ray B), (closest on ray B to ray A), and their mean point """
+    # https://palitri.com/vault/stuff/maths/Rays%20closest%20point.pdf
+    c  = np.subtract( B_org, A_org )
+    aa = np.dot( A_dir, A_dir )
+    bb = np.dot( B_dir, B_dir )
+    ab = np.dot( A_dir, B_dir )
+    ac = np.dot( A_dir, c     )
+    bc = np.dot( B_dir, c     ) 
+    dv = (aa*bb-ab*ab)
+    if abs( dv ) < 0.001:
+        return None, None, None
+    fA = (-ab*bc + ac*bb) / dv
+    fB = ( ab*ac - bc*aa) / dv
+    pA = np.add( A_org, np.multiply( A_dir, fA ) )
+    pB = np.add( B_org, np.multiply( B_dir, fB ) )
+    return pA, pB, (pA + pB)/2.0
+
+
 
 ########## SENSOR PLACEMENT ########################################################################
 

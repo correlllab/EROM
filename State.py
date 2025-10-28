@@ -3,6 +3,7 @@ now = time.time
 from collections import deque, defaultdict
 from datetime import datetime
 from copy import deepcopy
+from random import choice
 
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
@@ -13,11 +14,18 @@ from skimage.measure import label # python3.10 -m pip install scikit-image --use
 import cv2
 
 from utils import deep_copy_memory_list, snap_z_to_nearest_block_unit_above_zero
+from OWLv2_Segment import mask_ray_realsense
+from homog_utils import posn_from_xform, diff_mag
+from Geometry import closest_ray_points
+
 from aspire.env_config import env_var, set_camera_env, set_object_env
 from aspire.symbols import ( ObjPose, GraspObj, euclidean_distance_between_symbols, extract_pose_as_homog )
 
+
 set_object_env()
 set_camera_env()
+
+
 
 ########## LOGGER ##################################################################################
 
@@ -479,7 +487,7 @@ def cluster_mask_arr( arrMsk : np.ndarray ):
     return clusters
 
 
-def get_nonzero_mask_bbox( mask ):
+def get_nonzero_mask_bbox( mask, flatXY = False ):
     """ Calculates the bounding box of non-zero elements in a 2D NumPy array (mask)."""
     # Get the row and column indices of non-zero elements
     rows, cols = np.where( mask )
@@ -493,8 +501,19 @@ def get_nonzero_mask_bbox( mask ):
     x_min = int( np.min( cols ) )
     x_max = int( np.max( cols ) )
 
-    return [[y_min, x_min,], [y_max, x_max,]]
+    if flatXY:
+        # This is how `mask_ray_realsense` expects it
+        return [ x_min, y_min, x_max, y_max,]
+    else:
+        # This is how Gemini ordered it
+        return [ [y_min, x_min,], [y_max, x_max,],]
 
+
+def vec3f_as_column( posn ):
+    """ Get the position as a 1-scale column vector """
+    rtnCol = np.ones( (4,1,) )
+    rtnCol[:3,0] = posn
+    return rtnCol
 
 
 ##### "Ground Truth" Tracker ############################################## 
@@ -518,12 +537,12 @@ class OCV_State_Tracker:
         }
 
 
-    def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray ):
+    def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray, imgID : str = None ):
         """ Search for the block, I guess! """
         _CLUST_MIN = 1000
         _DIST_MIN  =    0.070
         _DIST_MAX  =    1.250
-        _SCAL_MIN =    0.500
+        _SCAL_MIN =     0.500
         _SCAL_MAX  = _SCAL_MIN + 1.0 
         blcMsk = self.maskFunc[ blockName ]( imgArr )
         clstrs = cluster_mask_arr( blcMsk )
@@ -537,12 +556,16 @@ class OCV_State_Tracker:
             if Npix_i < _CLUST_MIN:
                 break # We sorted clusters descending
             # Test 2: Reasonable distance
-            depMsk_i = depArr[clstr].sum() / np.count_nonzero( depArr[clstr] )
+            count_i  = np.count_nonzero( depArr[clstr] )
+            if count_i == 0:
+                continue
+            depMsk_i = depArr[clstr].sum() / count_i
             print( f"Block mask is {depMsk_i} away!" )
             if (depMsk_i < _DIST_MIN) or (depMsk_i > _DIST_MAX):
                 continue
             # Test 3: Expected size
             bbox_i = get_nonzero_mask_bbox( clstr )
+            # span_i = [bbox_i[2]-bbox_i[0], bbox_i[3]-bbox_i[1],]
             span_i = [bbox_i[1][0]-bbox_i[0][0], bbox_i[1][1]-bbox_i[0][1],]
             print( f"Span is {span_i}" )
             angl_i = [ np.deg2rad( (span_i[0]/imgArr.shape[0])*env_var("_D405_FOV_V_DEG") ),
@@ -551,7 +574,7 @@ class OCV_State_Tracker:
             dims_i = [ 2.0 * np.tan( angl_i[0]/2.0 ) * depMsk_i, 
                        2.0 * np.tan( angl_i[1]/2.0 ) * depMsk_i, ] 
             scal_i = np.array( dims_i ) / env_var("_BLOCK_SCALE")
-            print( f"Scale is {scal_i}" )
+            print( f"Scale is {scal_i} * {env_var('_BLOCK_SCALE')}" )
             if (_SCAL_MIN <= scal_i[0] <= _SCAL_MAX) and (_SCAL_MIN <= scal_i[1] <= _SCAL_MAX):
                 if Npix_i > pixMax:
                     pixMax = Npix_i
@@ -564,13 +587,16 @@ class OCV_State_Tracker:
         if len( self.current ):
             self.scenes.append( deepcopy( self.current ) )
         self.current = {
-            "images": dict(),
-            "PCDs"  : dict(),
+            "labels": list(),
+            "image" : dict(),
+            "depth" : dict(),
+            "rays"  : deque()
         }
 
 
     @staticmethod
     def make_ray() -> dict:
+        """ Create a container for a ray """
         return {
             "camPose": None,
             "imageID": None,
@@ -580,19 +606,130 @@ class OCV_State_Tracker:
         }
 
 
-    def mask_to_ray( self ):
-        # FIXME: IS THERE RAY DATA ALREADY THERE?????????? COMPARE ???????
-        pass
-
-
-    def process_observation( self, obsData, goalLabels : list[str] ):
+    def process_observation_data( self, obsData : dict, goalLabels : list[str], camPose : np.ndarray = None ):
         """ Transform observation data into information about the current state """
-        pass
+        if camPose is None:
+            camPose = np.eye(4)
+        inpt = obsData['input']
+        iKey = choice( list( inpt.keys() ) )
+        imag = inpt[ iKey ]['image']
+        dpth = inpt[ iKey ]['depth']
+        self.current['image'][ iKey ] = deepcopy( imag )
+        self.current['depth'][ iKey ] = deepcopy( dpth )
+        Nadd = 0
+        for label in goalLabels:
+            res = self.find_block_mask( label, imag, dpth )
+            if res is not None:
+                self.current['labels'].append( label )
+                print( f"MASK FOUND for {label}!" )
+                ray_i  = OCV_State_Tracker.make_ray()
+                rayVec = mask_ray_realsense( get_nonzero_mask_bbox( res, flatXY = True ), res )
+                rayVec = np.dot( camPose, vec3f_as_column( rayVec ) ).reshape( (-1,) )[:3]
+                ray_i["camPose"] = camPose.copy()
+                ray_i["imageID"] = iKey
+                ray_i["label"  ] = f"{label}"
+                ray_i["rayOrg" ] = posn_from_xform( camPose )
+                ray_i["rayDir" ] = rayVec
+                self.current['rays'].append( ray_i )
+                Nadd += 1
+        print( f"\nAdded {Nadd} rays!\n\n" )
 
 
-    def infer_current_state( self ) -> list[GraspObj]:
-        """ Return a list of blocks, classes, and poses """
-        pass
+    def process_ray_obs( self ):
+        """ Stage 2: Process ray observations """
+        if not len( self.current ):
+            return None
+        _VERBOSE = 1
+        rtnGobs = deque()
+        centers = deque()
+        print( f"There are {len(self.current['rays'])} RAY observations" )
+
+        ### Local Helper Functions ###
+
+        def center_index( q ):
+            """ Find the index of the closest matching center """
+            nonlocal centers
+            rtnIdx = -5.5
+            dMin   = 6e10
+            for i, center in enumerate( centers ):
+                ctr  = center['point']
+                dSep = diff_mag( q, ctr )
+                if dSep < dMin:
+                    dMin = dSep
+                    if dSep <= env_var("_BLOCK_SCALE")*0.80:
+                        rtnIdx = i
+            return rtnIdx
+
+        ### For every pair of rays, Attempt to find an intersection ###
+
+        rayItm = list( self.current['rays'] )
+        Nrays  = len( self.current['rays'] )
+        crit_m = env_var("_BLOCK_SCALE")*1.50
+
+        for i in range( Nrays-1 ):
+            item_i = rayItm[i]
+            for j in range( i+1, Nrays ):
+                item_j = rayItm[j]
+
+                if item_i['label'] != item_j['label']:
+                    continue 
+
+                pnt_ij, pnt_ji, center = closest_ray_points( 
+                    item_i['rayOrg'], 
+                    item_i['rayDir'], 
+                    item_j['rayOrg'], 
+                    item_j['rayDir'], 
+                )
+                if center is None:
+                    print( "NO intersection!" )
+                    continue
+                elif (diff_mag( center, item_i['rayOrg'] ) <= env_var("_BLOCK_SCALE")*1.25) and (diff_mag( item_j['rayOrg'], center ) <= env_var("_BLOCK_SCALE")*1.25):
+                    print( "Intersection at ORIGIN!" )
+                    continue
+
+                if _VERBOSE:
+                    print( 
+                        [i,j,],
+                        item_i['rayOrg'], 
+                        item_i['rayDir'], 
+                        item_j['rayOrg'], 
+                        item_j['rayDir']
+                    )
+
+                if diff_mag( pnt_ij, pnt_ji ) <= crit_m:
+                    print( f"Log center {center} for separation {diff_mag( pnt_ij, pnt_ji )}" )
+                    idx_ij  = center_index( center )
+                    pair_ij = [item_i, item_j,]
+                    if idx_ij > -1:
+                        centers[ idx_ij ]['point'] = np.add( centers[ idx_ij ]['point'], center ) / 2.0
+                        centers[ idx_ij ]['obs'].extend( pair_ij )
+                    else:
+                        centers.append( {
+                            'point' : np.array( center ),
+                            'obs'   : deque( pair_ij ),
+                            'label' : item_i['label'],
+                        } )
+                else:
+                    print( f"NO intersection for separation of {diff_mag( pnt_ij, pnt_ji )}/{crit_m}" )
+
+        ### Construct an object for each intersection ###
+        
+        print( f"There {len(centers)} loci to evaluate!" )
+        for ctrDct in centers:
+            pnt_i    = ctrDct['point']
+            objPose  = np.eye(4)
+            objPose[0:3,3] = pnt_i
+            obsDqu_i = ctrDct['obs']
+            if len( obsDqu_i ):
+                # Create reading
+                rtnObj = GraspObj( 
+                    label  = ctrDct['label'], 
+                    pose   = ObjPose( objPose ), 
+                    count  = len( obsDqu_i ), 
+                )
+                rtnGobs.append( rtnObj )
+
+        return list( rtnGobs )
 
 
     def compare_states( self, ocvState : list[GraspObj], eromState : list[GraspObj] ):
