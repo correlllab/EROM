@@ -9,6 +9,8 @@ from matplotlib.axes import Axes
 import matplotlib.patches as patches
 
 import numpy as np
+from skimage.measure import label # python3.10 -m pip install scikit-image --user
+import cv2
 
 from utils import deep_copy_memory_list, snap_z_to_nearest_block_unit_above_zero
 from aspire.env_config import env_var
@@ -413,27 +415,126 @@ class PoseCheater:
 
 def red_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Red Block """
-    pass
+    # Convert BGR to HSV
+    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
+    lower     = np.array( [ 85, 100, 100,] )  # Example: lower bound for RED
+    upper     = np.array( [255, 255, 255,] ) # Example: upper bound for RED
+    # Create a mask for blue color
+    return cv2.inRange( hsv_image, lower, upper)
 
 
 def blu_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Blue Block """
-    pass
+    # Convert BGR to HSV
+    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
+    lower     = np.array( [200/2, 150,  37,]) # Example: lower bound for BLUE
+    upper     = np.array( [255/2, 255, 255,]) # Example: upper bound for BLUE
+    # Create a mask for blue color
+    return cv2.inRange( hsv_image, lower, upper)
 
 
 def grn_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Green Block """
-    pass
+    # Convert BGR to HSV
+    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
+    lower     = np.array( [ 80/2, 150,  15,] ) # Example: lower bound for GREEN
+    upper     = np.array( [190/2, 255, 255,] ) # Example: upper bound for GREEN
+    # Create a mask for blue color
+    return cv2.inRange( hsv_image, lower, upper)
 
 
 def blk_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    pass
+    # Convert BGR to HSV
+    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
+    lower     = np.array( [  0,   0,  0,] ) # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
+    upper     = np.array( [180, 255, 62,] ) # Example: upper bound for BLACK
+    # Create a mask for blue color
+    return cv2.inRange( hsv_image, lower, upper)
 
 
 def wht_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the White Block """
-    pass
+    # Convert BGR to HSV
+    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
+    lower     = np.array( [  0,   0, 170,] ) # Example: lower bound for WHITE
+    upper     = np.array( [172, 111, 255,] ) # Example: upper bound for WHITE
+    # Create a mask for blue color
+    return cv2.inRange( hsv_image, lower, upper)
+
+
+from scipy.ndimage import convolve
+
+
+def flood_fill_positive_thresh_mask( arr2D : np.ndarray, start : list[int], thresh = 0.005 ):
+    """ WARNING: PROBABLY SLOW """
+    kernel   = [[-1,-1,],
+                [ 0,-1,],
+                [ 1,-1,],
+                [-1, 1,],
+                [ 0, 1,],
+                [ 1, 1,],
+                [-1, 0,],
+                [ 1, 0,],]
+    rtnMsk   = np.zeros( arr2D.shape )
+    frontier = deque([start,])
+    visited  = set([])
+    Mrows    = arr2D.shape[0]
+    Ncols    = arr2D.shape[1]
+    # DFS search for kernel pixels above `thresh`
+    while len( frontier ):
+        loc  = frontier.popleft()
+        i, j = loc
+        if not loc in visited:
+            visited.add( loc )
+            if arr2D[i,j] >= thresh:
+                rtnMsk[i,j] = 1
+                for k in kernel:
+                    addr = (i+k[0], j+k[1],)
+                    if (addr[0] < 0) or (addr[0] >= Mrows):
+                        continue
+                    if (addr[1] < 0) or (addr[1] >= Ncols):
+                        continue
+                    if not addr in visited:
+                        frontier.append( addr )       
+    return rtnMsk 
+
+
+
+
+
+def cluster_mask_arr( arrMsk : np.ndarray ):
+    """ Get cluster masks """
+    clusters = deque()
+    labeled_mask = label( arrMsk, connectivity=2)
+    for cluster_id in np.unique( labeled_mask ):
+        if cluster_id != 0:  # Exclude background
+            cluster_mask = ( labeled_mask == cluster_id)
+            clusters.append( cluster_mask )
+    clusters = list( clusters )
+    clusters.sort( key = lambda x: np.count_nonzero(x), reverse = True )
+    return clusters
+    # kernel = np.array([[1, 1, 1],
+    #                    [1, 0, 1],
+    #                    [1, 1, 1]])
+
+    # # Convolve the binary array with the kernel
+    # # This will sum the values of the neighbors for each pixel
+    # neighbor_sums = convolve( arr.astype(float), kernel, mode='constant', cval=0.0)
+
+    # # Create a mask where the sum of neighbors is exactly 4
+    # nghbrMask = (neighbor_sums >= 4)
+    # clusters  = deque()
+
+    # M = nghbrMask.shape[0]
+    # N = nghbrMask.shape[1]
+
+    # def p_in_cluster():
+    #     nonlocal clusters
+
+
+
+# def cluster_bbox(  )
 
 
 
@@ -444,10 +545,36 @@ class OCV_State_Tracker:
     # NOTE: I NEVER DID ANY GROUND TRUTH ANNOTATION OF EXPERIMENTAL DATA, SO I HAVE TO BUILD IT!
     def __init__( self ):
         """ Set up tracking """
-        self.scenes  = deque() # Sequence of reconstruction data
-        self.states  = deque() # Sequence of States
-        self.changes = deque() # Sequence of Transitions
-        self.current = dict() #- All data relating to the current state
+        self.names    = list() #- Names of the objects req'd to solve the problem
+        self.scenes   = deque() # Sequence of reconstruction data
+        self.states   = deque() # Sequence of States
+        self.changes  = deque() # Sequence of Transitions
+        self.current  = dict() #- All data relating to the current state
+        self.maskFunc = { # ----- Function lookup to segment out the blocks in the experiments
+            "redBlock": red_block_mask,
+            "grnBlock": grn_block_mask,
+            "bluBlock": blu_block_mask,
+            "blkBlock": blk_block_mask,
+            "whtBlock": wht_block_mask,
+        }
+
+
+    def TEST_FUNC( self, blockName : str, imgArr : np.ndarray ):
+        """ Search for the block, I guess! """
+        print( f"Attempt to segment {blockName}" )
+        blcMsk = self.maskFunc[ blockName ]( imgArr )
+        plt.figure()
+        plt.imshow( blcMsk )
+        print( f"Obtained a mask w dims: {blcMsk.shape}" )
+        clstrs = cluster_mask_arr( blcMsk )
+        print( f"There are {len(clstrs)} clusters" )
+        for i, clstr in enumerate( clstrs ):
+            print( np.count_nonzero( clstr ) )
+            plt.figure()
+            plt.imshow( clstr )
+            if i >= 10:
+                break
+
 
     def new_scene( self ):
         """ Init Empty State Reconstruction """
@@ -457,6 +584,7 @@ class OCV_State_Tracker:
             "images": dict(),
             "PCDs"  : dict(),
         }
+
 
     @staticmethod
     def make_ray() -> dict:
