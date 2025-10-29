@@ -575,10 +575,16 @@ def color_depth_to_pointcloud( color_image : np.ndarray, depth_image : np.ndarra
                                distortion_color = None, distortion_depth = None, mask : np.ndarray = None ):
     """ Convert RGB-D images to a point cloud, https://claude.ai/public/artifacts/53bc4d27-e2b8-4fd7-b36f-c55e0d442a85 """
 
+    print( color_image.shape )
+    print( depth_image.shape )
+
     # Mask if requested
     if mask is not None:
-        color_image = color_image[ mask ]
-        depth_image = depth_image[ mask ]
+        # 3. Expand the dimensions of the 2D mask to be compatible with the 3D array
+        # We add a new axis at the end to match the third dimension of array_3d
+        msk3 = mask[:, :, np.newaxis]
+        color_image = np.where( msk3, color_image, 0 ) # color_image[ mask ]
+        depth_image = np.where( mask, depth_image, 0 ) # depth_image[ mask ]
 
     # Parse intrinsics
     if isinstance( intrinsics, dict ):
@@ -596,7 +602,11 @@ def color_depth_to_pointcloud( color_image : np.ndarray, depth_image : np.ndarra
         cx = camera_matrix[0,2]
         cy = camera_matrix[1,2]
     
-    h, w = depth_image.shape
+    print( color_image.shape )
+    print( depth_image.shape )
+
+    h = depth_image.shape[0]
+    w = depth_image.shape[1]
     
     # Undistort images if distortion coefficients are provided
     if distortion_color is not None:
@@ -795,6 +805,7 @@ class OCV_State_Tracker:
             else:
                 self.current['symbols'][ lbl_i ] = obj_i.copy()
         print( f"Processed {len(self.current['objects'])} readings!" )
+        return list( self.current['symbols'].values() )
 
 
     def near_path( self, parentPath : str, suffix : str = "_OCV-State", EXT : str = "pkl" ):
