@@ -517,19 +517,21 @@ def vec3f_as_column( posn ):
 
 
 ##### "Ground Truth" Tracker ############################################## 
+from utils import JupyterPlotServer
 
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
     
-    _CLUST_MIN = 1000 # 500 # 1000
+    _CLUST_MIN = 500 # 500 # 1000
     _DIST_MIN  =    0.070
     _DIST_MAX  =    1.250
     _SCAL_MIN  =    0.500
     _SCAL_MAX  = _SCAL_MIN + 1.0 
-    _CRIT_M    = env_var("_BLOCK_SCALE") * 2.25 # 1.50 # 1.750
+    _CRIT_M    = env_var("_BLOCK_SCALE") * 1.50 # 1.50 # 1.750 # 2.25
 
     def __init__( self ):
         """ Set up tracking """
+        self.jps      = JupyterPlotServer()
         self.names    = list() #- Names of the objects req'd to solve the problem
         self.scenes   = deque() # Sequence of reconstruction data
         self.states   = deque() # Sequence of States
@@ -542,6 +544,7 @@ class OCV_State_Tracker:
             "blkBlock": blk_block_mask,
             "whtBlock": wht_block_mask,
         }
+        self.new_scene()
 
 
     def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray, imgID : str = None ):
@@ -624,8 +627,10 @@ class OCV_State_Tracker:
             if res is not None:
                 self.current['labels'].append( label )
                 print( f"MASK FOUND for {label}!" )
+                self.jps.arr_show( res )
                 ray_i  = OCV_State_Tracker.make_ray()
                 rayVec = mask_ray_realsense( get_nonzero_mask_bbox( res, flatXY = True ), res )
+                # rayVec = mask_ray_realsense( get_nonzero_mask_bbox( res, flatXY = True ) )
                 rayVec = np.dot( camPose, vec3f_as_column( rayVec ) ).reshape( (-1,) )[:3]
                 ray_i["camPose"] = camPose.copy()
                 ray_i["imageID"] = iKey
@@ -734,16 +739,17 @@ class OCV_State_Tracker:
         return list( rtnGobs )
 
 
-    def compare_states( self, ocvState : list[GraspObj], eromState : list[GraspObj] ):
-        """ Return a list of object-wise differences between the two states """
-        pass
+    def near_path( self, parentPath : str, suffix : str = "_OCV-State", EXT : str = "pkl" ):
+        """ A path similar to parent path, but with a suffix """
+        return parentPath.split('.')[0] + suffix + "." + EXT
 
 
-    def episode_report( self, epPklPath : str ):
-        """ Write a file that describes the results of each step of the episode, Prefer plain JSON """
-        pass
-
-
-    def diagnose_diff( self ):
-        # FIXME: TRY TO DISCERN WHY THE DIFFERENCES OCCURRED????
-        pass
+    def dump_episode( self, epPklPath : str, nameSimilar : bool = True ):
+        """ Write a file that describes the results of each step of the episode """
+        if nameSimilar:
+            epPklPath = self.near_path( epPklPath )
+        self.new_scene() # Save last scene
+        with open( epPklPath, 'wb' ) as outFil:
+            pickle.dump( list( self.scenes ), outFil )
+        self.scenes = deque()
+        print( f"Saved: {epPklPath}!" )

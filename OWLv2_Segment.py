@@ -123,8 +123,9 @@ def mask_ray_realsense( bbox : np.ndarray, mask : np.ndarray = None  ):
     """ Project a ray through the center of the mask """
     cntr2d = np.zeros( 2 )
     count  = 0.0
-    Xlen   = np.tan( np.radians( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
-    Ylen   = np.tan( np.radians( env_var("_D405_FOV_V_DEG")/2.0 ) ) 
+    Xlen   = np.tan( np.deg2rad( env_var("_D405_FOV_H_DEG")/2.0 ) ) 
+    Ylen   = np.tan( np.deg2rad( env_var("_D405_FOV_V_DEG")/2.0 ) )
+    print( f"Shoot a ray through a mask of shape {mask.shape}" ) 
     if mask is not None:
         rows = mask.shape[0]
         rwHf = rows / 2
