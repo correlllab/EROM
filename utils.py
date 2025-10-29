@@ -1,13 +1,18 @@
 ########## INIT ####################################################################################
 
-import pickle, os, time
+import time, os
 now = time.time 
 from math import isnan
 from collections import deque
 from datetime import datetime
+from uuid import uuid4
 
 import numpy as np
 np.set_printoptions( precision = 4 )
+from PIL import Image
+from IPython.display import display
+import matplotlib.pyplot as plt
+
 
 from aspire.symbols import GraspObj
 from aspire.env_config import env_var
@@ -116,3 +121,52 @@ def closest_ray_points( A_org, A_dir, B_org, B_dir ):
     pA = np.add( A_org, np.multiply( A_dir, fA ) )
     pB = np.add( B_org, np.multiply( B_dir, fB ) )
     return pA, pB
+
+
+
+########## HELPER CLASSES ##########################################################################
+
+class JupyterPlotServer:
+    """ New Plots Forever """
+    def __init__( self, imgDir : str = "data/MemImg" ):
+        """ Init vars to save plots as PNG in the BG """
+        self.imgDir   = imgDir
+        self.imgEXT   = "png"
+        self.figure   = None
+        self.bboxMode = 'tight'
+        self.dfltSize = (8,6,)
+
+
+    def fig( self, figsize = None ):
+        """ New Figure """
+        if figsize is None:
+            figsize = self.dfltSize
+        self.figure = plt.figure( figsize = figsize )
+
+
+    def img_show( self, path ):
+        """ Load Image, Show Image, Close Image """
+        # Load the image
+        img = Image.open( path )
+        # Display the image
+        display( img )
+        # Close the image
+        img.close()
+
+
+    def plt_show( self ):
+        """ Save the current figure as an image, Close the figure, Display the image """
+        figPath = os.path.join( self.imgDir, f"{uuid4()}.{self.imgEXT}" )
+        plt.savefig( figPath, bbox_inches = self.bboxMode )
+        plt.close( self.figure )
+        self.img_show( figPath )
+
+
+    def arr_show( self, arr, noAxes = True ):
+        """ Display an array """
+        self.fig()
+        if noAxes:
+            # Turn off the axes
+            plt.axis('off')
+        plt.imshow( arr )
+        self.plt_show()

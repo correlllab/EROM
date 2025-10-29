@@ -521,7 +521,7 @@ def vec3f_as_column( posn ):
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
     
-    _CLUST_MIN =  500 # 1000
+    _CLUST_MIN = 1000 # 500 # 1000
     _DIST_MIN  =    0.070
     _DIST_MAX  =    1.250
     _SCAL_MIN  =    0.500
