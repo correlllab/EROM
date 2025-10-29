@@ -1,6 +1,6 @@
 """ Make it as simple as possible """
 ########## INIT ####################################################################################
-_LOAD_SAM2 = False
+_LOAD_SAM2 = True
 ### Standard ###
 import sys, gc, time, traceback, warnings
 now = time.time
@@ -24,6 +24,7 @@ from magpie_perception import pcd
 from magpie_control import realsense_wrapper as real
 from magpie_control.realsense_wrapper import get_oPCD_aabb_volume, MPCD
 from magpie_perception.label_owlv2 import LabelOWLv2
+
 
 ### ASPIRE ###
 from aspire.env_config import env_var, env_sto

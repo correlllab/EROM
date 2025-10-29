@@ -12,6 +12,8 @@ import matplotlib.patches as patches
 import numpy as np
 from skimage.measure import label # python3.10 -m pip install scikit-image --user
 import cv2
+import pyrealsense2 as rs
+import open3d as o3d
 
 from utils import deep_copy_memory_list, snap_z_to_nearest_block_unit_above_zero
 from OWLv2_Segment import mask_ray_realsense
@@ -20,6 +22,8 @@ from Geometry import closest_ray_points
 
 from aspire.env_config import env_var, set_camera_env, set_object_env
 from aspire.symbols import ( ObjPose, GraspObj, euclidean_distance_between_symbols, extract_pose_as_homog )
+
+from magpie_control.realsense_wrapper import MPCD
 
 
 set_object_env()
@@ -514,6 +518,61 @@ def vec3f_as_column( posn ):
     rtnCol = np.ones( (4,1,) )
     rtnCol[:3,0] = posn
     return rtnCol
+
+
+def rgbd_to_pointcloud( color_image : np.ndarray, depth_image : np.ndarray, intrinsics, distortion_coeffs = None ):
+    """ Convert RGB-D images to a point cloud, https://claude.ai/public/artifacts/53bc4d27-e2b8-4fd7-b36f-c55e0d442a85 """
+    # Parse intrinsics
+    if isinstance( intrinsics, dict ):
+        fx = intrinsics['fx']
+        fy = intrinsics['fy']
+        cx = intrinsics['cx']
+        cy = intrinsics['cy']
+        camera_matrix = np.array( [[fx , 0.0, cx ,],
+                                   [0.0, fy , cy ,],
+                                   [0.0, 0.0, 1.0,]], dtype=np.float32)
+    else:
+        camera_matrix = intrinsics
+        fx = camera_matrix[0,0]
+        fy = camera_matrix[1,1]
+        cx = camera_matrix[0,2]
+        cy = camera_matrix[1,2]
+    
+    h, w = depth_image.shape
+    
+    # Undistort images if distortion coefficients are provided
+    if distortion_coeffs is not None:
+        color_image = cv2.undistort( color_image, camera_matrix, distortion_coeffs )
+        depth_image = cv2.undistort( depth_image, camera_matrix, distortion_coeffs )
+    
+    # Create mesh grid of pixel coordinates
+    u, v = np.meshgrid( np.arange(w), np.arange(h) )
+    
+    # Flatten arrays
+    u = u.flatten()
+    v = v.flatten()
+    depth = depth_image.flatten()
+    
+    # Filter out invalid depth values (zero or negative)
+    valid = depth > 0
+    u = u[valid]
+    v = v[valid]
+    depth = depth[valid]
+    
+    # Convert pixel coordinates to 3D points
+    # Using pinhole camera model: X = (u - cx) * Z / fx
+    x = (u - cx) * depth / fx
+    y = (v - cy) * depth / fy
+    z = depth
+    
+    # Stack into point cloud
+    points = np.stack([x, y, z], axis=-1)
+    
+    # Extract corresponding colors (convert BGR to RGB)
+    colors = color_image[v.astype(int), u.astype(int)]
+    colors = cv2.cvtColor( colors.reshape(-1, 1, 3), cv2.COLOR_BGR2RGB ).reshape(-1, 3)
+    
+    return points, colors
 
 
 ##### "Ground Truth" Tracker ############################################## 
