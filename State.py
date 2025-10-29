@@ -21,7 +21,7 @@ from homog_utils import posn_from_xform, diff_mag
 from Geometry import closest_ray_points
 
 from aspire.env_config import env_var, set_camera_env, set_object_env
-from aspire.symbols import ( ObjPose, GraspObj, euclidean_distance_between_symbols, extract_pose_as_homog )
+from aspire.symbols import ( ObjPose, GraspObj, euclidean_distance_between_symbols, extract_pose_as_homog, extract_position )
 
 from magpie_control.realsense_wrapper import MPCD
 
@@ -744,6 +744,7 @@ class OCV_State_Tracker:
             "depth"  : dict(), #- Lookup of depth images used
             "clouds" : deque(), # Collection of clouds obtained from the masked images
             "objects": deque(), # Collection of readings obtained from the masked images
+            "symbols": dict(), #- Lookup of objects obtained from the readings
         }
 
 
@@ -778,7 +779,22 @@ class OCV_State_Tracker:
         print( f"\nAdded {Nadd} rays!\n\n" )
 
 
-    # def 
+    def reconcile_scene( self ):
+        """ Merge all the readings """
+        _BLEND_FACTOR = 0.200
+        for obj_i in self.current['objects']:
+            lbl_i = obj_i.label
+            if lbl_i in self.current['symbols']:
+                obj_j  = self.current['symbols'][ lbl_i ]
+                posn_i = extract_position( obj_i )
+                posn_j = extract_position( obj_j )
+                posn_r = posn_i * _BLEND_FACTOR + posn_j * (1.0 - _BLEND_FACTOR)
+                pose_r = extract_pose_as_homog( obj_j )
+                pose_r[:3,3] = posn_r
+                obj_j.pose = ObjPose( pose_r )
+            else:
+                self.current['symbols'][ lbl_i ] = obj_i.copy()
+        print( f"Processed {len(self.current['objects'])} readings!" )
 
 
     def near_path( self, parentPath : str, suffix : str = "_OCV-State", EXT : str = "pkl" ):
