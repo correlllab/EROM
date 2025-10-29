@@ -520,7 +520,14 @@ def vec3f_as_column( posn ):
 
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
-    # NOTE: I NEVER DID ANY GROUND TRUTH ANNOTATION OF EXPERIMENTAL DATA, SO I HAVE TO BUILD IT!
+    
+    _CLUST_MIN =  500 # 1000
+    _DIST_MIN  =    0.070
+    _DIST_MAX  =    1.250
+    _SCAL_MIN  =    0.500
+    _SCAL_MAX  = _SCAL_MIN + 1.0 
+    _CRIT_M    = env_var("_BLOCK_SCALE") * 2.25 # 1.50 # 1.750
+
     def __init__( self ):
         """ Set up tracking """
         self.names    = list() #- Names of the objects req'd to solve the problem
@@ -539,21 +546,16 @@ class OCV_State_Tracker:
 
     def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray, imgID : str = None ):
         """ Search for the block, I guess! """
-        _CLUST_MIN = 1000
-        _DIST_MIN  =    0.070
-        _DIST_MAX  =    1.250
-        _SCAL_MIN =     0.500
-        _SCAL_MAX  = _SCAL_MIN + 1.0 
         blcMsk = self.maskFunc[ blockName ]( imgArr )
         clstrs = cluster_mask_arr( blcMsk )
         pixMax = -6e10
         clstMx = None
-        print( depArr[0,0] )
+        # print( depArr[0,0] )
         for clstr in clstrs:
             # Test 1: Sufficient Points 
             Npix_i = np.count_nonzero( clstr )
             print( f"Block mask of {Npix_i} points!" )
-            if Npix_i < _CLUST_MIN:
+            if Npix_i < self._CLUST_MIN:
                 break # We sorted clusters descending
             # Test 2: Reasonable distance
             count_i  = np.count_nonzero( depArr[clstr] )
@@ -561,7 +563,7 @@ class OCV_State_Tracker:
                 continue
             depMsk_i = depArr[clstr].sum() / count_i
             print( f"Block mask is {depMsk_i} away!" )
-            if (depMsk_i < _DIST_MIN) or (depMsk_i > _DIST_MAX):
+            if (depMsk_i < self._DIST_MIN) or (depMsk_i > self._DIST_MAX):
                 continue
             # Test 3: Expected size
             bbox_i = get_nonzero_mask_bbox( clstr )
@@ -575,7 +577,7 @@ class OCV_State_Tracker:
                        2.0 * np.tan( angl_i[1]/2.0 ) * depMsk_i, ] 
             scal_i = np.array( dims_i ) / env_var("_BLOCK_SCALE")
             print( f"Scale is {scal_i} * {env_var('_BLOCK_SCALE')}" )
-            if (_SCAL_MIN <= scal_i[0] <= _SCAL_MAX) and (_SCAL_MIN <= scal_i[1] <= _SCAL_MAX):
+            if (self._SCAL_MIN <= scal_i[0] <= self._SCAL_MAX) and (self._SCAL_MIN <= scal_i[1] <= self._SCAL_MAX):
                 if Npix_i > pixMax:
                     pixMax = Npix_i
                     clstMx = clstr
@@ -664,7 +666,7 @@ class OCV_State_Tracker:
 
         rayItm = list( self.current['rays'] )
         Nrays  = len( self.current['rays'] )
-        crit_m = env_var("_BLOCK_SCALE")*1.50
+        
 
         for i in range( Nrays-1 ):
             item_i = rayItm[i]
@@ -696,7 +698,7 @@ class OCV_State_Tracker:
                         item_j['rayDir']
                     )
 
-                if diff_mag( pnt_ij, pnt_ji ) <= crit_m:
+                if diff_mag( pnt_ij, pnt_ji ) <= self._CRIT_M:
                     print( f"Log center {center} for separation {diff_mag( pnt_ij, pnt_ji )}" )
                     idx_ij  = center_index( center )
                     pair_ij = [item_i, item_j,]
@@ -710,7 +712,7 @@ class OCV_State_Tracker:
                             'label' : item_i['label'],
                         } )
                 else:
-                    print( f"NO intersection for separation of {diff_mag( pnt_ij, pnt_ji )}/{crit_m}" )
+                    print( f"NO intersection for separation of {diff_mag( pnt_ij, pnt_ji )}/{self._CRIT_M}" )
 
         ### Construct an object for each intersection ###
         
