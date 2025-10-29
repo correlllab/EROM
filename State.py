@@ -520,8 +520,66 @@ def vec3f_as_column( posn ):
     return rtnCol
 
 
-def rgbd_to_pointcloud( color_image : np.ndarray, depth_image : np.ndarray, intrinsics, distortion_coeffs = None ):
+"""
+ Intrinsic of "Color" / 1280x720 / {YUYV/RGB8/BGR8/RGBA8/BGRA8/Y8}
+  Width:      	1280
+  Height:     	720
+  PPX:        	635.127990722656
+  PPY:        	356.310791015625
+  Fx:         	641.381103515625
+  Fy:         	640.520446777344
+  Distortion: 	Inverse Brown Conrady
+  Coeffs:     	-0.0538796000182629  	0.0600070655345917  	-1.4652669960924e-05  	0.000627028464805335  	-0.0188705865293741  
+  FOV (deg):  	89.88 x 58.67
+
+ Intrinsic of "Depth" / 1280x720 / {Z16}
+  Width:      	1280
+  Height:     	720
+  PPX:        	633.974792480469
+  PPY:        	356.181549072266
+  Fx:         	634.66357421875
+  Fy:         	634.66357421875
+  Distortion: 	Brown Conrady
+  Coeffs:     	0  	0  	0  	0  	0  
+  FOV (deg):  	90.48 x 59.13
+"""
+
+_COLOR_MATX_1280x720 = {
+    "fx":         	641.381103515625,
+    "fy":         	640.520446777344,
+    "cx":        	635.127990722656,
+    "cy":        	356.310791015625,
+    "distortion": [-0.0538796000182629, 0.0600070655345917, -1.4652669960924e-05, 0.000627028464805335, -0.0188705865293741,],
+}
+
+_DEPTH_MATX_1280x720 = {
+    "fx":         	634.66357421875,
+    "fy":         	634.66357421875,
+    "cx":        	633.974792480469,
+    "cy":        	356.181549072266,
+    "distortion": [0.0, 0.0, 0.0, 0.0, 0.0,],
+}
+
+
+def rgbd_to_color( rawRGBDImage : np.ndarray ):
+    """ Return the color portion of RGB-D """
+    return rawRGBDImage[:,:,:3].copy()
+
+
+def rgbd_to_depth( rawRGBDImage : np.ndarray ):
+    """ Return the color portion of RGB-D """
+    return rawRGBDImage[:,:,:-1].copy()
+
+
+def color_depth_to_pointcloud( color_image : np.ndarray, depth_image : np.ndarray, intrinsics : dict | np.ndarray, 
+                               distortion_color = None, distortion_depth = None, mask : np.ndarray = None ):
     """ Convert RGB-D images to a point cloud, https://claude.ai/public/artifacts/53bc4d27-e2b8-4fd7-b36f-c55e0d442a85 """
+
+    # Mask if requested
+    if mask is not None:
+        color_image = color_image[ mask ]
+        depth_image = depth_image[ mask ]
+
     # Parse intrinsics
     if isinstance( intrinsics, dict ):
         fx = intrinsics['fx']
@@ -541,22 +599,28 @@ def rgbd_to_pointcloud( color_image : np.ndarray, depth_image : np.ndarray, intr
     h, w = depth_image.shape
     
     # Undistort images if distortion coefficients are provided
-    if distortion_coeffs is not None:
-        color_image = cv2.undistort( color_image, camera_matrix, distortion_coeffs )
-        depth_image = cv2.undistort( depth_image, camera_matrix, distortion_coeffs )
+    if distortion_color is not None:
+        color_image = cv2.undistort( color_image, camera_matrix, distortion_color )
+    if distortion_depth is not None:
+        depth_image = cv2.undistort( depth_image, camera_matrix, distortion_depth )
     
+    # ASSUMPTION: THIS IS JUST STACKED???
+    rawRGBDImage = np.zeros( (h, w, 4) )
+    rawRGBDImage[:,:,:3] = color_image 
+    rawRGBDImage[:,:,-1] = depth_image
+
     # Create mesh grid of pixel coordinates
     u, v = np.meshgrid( np.arange(w), np.arange(h) )
     
     # Flatten arrays
-    u = u.flatten()
-    v = v.flatten()
+    u     = u.flatten()
+    v     = v.flatten()
     depth = depth_image.flatten()
     
     # Filter out invalid depth values (zero or negative)
     valid = depth > 0
-    u = u[valid]
-    v = v[valid]
+    u     = u[valid]
+    v     = v[valid]
     depth = depth[valid]
     
     # Convert pixel coordinates to 3D points
@@ -567,12 +631,36 @@ def rgbd_to_pointcloud( color_image : np.ndarray, depth_image : np.ndarray, intr
     
     # Stack into point cloud
     points = np.stack([x, y, z], axis=-1)
+    print( f"Points Array with shape: {points.shape}" )
     
     # Extract corresponding colors (convert BGR to RGB)
-    colors = color_image[v.astype(int), u.astype(int)]
+    colors = color_image[ v.astype(int), u.astype(int) ]
     colors = cv2.cvtColor( colors.reshape(-1, 1, 3), cv2.COLOR_BGR2RGB ).reshape(-1, 3)
+    print( f"Points Array with shape: {points.shape}" )
     
-    return points, colors
+    # return points, colors
+    return MPCD( rawRGBDImage, points, colors )
+
+
+def masked_rgbd_to_pointcloud( rawRGBDImage : np.ndarray, intrinsics : dict | np.ndarray, 
+                               distortion_color = None, distortion_depth = None, mask : np.ndarray = None ):
+    """ Mask the stacked RGB-D Image and calc a point cloud for it """
+    color_image = rgbd_to_color( rawRGBDImage )
+    depth_image = rgbd_to_depth( rawRGBDImage )
+    return color_depth_to_pointcloud( color_image, depth_image, intrinsics, distortion_color, distortion_depth, mask )
+    
+
+def get_mpcd_pose( point_cloud : MPCD ):
+    """ Gets the pose of the point cloud. """
+    if len( point_cloud.xyzArr ):
+        center = np.mean( point_cloud.xyzArr, axis = 0 )
+    else:
+        center = np.zeros( 3 )
+    # HACK: HARDCODED ORIENTATION
+    # FIXME: GET THE "ACTUAL" ORIENTATION VIA ICP
+    pose = np.eye(4)
+    pose[:3,3] = center
+    return pose
 
 
 ##### "Ground Truth" Tracker ############################################## 
@@ -651,22 +739,11 @@ class OCV_State_Tracker:
         if len( self.current ):
             self.scenes.append( deepcopy( self.current ) )
         self.current = {
-            "labels": list(),
-            "image" : dict(),
-            "depth" : dict(),
-            "rays"  : deque()
-        }
-
-
-    @staticmethod
-    def make_ray() -> dict:
-        """ Create a container for a ray """
-        return {
-            "camPose": None,
-            "imageID": None,
-            "label"  : None,
-            "rayOrg" : None,
-            "rayDir" : None,
+            "labels" : list(), #- List of objects in this scene
+            "image"  : dict(), #- Lookup of color images used
+            "depth"  : dict(), #- Lookup of depth images used
+            "clouds" : deque(), # Collection of clouds obtained from the masked images
+            "objects": deque(), # Collection of readings obtained from the masked images
         }
 
 
@@ -674,10 +751,10 @@ class OCV_State_Tracker:
         """ Transform observation data into information about the current state """
         if camPose is None:
             camPose = np.eye(4)
-        inpt = obsData['input']
-        iKey = choice( list( inpt.keys() ) )
-        imag = inpt[ iKey ]['image']
-        dpth = inpt[ iKey ]['depth']
+        inpt : dict       = obsData['input']
+        iKey : str        = choice( list( inpt.keys() ) )
+        imag : np.ndarray = inpt[ iKey ]['image']
+        dpth : np.ndarray = inpt[ iKey ]['depth']
         self.current['image'][ iKey ] = deepcopy( imag )
         self.current['depth'][ iKey ] = deepcopy( dpth )
         Nadd = 0
@@ -687,115 +764,21 @@ class OCV_State_Tracker:
                 self.current['labels'].append( label )
                 print( f"MASK FOUND for {label}!" )
                 self.jps.arr_show( res )
-                ray_i  = OCV_State_Tracker.make_ray()
-                rayVec = mask_ray_realsense( get_nonzero_mask_bbox( res, flatXY = True ), res )
-                # rayVec = mask_ray_realsense( get_nonzero_mask_bbox( res, flatXY = True ) )
-                rayVec = np.dot( camPose, vec3f_as_column( rayVec ) ).reshape( (-1,) )[:3]
-                ray_i["camPose"] = camPose.copy()
-                ray_i["imageID"] = iKey
-                ray_i["label"  ] = f"{label}"
-                ray_i["rayOrg" ] = posn_from_xform( camPose )
-                ray_i["rayDir" ] = rayVec
-                self.current['rays'].append( ray_i )
+                pcd_i = color_depth_to_pointcloud( imag, dpth, _DEPTH_MATX_1280x720, mask = res )
+                pos_i = get_mpcd_pose( pcd_i )
+                self.current['clouds'].append( deepcopy( pcd_i ) )
+                self.current['objects'].append( GraspObj( 
+                    label = label, 
+                    pose  = ObjPose( pos_i ), 
+                    ts    = now(), 
+                    score = 0.0,
+                    cpcd  = deepcopy( pcd_i ),
+                ) )
                 Nadd += 1
         print( f"\nAdded {Nadd} rays!\n\n" )
 
 
-    def process_ray_obs( self ):
-        """ Stage 2: Process ray observations """
-        if not len( self.current ):
-            return None
-        _VERBOSE = 1
-        rtnGobs = deque()
-        centers = deque()
-        print( f"There are {len(self.current['rays'])} RAY observations" )
-
-        ### Local Helper Functions ###
-
-        def center_index( q ):
-            """ Find the index of the closest matching center """
-            nonlocal centers
-            rtnIdx = -5.5
-            dMin   = 6e10
-            for i, center in enumerate( centers ):
-                ctr  = center['point']
-                dSep = diff_mag( q, ctr )
-                if dSep < dMin:
-                    dMin = dSep
-                    if dSep <= env_var("_BLOCK_SCALE")*0.80:
-                        rtnIdx = i
-            return rtnIdx
-
-        ### For every pair of rays, Attempt to find an intersection ###
-
-        rayItm = list( self.current['rays'] )
-        Nrays  = len( self.current['rays'] )
-        
-
-        for i in range( Nrays-1 ):
-            item_i = rayItm[i]
-            for j in range( i+1, Nrays ):
-                item_j = rayItm[j]
-
-                if item_i['label'] != item_j['label']:
-                    continue 
-
-                pnt_ij, pnt_ji, center = closest_ray_points( 
-                    item_i['rayOrg'], 
-                    item_i['rayDir'], 
-                    item_j['rayOrg'], 
-                    item_j['rayDir'], 
-                )
-                if center is None:
-                    print( "NO intersection!" )
-                    continue
-                elif (diff_mag( center, item_i['rayOrg'] ) <= env_var("_BLOCK_SCALE")*1.25) and (diff_mag( item_j['rayOrg'], center ) <= env_var("_BLOCK_SCALE")*1.25):
-                    print( "Intersection at ORIGIN!" )
-                    continue
-
-                if _VERBOSE:
-                    print( 
-                        [i,j,],
-                        item_i['rayOrg'], 
-                        item_i['rayDir'], 
-                        item_j['rayOrg'], 
-                        item_j['rayDir']
-                    )
-
-                if diff_mag( pnt_ij, pnt_ji ) <= self._CRIT_M:
-                    print( f"Log center {center} for separation {diff_mag( pnt_ij, pnt_ji )}" )
-                    idx_ij  = center_index( center )
-                    pair_ij = [item_i, item_j,]
-                    if idx_ij > -1:
-                        centers[ idx_ij ]['point'] = np.add( centers[ idx_ij ]['point'], center ) / 2.0
-                        centers[ idx_ij ]['obs'].extend( pair_ij )
-                    else:
-                        centers.append( {
-                            'point' : np.array( center ),
-                            'obs'   : deque( pair_ij ),
-                            'label' : item_i['label'],
-                        } )
-                else:
-                    print( f"NO intersection for separation of {diff_mag( pnt_ij, pnt_ji )}/{self._CRIT_M}" )
-
-        ### Construct an object for each intersection ###
-        
-        print( f"There {len(centers)} loci to evaluate!" )
-        for ctrDct in centers:
-            pnt_i    = ctrDct['point']
-            objPose  = np.eye(4)
-            objPose[0:3,3] = pnt_i
-            obsDqu_i = ctrDct['obs']
-            if len( obsDqu_i ):
-                # Create reading
-                rtnObj = GraspObj( 
-                    label  = ctrDct['label'], 
-                    pose   = ObjPose( objPose ), 
-                    count  = len( obsDqu_i ), 
-                )
-                rtnGobs.append( rtnObj )
-
-        return list( rtnGobs )
+    # def 
 
 
     def near_path( self, parentPath : str, suffix : str = "_OCV-State", EXT : str = "pkl" ):
