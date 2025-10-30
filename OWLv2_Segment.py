@@ -1,6 +1,6 @@
 """ Make it as simple as possible """
 ########## INIT ####################################################################################
-_LOAD_SAM2 = True
+_LOAD_SAM2 = False
 ### Standard ###
 import sys, gc, time, traceback, warnings
 now = time.time

@@ -660,6 +660,13 @@ def masked_rgbd_to_pointcloud( rawRGBDImage : np.ndarray, intrinsics : dict | np
     return color_depth_to_pointcloud( color_image, depth_image, intrinsics, distortion_color, distortion_depth, mask )
     
 
+def transform_mpcd( point_cloud : MPCD, xform : np.ndarray ):
+    points = np.hstack( (point_cloud.xyzArr, np.ones( (point_cloud.xyzArr.shape[0],1,) )) )
+    xPnts  = np.dot( xform, points.T )
+    point_cloud.xyzArr = xPnts.T[:,:3]
+    print( f"Transformed {len(point_cloud.xyzArr)} points!" ) 
+
+
 def get_mpcd_pose( point_cloud : MPCD ):
     """ Gets the pose of the point cloud. """
     if len( point_cloud.xyzArr ):
@@ -776,6 +783,7 @@ class OCV_State_Tracker:
                 print( f"MASK FOUND for {label}!" )
                 self.jps.arr_show( res )
                 pcd_i = color_depth_to_pointcloud( imag, dpth, _DEPTH_MATX_1280x720, mask = res )
+                transform_mpcd( pcd_i, camPose )
                 pos_i = get_mpcd_pose( pcd_i )
                 self.current['clouds'].append( deepcopy( pcd_i ) )
                 self.current['objects'].append( GraspObj( 
@@ -801,6 +809,7 @@ class OCV_State_Tracker:
                 posn_r = posn_i * _BLEND_FACTOR + posn_j * (1.0 - _BLEND_FACTOR)
                 pose_r = extract_pose_as_homog( obj_j )
                 pose_r[:3,3] = posn_r
+                pose_r[2,3] = snap_z_to_nearest_block_unit_above_zero( pose_r[2,3] )
                 obj_j.pose = ObjPose( pose_r )
             else:
                 self.current['symbols'][ lbl_i ] = obj_i.copy()
