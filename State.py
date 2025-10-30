@@ -21,9 +21,12 @@ from homog_utils import posn_from_xform, diff_mag
 from Geometry import closest_ray_points
 
 from aspire.env_config import env_var, set_camera_env, set_object_env
-from aspire.symbols import ( ObjPose, GraspObj, euclidean_distance_between_symbols, extract_pose_as_homog, extract_position )
+from aspire.symbols import ( ObjPose, GraspObj, euclidean_distance_between_symbols, extract_pose_as_homog, extract_position,
+                             p_symbol_inside_workspace_bounds )
+from aspire.utils import diff_norm
 
 from magpie_control.realsense_wrapper import MPCD
+
 
 
 set_object_env()
@@ -425,6 +428,7 @@ class PoseCheater:
 
 
 ########## GROUND TRUTH EXTRACTOR ##################################################################
+from scipy.ndimage import convolve
 
 ##### Block Masks ######################################################### 
 
@@ -478,6 +482,8 @@ def wht_block_mask( img : np.ndarray ) -> np.ndarray:
     return cv2.inRange( hsv_image, lower, upper)
 
 
+##### Mask Operations ##################################################### 
+
 def cluster_mask_arr( arrMsk : np.ndarray ):
     """ Get cluster masks """
     clusters = deque()
@@ -511,6 +517,36 @@ def get_nonzero_mask_bbox( mask, flatXY = False ):
     else:
         # This is how Gemini ordered it
         return [ [y_min, x_min,], [y_max, x_max,],]
+    
+
+def mask_density( mask : np.ndarray ):
+    """ How much of the bbox is actually occupied by the mask? """
+    bbox = get_nonzero_mask_bbox( mask )
+    A_bb = abs(bbox[1][0] - bbox[0][0]) * abs(bbox[1][1] - bbox[0][1])
+    c_bb = np.count_nonzero( mask )
+    return c_bb / A_bb
+
+
+def get_clumped_mask( binary_image : np.ndarray, N : int = 4 ):
+    """ Returns a mask of pixels in a binary image that at least N neighbors (N-connectivity) """
+    # Ensure the image is boolean for consistent behavior
+    binary_image = binary_image.astype( bool )
+    kernel_conn  = np.array([[1, 1, 1],
+                             [1, 0, 1],
+                             [1, 1, 1]])
+    # Convolve the binary image with the kernel to count neighbors
+    neighbor_counts = convolve( binary_image.astype(int), kernel_conn, mode = 'constant', cval = 0 )
+    # Create the mask: pixels that are foreground AND have exactly 4 neighbors
+    mask = (binary_image) & (neighbor_counts >= N)
+    return mask
+
+
+def mask_clump_ratio( mask : np.ndarray, N : int = 4 ):
+    """ What fraction of the mask pixels have at least N neighbors? """
+    cM = get_clumped_mask( mask, N )
+    Nc = np.count_nonzero( cM )
+    Nt = np.count_nonzero( mask )
+    return Nc / Nt
 
 
 def vec3f_as_column( posn ):
@@ -683,10 +719,12 @@ def get_mpcd_pose( point_cloud : MPCD ):
 ##### "Ground Truth" Tracker ############################################## 
 from utils import JupyterPlotServer
 
+_CLUMP_POP_PX = 4 # Number of neighbors to be considered part of a clump
+
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
     
-    _CLUST_MIN = 500 # 500 # 1000
+    _CLUST_MIN = 1000 # 500 # 1000
     _DIST_MIN  =    0.070
     _DIST_MAX  =    1.250
     _SCAL_MIN  =    0.500
@@ -721,6 +759,7 @@ class OCV_State_Tracker:
         for clstr in clstrs:
             # Test 1: Sufficient Points 
             Npix_i = np.count_nonzero( clstr )
+            Nclm_i = mask_clump_ratio( clstr, _CLUMP_POP_PX ) * Npix_i
             print( f"Block mask of {Npix_i} points!" )
             if Npix_i < self._CLUST_MIN:
                 break # We sorted clusters descending
@@ -745,8 +784,10 @@ class OCV_State_Tracker:
             scal_i = np.array( dims_i ) / env_var("_BLOCK_SCALE")
             print( f"Scale is {scal_i} * {env_var('_BLOCK_SCALE')}" )
             if (self._SCAL_MIN <= scal_i[0] <= self._SCAL_MAX) and (self._SCAL_MIN <= scal_i[1] <= self._SCAL_MAX):
-                if Npix_i > pixMax:
-                    pixMax = Npix_i
+                # if Npix_i > pixMax:
+                if Nclm_i > pixMax:
+                    # pixMax = Npix_i
+                    pixMax = Nclm_i
                     clstMx = clstr
         return clstMx      
 
@@ -781,20 +822,110 @@ class OCV_State_Tracker:
             if res is not None:
                 self.current['labels'].append( label )
                 print( f"MASK FOUND for {label}!" )
-                self.jps.arr_show( res )
                 pcd_i = color_depth_to_pointcloud( imag, dpth, _DEPTH_MATX_1280x720, mask = res )
                 transform_mpcd( pcd_i, camPose )
                 pos_i = get_mpcd_pose( pcd_i )
                 self.current['clouds'].append( deepcopy( pcd_i ) )
-                self.current['objects'].append( GraspObj( 
+                obj_i = GraspObj( 
                     label = label, 
                     pose  = ObjPose( pos_i ), 
                     ts    = now(), 
                     score = 0.0,
                     cpcd  = deepcopy( pcd_i ),
-                ) )
-                Nadd += 1
-        print( f"\nAdded {Nadd} rays!\n\n" )
+                )
+                if p_symbol_inside_workspace_bounds( obj_i ): # Sometimes extraneous shit gets picked up!
+                    self.jps.arr_show( res )
+                    self.current['objects'].append( obj_i )
+                    Nadd += 1
+        print( f"\nAdded {Nadd} readings!\n\n" )
+
+
+    def get_block_facts( self, objLst : list[GraspObj] ):
+        """ Scan the environment for evidence that the task is progressing, using current beliefs """
+        rtnFct = list()
+        ## Ground the Blocks ##
+        for sym in objLst:
+            rtnFct.append( ('Graspable', sym.label,) )
+            rtnFct.append( ('GraspObj' , sym.label, sym.pose, ) )
+        ## Support Predicates && Blocked Status ##
+        # Check if `sym_i` is supported by `sym_j`, blocking `sym_j`, NOTE: Table supports not checked
+        supDices = set([])
+        for i, sym_i in enumerate( objLst ):
+            for j, sym_j in enumerate( objLst ):
+                if i != j:
+                    lblUp = sym_i.label
+                    lblDn = sym_j.label
+                    posUp = extract_pose_as_homog( sym_i )
+                    posDn = extract_pose_as_homog( sym_j )
+                    xySep = diff_norm( posUp[0:2,3], posDn[0:2,3] )
+                    zSep  = posUp[2,3] - posDn[2,3]
+                    if ((xySep <= env_var("_WIDE_XY_ACCEPT")) and ( env_var("_WIDE_Z_ABOVE") >= zSep >= env_var("_SMUSH_Z_ABOVE"))):
+                        supDices.add(i)
+                        rtnFct.extend([
+                            ('Supported', lblUp, lblDn,),
+                            ('Blocked', lblDn,),
+                            ('PoseAbove', ObjPose( posUp ), lblDn,),
+                        ])
+        for i, sym_i in enumerate( objLst ):
+            if i not in supDices:
+                pose_i = extract_pose_as_homog( sym_i )
+                hght_i = pose_i[2,3]
+                if env_var("_DEFAULT_TABLE_SUPPORT") or (hght_i <= env_var("_TABLE_SUPPORT_Z_MAX")):
+                    rtnFct.extend( [
+                        ('Supported', sym_i.label, 'table',),
+                        ('PoseAbove', sym_i.pose , 'table',),
+                    ] )
+                else:
+                    raise ValueError( f"FLOATING BLOCK: {sym_i}, {hght_i}" )
+        ## Return relevant predicates ##
+        return rtnFct
+
+
+    def logical_Z_snap( self, objLst : list[GraspObj] ):
+        """ Impoze zome phyzical rulez on the Z-coordinatez of the objectz """
+        blockFacts = self.get_block_facts( objLst )
+
+        def get_obj_by_label( q : str ):
+            """ Get the object that matches the label """
+            nonlocal objLst
+            for sym in objLst:
+                if sym.label == q:
+                    return sym
+            return None
+        
+        def get_facts_by_type( typNam : str ):
+            """ Get all the facts that match the type """
+            nonlocal blockFacts
+            rtnFct = list()
+            for fact in blockFacts:
+                if fact[0] == typNam:
+                    rtnFct.append( fact )
+            return rtnFct
+
+        ## Stack the Blocks ##
+        frontier = deque(["table",])
+        modSet   = set([])
+        while len( frontier ):  
+            support = frontier.pop()
+            facts_i = [item for item in get_facts_by_type( 'Supported' ) if (item[-1] == support)]
+            if support == "table":
+                for fct_j in facts_i:
+                    obj_j = get_obj_by_label( fct_j[1] )
+                    if obj_j is not None:
+                        obj_j.pose.pose[2,3] = env_var("_BLOCK_SCALE")/2.0
+                        modSet.add( obj_j.index )
+                        frontier.append( obj_j.label )
+            else:
+                obj_b = get_obj_by_label( support )
+                if obj_b is not None:
+                    for fct_j in facts_i:
+                        obj_j = get_obj_by_label( fct_j[1] )
+                        obj_j.pose.pose[2,3] = obj_b.pose.pose[2,3] + env_var("_BLOCK_SCALE")
+                        modSet.add( obj_j.index )
+                        frontier.append( obj_j.label )
+        for sym in objLst:
+            if sym.index not in modSet:
+                obj_j.pose.pose[2,3] = snap_z_to_nearest_block_unit_above_zero( obj_j.pose.pose[2,3] )
 
 
     def reconcile_scene( self ):
@@ -809,12 +940,13 @@ class OCV_State_Tracker:
                 posn_r = posn_i * _BLEND_FACTOR + posn_j * (1.0 - _BLEND_FACTOR)
                 pose_r = extract_pose_as_homog( obj_j )
                 pose_r[:3,3] = posn_r
-                pose_r[2,3] = snap_z_to_nearest_block_unit_above_zero( pose_r[2,3] )
                 obj_j.pose = ObjPose( pose_r )
             else:
                 self.current['symbols'][ lbl_i ] = obj_i.copy()
         print( f"Processed {len(self.current['objects'])} readings!" )
-        return list( self.current['symbols'].values() )
+        rtnSym = list( self.current['symbols'].values() )
+        self.logical_Z_snap( rtnSym )
+        return rtnSym
 
 
     def near_path( self, parentPath : str, suffix : str = "_OCV-State", EXT : str = "pkl" ):
