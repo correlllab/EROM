@@ -461,25 +461,67 @@ def grn_block_mask( img : np.ndarray ) -> np.ndarray:
     # Create a mask for blue color
     return cv2.inRange( hsv_image, lower, upper)
 
+_BLK_HI =  85
+_WHT_LO = 167
 
 def blk_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    # Convert BGR to HSV
-    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
-    lower     = np.array( [  0,   0,  0,] ) # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
-    upper     = np.array( [180, 255, 62,] ) # Example: upper bound for BLACK
+    lower = np.array( [  0,   0,  0,] ) # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
+    upper = np.array( [_BLK_HI, _BLK_HI, _BLK_HI,] ) # Example: upper bound for BLACK
     # Create a mask for blue color
-    return cv2.inRange( hsv_image, lower, upper)
+    # return cv2.inRange( hsv_image, lower, upper)
+    return cv2.inRange( img, lower, upper)
+
+_LO_FCT = 0.25
+_HI_FCT = 1.95
+
+_GRY_LO = np.array( [60*_LO_FCT, 70*_LO_FCT, 80*_LO_FCT,] )
+_GRY_HI = np.array( [90*_HI_FCT, 90*_HI_FCT, 90*_HI_FCT,] )
+_GY_VEC = np.array( [64, 76, 87,] )
+
+
+def gry_block_mask( img : np.ndarray ) -> np.ndarray:
+    """ Return a mask that segments the Black Block """
+    lower  = _GRY_LO # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
+    upper  = _GRY_HI # Example: upper bound for BLACK
+    boxMsk = cv2.inRange( img, lower, upper)
+    # WARNING: THIS SMELLS VERY DUMB
+    boxMsk = ~boxMsk
+
+    # # 2. Create a mask based on cosine similarity
+    # # Reshape the array to a 2D array of vectors (H*W, 3) to apply the calculation efficiently
+    # h, w, c = img.shape
+    # pixel_vectors = img.reshape(h * w, c)
+
+    # # Calculate dot product and norms for cosine similarity
+    # # Cosine similarity = dot product / (norm(A) * norm(B))
+    # dot_product = np.dot( pixel_vectors, _GY_VEC )
+    # norm_pixels = np.linalg.norm( pixel_vectors, axis = 1 )
+    # norm_grey   = np.linalg.norm( _GY_VEC )
+
+    # # Handle potential division by zero for zero-magnitude vectors (black pixels)
+    # # where norm_pixels might be 0. Set similarity to 0 in such cases.
+    # cosine_similarity = np.zeros(h * w)
+    # nonzero_pixels = norm_pixels != 0
+    # cosine_similarity[nonzero_pixels] = dot_product[nonzero_pixels] / (norm_pixels[nonzero_pixels] * norm_grey)
+
+    # # Reshape the similarity back to a 2D array (H, W)
+    # similarity_threshold = 0.90
+    # cosine_similarity_2d = cosine_similarity.reshape( (h, w,) )
+    # similarity_mask_2d   = cosine_similarity_2d >= similarity_threshold
+
+    # 3. Combine the two masks using the logical AND operator
+    # return boxMsk & similarity_mask_2d
+    return boxMsk 
 
 
 def wht_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the White Block """
     # Convert BGR to HSV
-    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
-    lower     = np.array( [  0,   0, 170,] ) # Example: lower bound for WHITE
-    upper     = np.array( [172, 111, 255,] ) # Example: upper bound for WHITE
+    lower = np.array( [_WHT_LO, _WHT_LO, _WHT_LO,] ) # Example: lower bound for WHITE
+    upper = np.array( [255, 255, 255,] ) # Example: upper bound for WHITE
     # Create a mask for blue color
-    return cv2.inRange( hsv_image, lower, upper)
+    return cv2.inRange( img, lower, upper)
 
 
 ##### Mask Operations ##################################################### 
@@ -744,7 +786,7 @@ class OCV_State_Tracker:
             "grnBlock": grn_block_mask,
             "bluBlock": blu_block_mask,
             "blkBlock": blk_block_mask,
-            "whtBlock": wht_block_mask,
+            "whtBlock": gry_block_mask, # wht_block_mask,
         }
         self.new_scene()
 
@@ -757,10 +799,13 @@ class OCV_State_Tracker:
         clstMx = None
         # print( depArr[0,0] )
         for clstr in clstrs:
+            print( f"Evaluate: {self.maskFunc[ blockName ].__name__}" )
+            
             # Test 1: Sufficient Points 
             Npix_i = np.count_nonzero( clstr )
             Nclm_i = mask_clump_ratio( clstr, _CLUMP_POP_PX ) * Npix_i
             print( f"Block mask of {Npix_i} points!" )
+            self.jps.arr_show( clstr )
             if Npix_i < self._CLUST_MIN:
                 break # We sorted clusters descending
             # Test 2: Reasonable distance
@@ -771,6 +816,7 @@ class OCV_State_Tracker:
             print( f"Block mask is {depMsk_i} away!" )
             if (depMsk_i < self._DIST_MIN) or (depMsk_i > self._DIST_MAX):
                 continue
+            
             # Test 3: Expected size
             bbox_i = get_nonzero_mask_bbox( clstr )
             # span_i = [bbox_i[2]-bbox_i[0], bbox_i[3]-bbox_i[1],]
