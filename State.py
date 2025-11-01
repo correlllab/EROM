@@ -15,7 +15,8 @@ import cv2
 import pyrealsense2 as rs
 import open3d as o3d
 
-from utils import deep_copy_memory_list, snap_z_to_nearest_block_unit_above_zero
+from utils import deep_copy_memory_list, snap_z_to_nearest_block_unit_above_zero, JupyterPlotServer
+
 from OWLv2_Segment import mask_ray_realsense
 from homog_utils import posn_from_xform, diff_mag
 from Geometry import closest_ray_points
@@ -462,7 +463,7 @@ def grn_block_mask( img : np.ndarray ) -> np.ndarray:
     return cv2.inRange( hsv_image, lower, upper)
 
 _BLK_HI =  85
-_WHT_LO = 167
+_WHT_LO = 155 # 165 # 167
 
 def blk_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
@@ -472,56 +473,57 @@ def blk_block_mask( img : np.ndarray ) -> np.ndarray:
     # return cv2.inRange( hsv_image, lower, upper)
     return cv2.inRange( img, lower, upper)
 
-_LO_FCT = 0.25
-_HI_FCT = 1.95
+_LO_FCT = 2.30
+_HI_FCT = 2.40 #1.95
 
-_GRY_LO = np.array( [60*_LO_FCT, 70*_LO_FCT, 80*_LO_FCT,] )
-_GRY_HI = np.array( [90*_HI_FCT, 90*_HI_FCT, 90*_HI_FCT,] )
+_GRY_LO = np.array( [60*_LO_FCT, 60*_LO_FCT, 65*_LO_FCT,] )
+_GRY_HI = np.array( [90*_HI_FCT, 90*_HI_FCT,120*_HI_FCT,] )
 _GY_VEC = np.array( [64, 76, 87,] )
+_B_LVL  = 0.125 # 0.0625
+
+
+def sobel_mask_intolerant( img : np.ndarray ) -> np.ndarray:
+    """ Border mask with a hair trigger """
+    gImg = cv2.cvtColor( img, cv2.COLOR_BGR2GRAY )
+    # Apply Sobel operator
+    sobelx = cv2.Sobel(gImg, ddepth=cv2.CV_64F, dx=1, dy=0, ksize=3)  # Horizontal edges
+    sobely = cv2.Sobel(gImg, ddepth=cv2.CV_64F, dx=0, dy=1, ksize=3)  # Vertical edges
+    # Compute gradient magnitude
+    gradient_magnitude = cv2.magnitude(sobelx, sobely)
+    # Convert to uint8
+    gradient_magnitude = cv2.convertScaleAbs( gradient_magnitude )
+    return (gradient_magnitude >= ( _B_LVL * 255)).astype("bool")
 
 
 def gry_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    lower  = _GRY_LO # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
-    upper  = _GRY_HI # Example: upper bound for BLACK
-    boxMsk = cv2.inRange( img, lower, upper)
-    # WARNING: THIS SMELLS VERY DUMB
-    boxMsk = ~boxMsk
+    jps     = JupyterPlotServer()
+    lower   = _GRY_LO # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
+    upper   = _GRY_HI # Example: upper bound for BLACK
+    boxMsk  = cv2.inRange( img, lower, upper)
+    brdrMsk = sobel_mask_intolerant( img )
+    print( "GREY MASK" )
+    jps.arr_show( boxMsk )
+    print( "BORDER MASK" )
+    jps.arr_show( brdrMsk )
+    boxMsk = np.logical_and( boxMsk, ~brdrMsk )
 
-    # # 2. Create a mask based on cosine similarity
-    # # Reshape the array to a 2D array of vectors (H*W, 3) to apply the calculation efficiently
-    # h, w, c = img.shape
-    # pixel_vectors = img.reshape(h * w, c)
-
-    # # Calculate dot product and norms for cosine similarity
-    # # Cosine similarity = dot product / (norm(A) * norm(B))
-    # dot_product = np.dot( pixel_vectors, _GY_VEC )
-    # norm_pixels = np.linalg.norm( pixel_vectors, axis = 1 )
-    # norm_grey   = np.linalg.norm( _GY_VEC )
-
-    # # Handle potential division by zero for zero-magnitude vectors (black pixels)
-    # # where norm_pixels might be 0. Set similarity to 0 in such cases.
-    # cosine_similarity = np.zeros(h * w)
-    # nonzero_pixels = norm_pixels != 0
-    # cosine_similarity[nonzero_pixels] = dot_product[nonzero_pixels] / (norm_pixels[nonzero_pixels] * norm_grey)
-
-    # # Reshape the similarity back to a 2D array (H, W)
-    # similarity_threshold = 0.90
-    # cosine_similarity_2d = cosine_similarity.reshape( (h, w,) )
-    # similarity_mask_2d   = cosine_similarity_2d >= similarity_threshold
-
-    # 3. Combine the two masks using the logical AND operator
-    # return boxMsk & similarity_mask_2d
     return boxMsk 
 
 
 def wht_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the White Block """
     # Convert BGR to HSV
+    jps = JupyterPlotServer()
     lower = np.array( [_WHT_LO, _WHT_LO, _WHT_LO,] ) # Example: lower bound for WHITE
     upper = np.array( [255, 255, 255,] ) # Example: upper bound for WHITE
     # Create a mask for blue color
-    return cv2.inRange( img, lower, upper)
+    rtnMsk  = cv2.inRange( img, lower, upper)
+    brdrMsk = sobel_mask_intolerant( img )
+    rtnMsk  = np.logical_and( rtnMsk, ~brdrMsk )
+    print( "WHITE MASK" )
+    jps.arr_show( rtnMsk )
+    return rtnMsk
 
 
 ##### Mask Operations ##################################################### 
@@ -759,14 +761,13 @@ def get_mpcd_pose( point_cloud : MPCD ):
 
 
 ##### "Ground Truth" Tracker ############################################## 
-from utils import JupyterPlotServer
 
 _CLUMP_POP_PX = 4 # Number of neighbors to be considered part of a clump
 
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
     
-    _CLUST_MIN = 1000 # 500 # 1000
+    _CLUST_MIN =  500 #125 # 250 # 500 # 750 # 1000
     _DIST_MIN  =    0.070
     _DIST_MAX  =    1.250
     _SCAL_MIN  =    0.500
@@ -786,26 +787,32 @@ class OCV_State_Tracker:
             "grnBlock": grn_block_mask,
             "bluBlock": blu_block_mask,
             "blkBlock": blk_block_mask,
-            "whtBlock": gry_block_mask, # wht_block_mask,
+            "whtBlock": [gry_block_mask, wht_block_mask,],
         }
         self.new_scene()
 
 
     def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray, imgID : str = None ):
         """ Search for the block, I guess! """
-        blcMsk = self.maskFunc[ blockName ]( imgArr )
+        if isinstance( self.maskFunc[ blockName ], list ):
+            blcMsk = np.zeros( imgArr.shape[:2] )
+            for func in self.maskFunc[ blockName ]:
+                blcMsk = np.logical_or( blcMsk, func( imgArr ) ) 
+        else:
+            blcMsk = self.maskFunc[ blockName ]( imgArr )
         clstrs = cluster_mask_arr( blcMsk )
         pixMax = -6e10
         clstMx = None
         # print( depArr[0,0] )
         for clstr in clstrs:
-            print( f"Evaluate: {self.maskFunc[ blockName ].__name__}" )
+            print( f"Evaluate: {self.maskFunc[ blockName ]}" )
+            self.jps.arr_show( clstr )
             
             # Test 1: Sufficient Points 
             Npix_i = np.count_nonzero( clstr )
             Nclm_i = mask_clump_ratio( clstr, _CLUMP_POP_PX ) * Npix_i
             print( f"Block mask of {Npix_i} points!" )
-            self.jps.arr_show( clstr )
+            # self.jps.arr_show( clstr )
             if Npix_i < self._CLUST_MIN:
                 break # We sorted clusters descending
             # Test 2: Reasonable distance
@@ -868,6 +875,7 @@ class OCV_State_Tracker:
             if res is not None:
                 self.current['labels'].append( label )
                 print( f"MASK FOUND for {label}!" )
+                # self.jps.arr_show( res )
                 pcd_i = color_depth_to_pointcloud( imag, dpth, _DEPTH_MATX_1280x720, mask = res )
                 transform_mpcd( pcd_i, camPose )
                 pos_i = get_mpcd_pose( pcd_i )
