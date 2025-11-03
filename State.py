@@ -10,6 +10,7 @@ from matplotlib.axes import Axes
 import matplotlib.patches as patches
 
 import numpy as np
+from scipy import ndimage
 from skimage.measure import label # python3.10 -m pip install scikit-image --user
 import cv2
 import pyrealsense2 as rs
@@ -585,6 +586,35 @@ def get_clumped_mask( binary_image : np.ndarray, N : int = 4 ):
     return mask
 
 
+def clumped_density( mask : np.ndarray, N : int = 4 ):
+    """ How much of the bbox is actually occupied by the mask? """
+    bbox = get_nonzero_mask_bbox( mask )
+    A_bb = abs(bbox[1][0] - bbox[0][0]) * abs(bbox[1][1] - bbox[0][1])
+    c_bb = np.count_nonzero( get_clumped_mask( mask, N ) )
+    if A_bb > 0.0:
+        return c_bb / A_bb
+    return 0.0
+
+
+def grow_clumped_mask( binary_image : np.ndarray, N : int = 4, depth : int = 2 ):
+    """ Expand all pixels with at least N neighbors (N-connectivity) by `depth` """
+    clumpMask = get_clumped_mask( binary_image, N )
+    # 2. Define the kernel (structuring element).
+    # A kernel of all ones will "expand" the True regions to cover
+    # all areas where the kernel overlaps with a True value in the original mask.
+    kernel = np.array([
+        [0, 1, 0],
+        [1, 1, 1],
+        [0, 1, 0]
+    ], dtype=bool) # Kernel should typically be boolean or integer 1s and 0s for dilation
+    # 3. Perform the binary dilation, `depth` times
+    expanded_mask = clumpMask.copy()
+    for _ in range( depth ):
+        expanded_mask = ndimage.binary_dilation( expanded_mask, structure = kernel )
+    return expanded_mask
+
+
+
 def mask_clump_ratio( mask : np.ndarray, N : int = 4 ):
     """ What fraction of the mask pixels have at least N neighbors? """
     cM = get_clumped_mask( mask, N )
@@ -762,16 +792,17 @@ def get_mpcd_pose( point_cloud : MPCD ):
 
 ##### "Ground Truth" Tracker ############################################## 
 
-_CLUMP_POP_PX = 4 # Number of neighbors to be considered part of a clump
+_CLUMP_POP_PX = 6 # Number of neighbors to be considered part of a clump
+_EXPAND_DEPTH = 2
 
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
     
-    _CLUST_MIN =  500 #125 # 250 # 500 # 750 # 1000
+    _CLUST_MIN = 1000 #125 # 250 # 500 # 750 # 1000
     _DIST_MIN  =    0.070
     _DIST_MAX  =    1.250
-    _SCAL_MIN  =    0.500
-    _SCAL_MAX  = _SCAL_MIN + 1.0 
+    _SCAL_MIN  =    0.350 # 0.350 # 0.500
+    _SCAL_MAX  = (1.0 - _SCAL_MIN) + 1.0 
     _CRIT_M    = env_var("_BLOCK_SCALE") * 1.50 # 1.50 # 1.750 # 2.25
 
     def __init__( self ):
@@ -783,23 +814,28 @@ class OCV_State_Tracker:
         self.changes  = deque() # Sequence of Transitions
         self.current  = dict() #- All data relating to the current state
         self.maskFunc = { # ----- Function lookup to segment out the blocks in the experiments
-            "redBlock": red_block_mask,
-            "grnBlock": grn_block_mask,
-            "bluBlock": blu_block_mask,
-            "blkBlock": blk_block_mask,
-            "whtBlock": [gry_block_mask, wht_block_mask,],
+            "redBlock": { "func": red_block_mask, "grow": 0 },
+            "grnBlock": { "func": grn_block_mask, "grow": 0 },
+            "bluBlock": { "func": blu_block_mask, "grow": 0 },
+            "blkBlock": { "func": blk_block_mask, "grow": 0 },
+            "whtBlock": { "func": [gry_block_mask, wht_block_mask,], "grow": _EXPAND_DEPTH },
         }
         self.new_scene()
 
 
-    def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray, imgID : str = None ):
+    def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray ):
         """ Search for the block, I guess! """
-        if isinstance( self.maskFunc[ blockName ], list ):
+
+        if isinstance( self.maskFunc[ blockName ]['func'], list ):
             blcMsk = np.zeros( imgArr.shape[:2] )
-            for func in self.maskFunc[ blockName ]:
+            for func in self.maskFunc[ blockName ]['func']:
                 blcMsk = np.logical_or( blcMsk, func( imgArr ) ) 
         else:
-            blcMsk = self.maskFunc[ blockName ]( imgArr )
+            blcMsk = self.maskFunc[ blockName ]['func']( imgArr )
+        
+        if self.maskFunc[ blockName ]['grow'] > 0:
+            blcMsk = grow_clumped_mask( blcMsk, _CLUMP_POP_PX, self.maskFunc[ blockName ]['grow'] )
+        
         clstrs = cluster_mask_arr( blcMsk )
         pixMax = -6e10
         clstMx = None
@@ -811,6 +847,7 @@ class OCV_State_Tracker:
             # Test 1: Sufficient Points 
             Npix_i = np.count_nonzero( clstr )
             Nclm_i = mask_clump_ratio( clstr, _CLUMP_POP_PX ) * Npix_i
+            # Nclm_i = clumped_density( clstr, _CLUMP_POP_PX ) * Npix_i
             print( f"Block mask of {Npix_i} points!" )
             # self.jps.arr_show( clstr )
             if Npix_i < self._CLUST_MIN:
@@ -857,6 +894,14 @@ class OCV_State_Tracker:
             "objects": deque(), # Collection of readings obtained from the masked images
             "symbols": dict(), #- Lookup of objects obtained from the readings
         }
+
+
+    def get_last_scene( self ):
+        """ Get Last State Reconstruction """
+        if len( self.scenes ):
+            return deepcopy( self.scenes[-1] )
+        else:
+            return None
 
 
     def process_observation_data( self, obsData : dict, goalLabels : list[str], camPose : np.ndarray = None ):
@@ -998,7 +1043,16 @@ class OCV_State_Tracker:
             else:
                 self.current['symbols'][ lbl_i ] = obj_i.copy()
         print( f"Processed {len(self.current['objects'])} readings!" )
+
+        lstScn = self.get_last_scene()
+        lstSet = set( lstScn['symbols'].keys() ) 
+        curSet = set( self.current['symbols'].keys() )
+        difSet = lstSet - curSet 
+        for dLabel in difSet:
+            self.current['symbols'][ dLabel ] = deepcopy( lstScn['symbols'][ dLabel ] )
+
         rtnSym = list( self.current['symbols'].values() )
+        
         self.logical_Z_snap( rtnSym )
         return rtnSym
 
