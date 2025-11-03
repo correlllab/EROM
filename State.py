@@ -498,15 +498,19 @@ def sobel_mask_intolerant( img : np.ndarray ) -> np.ndarray:
 
 def gry_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    jps     = JupyterPlotServer()
+    _VERBOSE = False
+    jps      = None 
+    if _VERBOSE:
+        jps     = JupyterPlotServer()
     lower   = _GRY_LO # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
     upper   = _GRY_HI # Example: upper bound for BLACK
     boxMsk  = cv2.inRange( img, lower, upper)
     brdrMsk = sobel_mask_intolerant( img )
-    print( "GREY MASK" )
-    jps.arr_show( boxMsk )
-    print( "BORDER MASK" )
-    jps.arr_show( brdrMsk )
+    if _VERBOSE:
+        print( "GREY MASK" )
+        jps.arr_show( boxMsk )
+        print( "BORDER MASK" )
+        jps.arr_show( brdrMsk )
     boxMsk = np.logical_and( boxMsk, ~brdrMsk )
 
     return boxMsk 
@@ -515,15 +519,19 @@ def gry_block_mask( img : np.ndarray ) -> np.ndarray:
 def wht_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the White Block """
     # Convert BGR to HSV
-    jps = JupyterPlotServer()
+    _VERBOSE = False
+    jps = None
+    if _VERBOSE:
+        jps = JupyterPlotServer()
     lower = np.array( [_WHT_LO, _WHT_LO, _WHT_LO,] ) # Example: lower bound for WHITE
     upper = np.array( [255, 255, 255,] ) # Example: upper bound for WHITE
     # Create a mask for blue color
     rtnMsk  = cv2.inRange( img, lower, upper)
     brdrMsk = sobel_mask_intolerant( img )
     rtnMsk  = np.logical_and( rtnMsk, ~brdrMsk )
-    print( "WHITE MASK" )
-    jps.arr_show( rtnMsk )
+    if _VERBOSE:
+        print( "WHITE MASK" )
+        jps.arr_show( rtnMsk )
     return rtnMsk
 
 
@@ -825,6 +833,7 @@ class OCV_State_Tracker:
 
     def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray ):
         """ Search for the block, I guess! """
+        _VERBOSE = False
 
         if isinstance( self.maskFunc[ blockName ]['func'], list ):
             blcMsk = np.zeros( imgArr.shape[:2] )
@@ -842,7 +851,8 @@ class OCV_State_Tracker:
         # print( depArr[0,0] )
         for clstr in clstrs:
             print( f"Evaluate: {self.maskFunc[ blockName ]}" )
-            self.jps.arr_show( clstr )
+            if _VERBOSE: 
+                self.jps.arr_show( clstr )
             
             # Test 1: Sufficient Points 
             Npix_i = np.count_nonzero( clstr )
