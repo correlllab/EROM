@@ -1,4 +1,4 @@
-import os, pickle, time, subprocess, math
+import os, pickle, time, traceback, math
 now = time.time 
 from collections import deque, defaultdict
 from datetime import datetime
@@ -432,6 +432,68 @@ class PoseCheater:
 ########## GROUND TRUTH EXTRACTOR ##################################################################
 from scipy.ndimage import convolve
 
+##### Helper Functions #################################################### 
+
+def crash_out():
+    """ End the program with Brutal Finality """
+    print( "\n\n" )
+    os.system( 'kill %d' % os.getpid() ) 
+
+
+def extract_pose_from_str( poseStr : str ):
+    """ Get the homogeneous coordinates from the string and ignore everything else """
+    nstLst = list()
+    depth  = 0
+    numStr = ""
+    row    = list()
+
+    def store_num():
+        """ Add the number to the row """
+        nonlocal row, numStr, poseStr
+        if len( numStr ):
+            try:
+                row.append( float( numStr.strip() ) )
+            except ValueError as e:
+                print( f"BAD: {e}" )
+                print( numStr  )
+                print( poseStr )
+                crash_out()
+        numStr = ""
+
+    def store_row():
+        """ Add the row to the array """
+        nonlocal nstLst, row
+        if len( row ):
+            nstLst.append( row )
+        row = list()
+
+    for char in poseStr:
+        if char == '[':
+            depth += 1
+        elif char == ']':
+            if depth == 2:
+                store_num()
+            depth -= 1
+            if depth == 1:
+                store_row()
+        elif char == ' ':
+            if depth == 2:
+                store_num()
+        elif char == '\n':
+            pass
+        elif depth == 2:
+            numStr += char
+        else:
+            pass
+            # print( f"`extract_pose_from_str()`, BAD STATE:\n{char}\n{poseStr}\n" )
+
+    try:
+        return np.array( nstLst )
+    except Exception as e:
+        traceback.print_exc()
+        print( f"BAD: {e}" )
+        crash_out()
+
 ##### Block Masks ######################################################### 
 
 def red_block_mask( img : np.ndarray ) -> np.ndarray:
@@ -663,18 +725,18 @@ def vec3f_as_column( posn ):
 """
 
 _COLOR_MATX_1280x720 = {
-    "fx":         	641.381103515625,
-    "fy":         	640.520446777344,
-    "cx":        	635.127990722656,
-    "cy":        	356.310791015625,
+    "fx":         641.381103515625,
+    "fy":         640.520446777344,
+    "cx":         635.127990722656,
+    "cy":         356.310791015625,
     "distortion": [-0.0538796000182629, 0.0600070655345917, -1.4652669960924e-05, 0.000627028464805335, -0.0188705865293741,],
 }
 
 _DEPTH_MATX_1280x720 = {
-    "fx":         	634.66357421875,
-    "fy":         	634.66357421875,
-    "cx":        	633.974792480469,
-    "cy":        	356.181549072266,
+    "fx":         634.66357421875,
+    "fy":         634.66357421875,
+    "cx":         633.974792480469,
+    "cy":         356.181549072266,
     "distortion": [0.0, 0.0, 0.0, 0.0, 0.0,],
 }
 
@@ -800,13 +862,13 @@ def get_mpcd_pose( point_cloud : MPCD ):
 
 ##### "Ground Truth" Tracker ############################################## 
 
-_CLUMP_POP_PX = 6 # Number of neighbors to be considered part of a clump
+_CLUMP_POP_PX = 7 # Number of neighbors to be considered part of a clump
 _EXPAND_DEPTH = 2
 
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
     
-    _CLUST_MIN = 1000 #125 # 250 # 500 # 750 # 1000
+    _CLUST_MIN = 2000 #125 # 250 # 500 # 750 # 1000
     _DIST_MIN  =    0.070
     _DIST_MAX  =    1.250
     _SCAL_MIN  =    0.350 # 0.350 # 0.500
@@ -818,8 +880,7 @@ class OCV_State_Tracker:
         self.jps      = JupyterPlotServer()
         self.names    = list() #- Names of the objects req'd to solve the problem
         self.scenes   = deque() # Sequence of reconstruction data
-        self.states   = deque() # Sequence of States
-        self.changes  = deque() # Sequence of Transitions
+        self.actions  = deque() # Sequence of Actions
         self.current  = dict() #- All data relating to the current state
         self.maskFunc = { # ----- Function lookup to segment out the blocks in the experiments
             "redBlock": { "func": red_block_mask, "grow": 0 },
@@ -856,8 +917,8 @@ class OCV_State_Tracker:
             
             # Test 1: Sufficient Points 
             Npix_i = np.count_nonzero( clstr )
-            Nclm_i = mask_clump_ratio( clstr, _CLUMP_POP_PX ) * Npix_i
-            # Nclm_i = clumped_density( clstr, _CLUMP_POP_PX ) * Npix_i
+            # Nclm_i = mask_clump_ratio( clstr, _CLUMP_POP_PX ) * Npix_i
+            Nclm_i = clumped_density( clstr, _CLUMP_POP_PX ) * Npix_i
             print( f"Block mask of {Npix_i} points!" )
             # self.jps.arr_show( clstr )
             if Npix_i < self._CLUST_MIN:
@@ -906,10 +967,10 @@ class OCV_State_Tracker:
         }
 
 
-    def get_last_scene( self ):
+    def get_last_scene( self, backDex : int = 1 ) -> list[GraspObj]:
         """ Get Last State Reconstruction """
-        if len( self.scenes ):
-            return deepcopy( self.scenes[-1] )
+        if len( self.scenes ) >= backDex:
+            return deepcopy( self.scenes[-backDex] )
         else:
             return None
 
@@ -1070,6 +1131,109 @@ class OCV_State_Tracker:
     def near_path( self, parentPath : str, suffix : str = "_OCV-State", EXT : str = "pkl" ):
         """ A path similar to parent path, but with a suffix """
         return parentPath.split('.')[0] + suffix + "." + EXT
+    
+
+    def last_scene_confusion( self, sensedObjects : list[GraspObj] ):
+        """ Return the number of `sensedObjects` that *contradict* the last scene """
+        lastScen = self.get_last_scene()
+        matches  = dict()
+
+        # Store Sensed Objects #
+        for obj_i in sensedObjects:
+            matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
+        
+        # Match OpenCV Objects to Sensed Objects #
+        for obj_j in lastScen:
+            dMin   = 6e10
+            kMin_i = None
+            for k_i, v_i in matches.items():
+                d_ij = euclidean_distance_between_symbols( v_i["sensed"], obj_j )
+                if d_ij <= env_var("_ACCEPT_POSN_ERR") and d_ij < dMin:
+                    dMin   = d_ij
+                    kMin_i = k_i 
+            if kMin_i is not None:
+                matches[ kMin_i ]["known"] = obj_j
+                matches[ kMin_i ]["d"    ] = dMin
+            
+        # Compute Number of Total, Confused, Hallucinated, and Missing Objects #
+        Ntot = max( len( lastScen ), len( sensedObjects ) ) # Total number of objects
+        Ncnf = 0 # Number of confusions
+        Nhal = 0 # Number of hallucinations, False positive
+        for k_i, v_i in matches.items():
+            # If the sensed block was real, Then check for confusion
+            if v_i["known"] is not None:
+                if v_i["known"].label != v_i["sensed"].label:
+                    Ncnf += 1
+            # Else block was NOT real, The system hallucinated it! 
+            else:
+                Nhal += 1 
+        Nmis = Ntot - len( sensedObjects )
+        return {
+            "N_total"  : Ntot,
+            "N_confuse": Ncnf,
+            "N_halluc" : Nhal,
+            "N_missing": Nmis,
+        }
+    
+
+    @staticmethod
+    def action_2_move( action : dict[str,list[str]] = None ) -> dict[str,np.ndarray]:
+        """ Express the action as a move from one pose to another """
+        if action is None:
+            return None
+        if 'next' in action:
+            seq = action['next']
+        elif 'plan' in action:
+            seq = action['plan'][:4]
+        else:
+            return None
+        src = None
+        dst = None
+        for bhv in seq:
+            if "Pick" in bhv[:10]:
+                src = extract_pose_from_str( bhv )
+            elif ("Place" in bhv[:10]) or ("Stack" in bhv[:10]):
+                dst = extract_pose_from_str( bhv )
+        if (src is not None) and (dst is not None):
+            return {"src" : src, "dst" : dst,}
+        else:
+            return None
+
+
+    def ingest_action( self, action : dict[str,list[str]] = None ):
+        """ Log plan for eval later """
+        moveDict = None
+        if (action is not None) and len( action ):
+            moveDict = OCV_State_Tracker.action_2_move( action )
+        self.actions.append( moveDict )
+
+
+    def check_move_outcome( self, move : dict[str,np.ndarray] ):
+        """ Was there a transition that matches these poses?? """
+        # ASSUMPTION: IF WE FIND OBJECTS AT THE SOURCE AND THE DESTINATION, THEN THE MOVE OCCURRED AS PLANNED
+        if len( self.scenes ) >= 2:
+            lastScen = self.get_last_scene(1)
+            prevScen = self.get_last_scene(2)
+            # Find the Source Object #
+            srcObj = None
+            srcErr = 6e10
+            for obj_p in prevScen:
+                d = euclidean_distance_between_symbols( move['src'], obj_p )
+                if d <= env_var("_ACCEPT_POSN_ERR") and d < srcErr:
+                    srcErr = d
+                    srcObj = obj_p 
+            # Find the Destination Object #
+            dstObj = None
+            dstErr = 6e10
+            for obj_l in lastScen:
+                d = euclidean_distance_between_symbols( move['dst'], obj_l )
+                if d <= env_var("_ACCEPT_POSN_ERR") and d < dstErr:
+                    dstErr = d
+                    dstObj = obj_l
+            # Did we find both? #
+            return (srcObj is not None) and (dstObj is not None)
+        else:
+            return None
 
 
     def dump_episode( self, epPklPath : str, nameSimilar : bool = True ):
