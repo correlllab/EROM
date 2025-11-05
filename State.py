@@ -684,13 +684,30 @@ def grow_clumped_mask( binary_image : np.ndarray, N : int = 4, depth : int = 2 )
     return expanded_mask
 
 
-
 def mask_clump_ratio( mask : np.ndarray, N : int = 4 ):
     """ What fraction of the mask pixels have at least N neighbors? """
     cM = get_clumped_mask( mask, N )
     Nc = np.count_nonzero( cM )
     Nt = np.count_nonzero( mask )
     return Nc / Nt
+
+
+def mask_midline_ratio( mask : np.ndarray ):
+    bbox   = get_nonzero_mask_bbox( mask )
+    rowMid = int( (bbox[1][0] + bbox[0][0])/2 )
+    colMid = int( (bbox[1][1] + bbox[0][1])/2 )
+    Ntot   = (bbox[1][0] - bbox[0][0])+(bbox[1][1] - bbox[0][1])
+    Nyes   = 0
+    for j in range( bbox[0][1], bbox[1][1]+1 ):
+        if mask[ rowMid ][j]:
+            Nyes += 1    
+    for i in range( bbox[0][0], bbox[1][0]+1 ):
+        if mask[i][ colMid ]:
+            Nyes += 1
+    if Ntot > 0:
+        return Nyes / Ntot
+    else:
+        return 0.0
 
 
 def vec3f_as_column( posn ):
@@ -862,8 +879,10 @@ def get_mpcd_pose( point_cloud : MPCD ):
 
 ##### "Ground Truth" Tracker ############################################## 
 
-_CLUMP_POP_PX = 7 # Number of neighbors to be considered part of a clump
-_EXPAND_DEPTH = 2
+_CLUMP_POP_PX  = 7 # Number of neighbors to be considered part of a clump
+_EXPAND_DEPTH  = 2
+_MIN_PXL_DNSTY = 0.25
+_MIN_MID_RATIO = 0.40
 
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
@@ -911,15 +930,25 @@ class OCV_State_Tracker:
         clstMx = None
         # print( depArr[0,0] )
         for clstr in clstrs:
-            print( f"Evaluate: {self.maskFunc[ blockName ]}" )
-            if _VERBOSE: 
+            
+            if _VERBOSE:
+                print( f"Evaluate: {self.maskFunc[ blockName ]}" ) 
                 self.jps.arr_show( clstr )
             
             # Test 1: Sufficient Points 
             Npix_i = np.count_nonzero( clstr )
             # Nclm_i = mask_clump_ratio( clstr, _CLUMP_POP_PX ) * Npix_i
-            Nclm_i = clumped_density( clstr, _CLUMP_POP_PX ) * Npix_i
-            print( f"Block mask of {Npix_i} points!" )
+            # Nclm_i = clumped_density( clstr, _CLUMP_POP_PX ) * Npix_i
+            dnsty_i = clumped_density( clstr, _CLUMP_POP_PX+1 )
+            ratio_i = mask_midline_ratio( clstr )
+            if dnsty_i < _MIN_PXL_DNSTY:
+                continue 
+            if ratio_i < _MIN_MID_RATIO:
+                continue
+            Nclm_i  = dnsty_i * Npix_i * ratio_i
+            print( f"Density: {dnsty_i}, Ratio: {ratio_i}" )
+            if _VERBOSE: 
+                print( f"Block mask of {Npix_i} points!" )
             # self.jps.arr_show( clstr )
             if Npix_i < self._CLUST_MIN:
                 break # We sorted clusters descending
@@ -928,7 +957,8 @@ class OCV_State_Tracker:
             if count_i == 0:
                 continue
             depMsk_i = depArr[clstr].sum() / count_i
-            print( f"Block mask is {depMsk_i} away!" )
+            if _VERBOSE: 
+                print( f"Block mask is {depMsk_i} away!" )
             if (depMsk_i < self._DIST_MIN) or (depMsk_i > self._DIST_MAX):
                 continue
             
@@ -936,14 +966,28 @@ class OCV_State_Tracker:
             bbox_i = get_nonzero_mask_bbox( clstr )
             # span_i = [bbox_i[2]-bbox_i[0], bbox_i[3]-bbox_i[1],]
             span_i = [bbox_i[1][0]-bbox_i[0][0], bbox_i[1][1]-bbox_i[0][1],]
-            print( f"Span is {span_i}" )
+            if _VERBOSE: 
+                print( f"Span is {span_i}" )
             angl_i = [ np.deg2rad( (span_i[0]/imgArr.shape[0])*env_var("_D405_FOV_V_DEG") ),
                        np.deg2rad( (span_i[1]/imgArr.shape[1])*env_var("_D405_FOV_H_DEG") ), ] 
-            print( f"Arc is {angl_i}" )
+            if _VERBOSE: 
+                print( f"Arc is {angl_i}" )
             dims_i = [ 2.0 * np.tan( angl_i[0]/2.0 ) * depMsk_i, 
                        2.0 * np.tan( angl_i[1]/2.0 ) * depMsk_i, ] 
             scal_i = np.array( dims_i ) / env_var("_BLOCK_SCALE")
-            print( f"Scale is {scal_i} * {env_var('_BLOCK_SCALE')}" )
+            # DANGER: HACK
+            # factor = 1.0
+            factor = list()
+            for scl in scal_i:
+                if scl < 1.0:
+                    # factor *= scl
+                    factor.append( scl )
+                elif scl > 1.0:
+                    # factor *= (1.0 - (scl - 1.0))
+                    factor.append( 1.0 - (scl - 1.0) )
+            Nclm_i *= max( factor )  
+            if _VERBOSE: 
+                print( f"Scale is {scal_i} * {env_var('_BLOCK_SCALE')}" )
             if (self._SCAL_MIN <= scal_i[0] <= self._SCAL_MAX) and (self._SCAL_MIN <= scal_i[1] <= self._SCAL_MAX):
                 # if Npix_i > pixMax:
                 if Nclm_i > pixMax:
@@ -1019,6 +1063,7 @@ class OCV_State_Tracker:
             rtnFct.append( ('GraspObj' , sym.label, sym.pose, ) )
         ## Support Predicates && Blocked Status ##
         # Check if `sym_i` is supported by `sym_j`, blocking `sym_j`, NOTE: Table supports not checked
+        _XY_FACTOR = 1.125
         supDices = set([])
         for i, sym_i in enumerate( objLst ):
             for j, sym_j in enumerate( objLst ):
@@ -1029,7 +1074,7 @@ class OCV_State_Tracker:
                     posDn = extract_pose_as_homog( sym_j )
                     xySep = diff_norm( posUp[0:2,3], posDn[0:2,3] )
                     zSep  = posUp[2,3] - posDn[2,3]
-                    if ((xySep <= env_var("_WIDE_XY_ACCEPT")) and ( env_var("_WIDE_Z_ABOVE") >= zSep >= env_var("_SMUSH_Z_ABOVE"))):
+                    if ((xySep <= (env_var("_WIDE_XY_ACCEPT") * _XY_FACTOR)) and ( env_var("_WIDE_Z_ABOVE") >= zSep >= env_var("_SMUSH_Z_ABOVE"))):
                         supDices.add(i)
                         rtnFct.extend([
                             ('Supported', lblUp, lblDn,),
@@ -1133,9 +1178,13 @@ class OCV_State_Tracker:
         return parentPath.split('.')[0] + suffix + "." + EXT
     
 
-    def last_scene_confusion( self, sensedObjects : list[GraspObj] ):
-        """ Return the number of `sensedObjects` that *contradict* the last scene """
-        lastScen = self.get_last_scene()
+    def current_scene_confusion( self, sensedObjects : list[GraspObj] ):
+        """ Return the number of `sensedObjects` that *contradict* the current scene """
+        if (sensedObjects is None) or (not len( sensedObjects )):
+            return dict()
+        
+        # lastScen = self.get_last_scene()
+        lastScen = list( self.current['symbols'].values() )
         matches  = dict()
 
         # Store Sensed Objects #
@@ -1148,6 +1197,8 @@ class OCV_State_Tracker:
             kMin_i = None
             for k_i, v_i in matches.items():
                 d_ij = euclidean_distance_between_symbols( v_i["sensed"], obj_j )
+                if d_ij is None:
+                    continue
                 if d_ij <= env_var("_ACCEPT_POSN_ERR") and d_ij < dMin:
                     dMin   = d_ij
                     kMin_i = k_i 
