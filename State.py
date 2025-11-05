@@ -913,7 +913,7 @@ class OCV_State_Tracker:
 
     def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray ):
         """ Search for the block, I guess! """
-        _VERBOSE = False
+        _VERBOSE = False # True # False
 
         if isinstance( self.maskFunc[ blockName ]['func'], list ):
             blcMsk = np.zeros( imgArr.shape[:2] )
