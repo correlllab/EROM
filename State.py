@@ -628,10 +628,10 @@ def get_nonzero_mask_bbox( mask, flatXY = False ):
 
     if flatXY:
         # This is how `mask_ray_realsense` expects it
-        return [ x_min, y_min, x_max, y_max,]
+        return [ x_min, y_min, x_max, y_max,] # [xLo, yLo, xHi, yHi]
     else:
         # This is how Gemini ordered it
-        return [ [y_min, x_min,], [y_max, x_max,],]
+        return [ [y_min, x_min,], [y_max, x_max,],] # [[rowLo, colLo], [rowHi, colHi]]
     
 
 def mask_density( mask : np.ndarray ):
