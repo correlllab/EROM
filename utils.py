@@ -152,6 +152,8 @@ class JupyterPlotServer:
         display( img )
         # Close the image
         img.close()
+        # Erase the image
+        img = None
 
 
     def plt_show( self ):

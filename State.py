@@ -893,9 +893,12 @@ class OCV_State_Tracker:
     _SCAL_MIN  =    0.350 # 0.350 # 0.500
     _SCAL_MAX  = (1.0 - _SCAL_MIN) + 1.0 
     _CRIT_M    = env_var("_BLOCK_SCALE") * 1.50 # 1.50 # 1.750 # 2.25
+    _N_RETAIN  = 5
 
-    def __init__( self ):
+    def __init__( self, readFile : str = None ):
         """ Set up tracking """
+        self.seq      = 0
+        self.rFile    = readFile
         self.jps      = JupyterPlotServer()
         self.names    = list() #- Names of the objects req'd to solve the problem
         self.scenes   = deque() # Sequence of reconstruction data
@@ -994,7 +997,19 @@ class OCV_State_Tracker:
                     # pixMax = Npix_i
                     pixMax = Nclm_i
                     clstMx = clstr
-        return clstMx      
+        return clstMx  
+
+
+    def dump_scene( self ):
+        epPklPath = self.near_path( self.rFile ).replace( ".pkl", f"_{self.seq}.pkl" ) 
+        if len( self.scenes ):
+            currScene = self.scenes.popleft()
+            with open( epPklPath, 'wb' ) as outFil:
+                pickle.dump( currScene, outFil )
+            self.seq += 1
+            print( f"Saved: {epPklPath}!" )
+        else:
+            print( f"NO scene to save!" )    
 
 
     def new_scene( self ):
@@ -1009,12 +1024,16 @@ class OCV_State_Tracker:
             "objects": deque(), # Collection of readings obtained from the masked images
             "symbols": dict(), #- Lookup of objects obtained from the readings
         }
+        if len( self.scenes ) > self._N_RETAIN:
+            self.dump_scene()
+
 
 
     def get_last_scene( self, backDex : int = 1 ) -> list[GraspObj]:
         """ Get Last State Reconstruction """
         if len( self.scenes ) >= backDex:
-            return deepcopy( self.scenes[-backDex] )
+            # return deepcopy( self.scenes[-backDex] )
+            return self.scenes[-backDex]
         else:
             return None
 
@@ -1027,8 +1046,12 @@ class OCV_State_Tracker:
         iKey : str        = choice( list( inpt.keys() ) )
         imag : np.ndarray = inpt[ iKey ]['image']
         dpth : np.ndarray = inpt[ iKey ]['depth']
-        self.current['image'][ iKey ] = deepcopy( imag )
-        self.current['depth'][ iKey ] = deepcopy( dpth )
+
+        # self.current['image'][ iKey ] = deepcopy( imag )
+        # self.current['depth'][ iKey ] = deepcopy( dpth )
+        self.current['image'][ iKey ] = imag
+        self.current['depth'][ iKey ] = dpth
+        
         Nadd = 0
         for label in goalLabels:
             res = self.find_block_mask( label, imag, dpth )
@@ -1039,18 +1062,26 @@ class OCV_State_Tracker:
                 pcd_i = color_depth_to_pointcloud( imag, dpth, _DEPTH_MATX_1280x720, mask = res )
                 transform_mpcd( pcd_i, camPose )
                 pos_i = get_mpcd_pose( pcd_i )
-                self.current['clouds'].append( deepcopy( pcd_i ) )
+
+                # self.current['clouds'].append( deepcopy( pcd_i ) )
+                self.current['clouds'].append( pcd_i )
+                
                 obj_i = GraspObj( 
                     label = label, 
                     pose  = ObjPose( pos_i ), 
                     ts    = now(), 
                     score = 0.0,
-                    cpcd  = deepcopy( pcd_i ),
+                    # cpcd  = deepcopy( pcd_i ),
+                    cpcd  = pcd_i,
                 )
                 if p_symbol_inside_workspace_bounds( obj_i ): # Sometimes extraneous shit gets picked up!
                     self.jps.arr_show( res )
                     self.current['objects'].append( obj_i )
                     Nadd += 1
+
+        imag = None
+        dpth = None
+
         print( f"\nAdded {Nadd} readings!\n\n" )
 
 
@@ -1159,7 +1190,8 @@ class OCV_State_Tracker:
                 pose_r[:3,3] = posn_r
                 obj_j.pose = ObjPose( pose_r )
             else:
-                self.current['symbols'][ lbl_i ] = obj_i.copy()
+                # self.current['symbols'][ lbl_i ] = obj_i.copy()
+                self.current['symbols'][ lbl_i ] = obj_i
         print( f"Processed {len(self.current['objects'])} readings!" )
 
         lstScn = self.get_last_scene()
@@ -1167,7 +1199,8 @@ class OCV_State_Tracker:
         curSet = set( self.current['symbols'].keys() )
         difSet = lstSet - curSet 
         for dLabel in difSet:
-            self.current['symbols'][ dLabel ] = deepcopy( lstScn['symbols'][ dLabel ] )
+            # self.current['symbols'][ dLabel ] = deepcopy( lstScn['symbols'][ dLabel ] )
+            self.current['symbols'][ dLabel ] = lstScn['symbols'][ dLabel ]
 
         rtnSym = list( self.current['symbols'].values() )
         
@@ -1305,7 +1338,7 @@ class OCV_State_Tracker:
         if nameSimilar:
             epPklPath = self.near_path( epPklPath )
         self.new_scene() # Save last scene
-        with open( epPklPath, 'wb' ) as outFil:
-            pickle.dump( list( self.scenes ), outFil )
+        while len( self.scenes ):
+            self.dump_scene()
         self.scenes = deque()
         print( f"Saved: {epPklPath}!" )
