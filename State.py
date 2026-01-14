@@ -1063,7 +1063,9 @@ class OCV_State_Tracker:
             rtnFct.append( ('GraspObj' , sym.label, sym.pose, ) )
         ## Support Predicates && Blocked Status ##
         # Check if `sym_i` is supported by `sym_j`, blocking `sym_j`, NOTE: Table supports not checked
-        _XY_FACTOR = 1.125
+        # _XY_FACTOR = 1.125
+        # _XY_FACTOR = 1.250
+        _XY_FACTOR = 1.500
         supDices = set([])
         for i, sym_i in enumerate( objLst ):
             for j, sym_j in enumerate( objLst ):
@@ -1180,12 +1182,21 @@ class OCV_State_Tracker:
 
     def current_scene_confusion( self, sensedObjects : list[GraspObj] ):
         """ Return the number of `sensedObjects` that *contradict* the current scene """
-        if (sensedObjects is None) or (not len( sensedObjects )):
-            return dict()
-        
-        # lastScen = self.get_last_scene()
         lastScen = list( self.current['symbols'].values() )
         matches  = dict()
+        
+        if (sensedObjects is None) or (not len( sensedObjects )):
+            return {
+            "N_total"  : len( lastScen ),
+            "N_confuse": 0,
+            "N_halluc" : 0,
+            "N_missing": len( lastScen ),
+            "N_sensed" : 0,
+            "N_true"   : len( lastScen ),
+        }
+        
+        # lastScen = self.get_last_scene()
+        
 
         # Store Sensed Objects #
         for obj_i in sensedObjects:
@@ -1224,6 +1235,8 @@ class OCV_State_Tracker:
             "N_confuse": Ncnf,
             "N_halluc" : Nhal,
             "N_missing": Nmis,
+            "N_sensed" : len( sensedObjects ),
+            "N_true"   : len( lastScen ),
         }
     
 
