@@ -1096,7 +1096,9 @@ class OCV_State_Tracker:
         # Check if `sym_i` is supported by `sym_j`, blocking `sym_j`, NOTE: Table supports not checked
         # _XY_FACTOR = 1.125
         # _XY_FACTOR = 1.250
-        _XY_FACTOR = 1.500
+        # _XY_FACTOR = 1.500
+        _XY_FACTOR = 1.750
+        _Z_FACTOR = 0.750
         supDices = set([])
         for i, sym_i in enumerate( objLst ):
             for j, sym_j in enumerate( objLst ):
@@ -1107,7 +1109,7 @@ class OCV_State_Tracker:
                     posDn = extract_pose_as_homog( sym_j )
                     xySep = diff_norm( posUp[0:2,3], posDn[0:2,3] )
                     zSep  = posUp[2,3] - posDn[2,3]
-                    if ((xySep <= (env_var("_WIDE_XY_ACCEPT") * _XY_FACTOR)) and ( env_var("_WIDE_Z_ABOVE") >= zSep >= env_var("_SMUSH_Z_ABOVE"))):
+                    if ((xySep <= (env_var("_WIDE_XY_ACCEPT") * _XY_FACTOR)) and ( env_var("_WIDE_Z_ABOVE") * (1.0 + (1.0 - _Z_FACTOR)) >= zSep >= env_var("_SMUSH_Z_ABOVE") * _Z_FACTOR )):
                         supDices.add(i)
                         rtnFct.extend([
                             ('Supported', lblUp, lblDn,),
@@ -1341,4 +1343,4 @@ class OCV_State_Tracker:
         while len( self.scenes ):
             self.dump_scene()
         self.scenes = deque()
-        print( f"Saved: {epPklPath}!" )
+        # print( f"Saved: {epPklPath}!" )
