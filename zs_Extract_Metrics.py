@@ -24,7 +24,6 @@ set_render_env()
 ########## SETUP ###################################################################################
 _JSON_PATH  = "data/allData.txt"
 _DATA_DRIVE = "DATA_TANK"
-# _PLOT_DIR   = "/media/james/FILEPILE/EROM/data/plots/"
 _PLOT_DIR   = "data/plots/"
 
 tests = [
@@ -41,10 +40,9 @@ longTestNames = [
     "Sensed Class & Sensed Pose", 
 ]
 
-# paths = [ f"/media/james/{_DATA_DRIVE}/2025-08_{test}" for test in tests ]
 datasets = [
     [ f"/media/james/{_DATA_DRIVE}/2025-08B_{test}" for test in tests ],
-    [ f"/media/james/{_DATA_DRIVE}/RWB_2025-09_{test}" for test in tests ],
+    # [ f"/media/james/{_DATA_DRIVE}/RWB_2025-09_{test}" for test in tests ],
 ]
 
 dataLabels = ["RGB", "RBW",]
@@ -53,11 +51,104 @@ datNamLong = {
     "RBW": "Red-Black-White",
 }
 
-fNames = [ f"{_PLOT_DIR}{test}" for test in tests  ]
-
 plotExt = ".pdf"
 
 
+########## HELPER FUNCTIONS ########################################################################
+
+def crash_out():
+    """ End the program with Brutal Finality """
+    print( "\n\n" )
+    os.system( 'kill %d' % os.getpid() ) 
+
+
+
 ########## SAVE: DATA PROCESSING ###################################################################
-_SAVE_DATA = True
-_LOAD_DATA = True 
+_SAVE_DATA      = True
+_LOAD_DATA      = True 
+_MIN_STATE_SIZE = 500.0
+
+records = deque()
+grTruth = deque()
+
+try:
+    ### For every block set ###
+    for iii, paths in enumerate( datasets ):
+        setNam = dataLabels[iii]
+        suffix = "_" + setNam
+        skip   = False
+
+        ### For every scenario ###
+        for ii, test in enumerate( tests ):
+            ##### Init ################################################################
+            path     = paths[ii]
+            longTNam = longTestNames[ii]
+            
+            testRecord = [os.path.join( path, item ) for item in os.listdir( path ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}"))]
+            trueRecord = [os.path.join( path, item ) for item in os.listdir( path ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}"))    ]
+
+            def dex_key( x ):
+                dex = f"{x}".split('_')[-1].replace( ".pkl", "" )
+                if len( dex ) >= 2:
+                    return dex
+                elif len( dex ) < 2:
+                    return '0'*(2-len( dex )) + dex
+                else:
+                    raise ValueError( "`dex_key`: This should NOT have happened!" )
+
+            ### For every episode ###
+            for episodePath in testRecord:
+                epPrefix   = f"{episodePath}".replace( ".pkl", "" )
+                statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE))    ]
+                statePaths.sort( key = lambda x: dex_key( x ) )
+
+                print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
+
+                state = deque()
+                if len( statePaths ) == 1:
+                    print( f"\t{statePaths[0]}, {int(os.path.getsize(statePaths[0])/1e6)}MB" )
+                    with open( statePaths[0], 'rb' ) as f:
+                        state = pickle.load(f)
+                elif len( statePaths ) > 1:
+                    ### For every state file ###
+                    for sPath in statePaths:
+                        try:
+                            print( f"\t{sPath}, {int(os.path.getsize(sPath)/1e6)}MB" )
+                            with open( sPath, 'rb' ) as f:
+                                state.append( pickle.load(f) )
+                        except Exception as e:
+                            print( f">>>> SKIP {sPath}: {e} >>>>" )
+                            continue
+                        if state is None:
+                            print( f">>>> SKIP {sPath}: NONE STATE >>>>" )
+                            continue
+                        print( f"\t\t{type(state[-1])}" )
+                else:
+                    raise ValueError( "ZERO State Files!!" )
+                print( f"Loaded {len( state )} states!" )
+
+                ### Makespan Metrics ###
+
+
+                ### For every state ###
+                for j, s_j in enumerate( state ):
+                    print( f"\n##### State {j+1} #####" )
+                    # print( list( s_j.keys() ) ) # ['labels', 'image', 'depth', 'clouds', 'objects', 'symbols']
+                    # "objects": deque(), # Collection of readings obtained from the masked images
+                    # "symbols": dict(), #- Lookup of objects obtained from the readings
+                    sense = s_j['symbols']
+                    truth = s_j['objects']
+
+
+                
+                    
+                    
+                    
+                    
+
+except KeyboardInterrupt:
+    print( "\n\nSESSION CLOSED BY USER!" )
+    crash_out()
+
+########## EXIT ####################################################################################
+crash_out()
