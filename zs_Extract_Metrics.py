@@ -3,7 +3,7 @@ import pickle, os, traceback, json
 from collections import deque
 from copy import deepcopy
 from pprint import pprint
-from typing import Deque
+from typing import Deque, Any
 
 import numpy as np
 
@@ -62,6 +62,87 @@ def crash_out():
     os.system( 'kill %d' % os.getpid() ) 
 
 
+def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : list[GraspObj] ):
+    """ Return the number of `sensedObjects` that *contradict* the current scene """
+    lastScen = actualObjects
+    matches : dict[int,dict[str,Any|GraspObj]]  = dict()
+    
+    if (sensedObjects is None) or (not len( sensedObjects )):
+        return {
+        "N_confuse": 0,
+        "N_halluc" : 0,
+        "N_missing": len( lastScen ),
+        "N_sensed" : 0,
+        "N_true"   : len( lastScen ),
+    }
+    
+    # Store Sensed Objects #
+    for obj_i in sensedObjects:
+        matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
+    
+    # Match OpenCV Objects to Sensed Objects #
+    for obj_j in lastScen:
+        dMin   = 6e10
+        kMin_i = None
+        for k_i, v_i in matches.items():
+            d_ij = euclidean_distance_between_symbols( v_i["sensed"], obj_j )
+            if d_ij is None:
+                continue
+            if d_ij <= env_var("_ACCEPT_POSN_ERR") and d_ij < dMin:
+                dMin   = d_ij
+                kMin_i = k_i 
+        if kMin_i is not None:
+            matches[ kMin_i ]["known"] = obj_j
+            matches[ kMin_i ]["d"    ] = dMin
+        
+    # Compute Number of Total, Confused, Hallucinated, and Missing Objects #
+    Ncnf = 0 # Number of confusions
+    Nhal = 0 # Number of hallucinations, False positive
+    for k_i, v_i in matches.items():
+        # If the sensed block was real, Then check for confusion
+        if v_i["known"] is not None:
+            if v_i["known"].label != v_i["sensed"].label:
+                Ncnf += 1
+        # Else block was NOT real, The system hallucinated it! 
+        else:
+            Nhal += 1 
+    Nmis = max( len( lastScen )-len( sensedObjects ), 0 )
+    return {
+        "N_confuse": Ncnf,
+        "N_halluc" : Nhal,
+        "N_missing": Nmis,
+        "N_sensed" : len( sensedObjects ),
+        "N_true"   : len( lastScen ),
+    }
+
+
+from State import OCV_State_Tracker
+from aspire.symbols import extract_position, extract_pose_as_homog
+
+
+def reconcile_scene( actualObjects : list[GraspObj] ):
+    """ Merge all the readings """
+    _BLEND_FACTOR = 0.200
+    symbols = dict()
+    for obj_i in actualObjects:
+        lbl_i = obj_i.label
+        # WARNING: THE FOLLOWING ASSUMES ONE OF EACH LABEL!
+        if lbl_i in symbols:
+            obj_j  = symbols[ lbl_i ]
+            posn_i = extract_position( obj_i )
+            posn_j = extract_position( obj_j )
+            posn_r = posn_i * _BLEND_FACTOR + posn_j * (1.0 - _BLEND_FACTOR)
+            pose_r = extract_pose_as_homog( obj_j )
+            pose_r[:3,3] = posn_r
+            obj_j.pose = ObjPose( pose_r )
+        else:
+            symbols[ lbl_i ] = obj_i
+    print( f"Processed {len(actualObjects)} readings!" )
+    rtnSym = list( symbols.values() )
+    
+    OCV_State_Tracker.logical_Z_snap( rtnSym )
+    return rtnSym
+
 
 ########## SAVE: DATA PROCESSING ###################################################################
 _SAVE_DATA      = True
@@ -80,7 +161,7 @@ try:
 
         ### For every scenario ###
         for ii, test in enumerate( tests ):
-            ##### Init ################################################################
+            ##### Init ####################################################
             path     = paths[ii]
             longTNam = longTestNames[ii]
             
@@ -95,6 +176,9 @@ try:
                     return '0'*(2-len( dex )) + dex
                 else:
                     raise ValueError( "`dex_key`: This should NOT have happened!" )
+                
+
+            ##### Episode Basics ##########################################
 
             ### For every episode ###
             for episodePath in testRecord:
@@ -102,8 +186,51 @@ try:
                 statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE))    ]
                 statePaths.sort( key = lambda x: dex_key( x ) )
 
-                print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
+                ### Episode Accounting ###
+                results = {
+                    ## Steps ##
+                    "tEpisd"  : deque(), # Total Makespan [s]
+                    "rSuccess": deque(), # Success Rate
+                }
 
+                ### Makespan Metrics ###
+                print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
+                try:
+                    with open( episodePath, 'rb' ) as f:
+                        data = pickle.load( f )
+                except EOFError as e:
+                    print( f"LOAD ERROR: {e}" )
+                    continue
+
+                end   =  False
+                resEp = 0
+                for i in range(1,11):
+                    try:
+                        msg = data[-i]['msg']
+                    except IndexError as e:
+                        print(e)
+                        break
+                    if ("Status.FAILURE" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                        resEp = 0
+                        print( f"FAILURE" )
+                        end = True
+                        break
+                    elif ("Status.SUCCESS" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                        resEp = 1
+                        print( f"SUCCESS" )
+                        end = True
+                        break
+                if not end:
+                    resEp = 0
+                    print( f"FAILURE" )
+
+                results["tEpisd"].append( data[-1]['t'] - data[0]['t'] )
+                results["rSuccess"].append( resEp )
+
+
+                ##### Perception Metrics -vs- Ground Truth ################
+                
+                ### Load States ###
                 state = deque()
                 if len( statePaths ) == 1:
                     print( f"\t{statePaths[0]}, {int(os.path.getsize(statePaths[0])/1e6)}MB" )
@@ -127,17 +254,16 @@ try:
                     raise ValueError( "ZERO State Files!!" )
                 print( f"Loaded {len( state )} states!" )
 
-                ### Makespan Metrics ###
-
-
                 ### For every state ###
                 for j, s_j in enumerate( state ):
                     print( f"\n##### State {j+1} #####" )
                     # print( list( s_j.keys() ) ) # ['labels', 'image', 'depth', 'clouds', 'objects', 'symbols']
                     # "objects": deque(), # Collection of readings obtained from the masked images
                     # "symbols": dict(), #- Lookup of objects obtained from the readings
-                    sense = s_j['symbols']
-                    truth = s_j['objects']
+                    sense  = s_j['symbols']
+                    truth  = reconcile_scene( s_j['objects'] )
+                    conf_j = current_scene_confusion( sense, truth )
+                    print( conf_j )
 
 
                 

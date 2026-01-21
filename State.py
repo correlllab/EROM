@@ -1085,7 +1085,8 @@ class OCV_State_Tracker:
         print( f"\nAdded {Nadd} readings!\n\n" )
 
 
-    def get_block_facts( self, objLst : list[GraspObj] ):
+    @staticmethod
+    def get_block_facts( objLst : list[GraspObj] ):
         """ Scan the environment for evidence that the task is progressing, using current beliefs """
         rtnFct = list()
         ## Ground the Blocks ##
@@ -1131,9 +1132,10 @@ class OCV_State_Tracker:
         return rtnFct
 
 
-    def logical_Z_snap( self, objLst : list[GraspObj] ):
+    @staticmethod
+    def logical_Z_snap( objLst : list[GraspObj] ):
         """ Impoze zome phyzical rulez on the Z-coordinatez of the objectz """
-        blockFacts = self.get_block_facts( objLst )
+        blockFacts = OCV_State_Tracker.get_block_facts( objLst )
 
         def get_obj_by_label( q : str ):
             """ Get the object that matches the label """
@@ -1183,6 +1185,7 @@ class OCV_State_Tracker:
         _BLEND_FACTOR = 0.200
         for obj_i in self.current['objects']:
             lbl_i = obj_i.label
+            # WARNING: THE FOLLOWING ASSUMES ONE OF EACH LABEL!
             if lbl_i in self.current['symbols']:
                 obj_j  = self.current['symbols'][ lbl_i ]
                 posn_i = extract_position( obj_i )
