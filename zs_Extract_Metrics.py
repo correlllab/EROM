@@ -42,7 +42,7 @@ longTestNames = [
 
 datasets = [
     [ f"/media/james/{_DATA_DRIVE}/2025-08B_{test}" for test in tests ],
-    # [ f"/media/james/{_DATA_DRIVE}/RWB_2025-09_{test}" for test in tests ],
+    [ f"/media/james/{_DATA_DRIVE}/RWB_2025-09_{test}" for test in tests ],
 ]
 
 dataLabels = ["RGB", "RBW",]
@@ -152,15 +152,26 @@ _MIN_STATE_SIZE = 500.0
 records = deque()
 grTruth = deque()
 
+def print_header( text : str, preWidth : int, totWidth : int, capitalize = True, _HDR_CHR : str = '#' ):
+    """ Print a pleasant header """
+    if capitalize:
+        text = f"{text}".upper()
+    totStr = f"\n{preWidth*_HDR_CHR[0]} {text} "
+    totStr += max( totWidth-len(totStr)+1, 0 )*_HDR_CHR[0]
+    print( totStr )
+
+
 try:
     ### For every block set ###
     for iii, paths in enumerate( datasets ):
+        
         setNam = dataLabels[iii]
         suffix = "_" + setNam
         skip   = False
 
         ### For every scenario ###
         for ii, test in enumerate( tests ):
+            print_header( f"TEST: {test}", preWidth = 10, totWidth = 100, capitalize = True )
             ##### Init ####################################################
             path     = paths[ii]
             longTNam = longTestNames[ii]
@@ -182,6 +193,7 @@ try:
 
             ### For every episode ###
             for episodePath in testRecord:
+                print_header( f"EP: {episodePath}", preWidth = 5, totWidth = 75, capitalize = False )
                 epPrefix   = f"{episodePath}".replace( ".pkl", "" )
                 statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE))    ]
                 statePaths.sort( key = lambda x: dex_key( x ) )
