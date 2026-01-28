@@ -1,5 +1,5 @@
 ########## INIT ####################################################################################
-import pickle, os, traceback, json
+import pickle, os, gc
 from collections import deque
 from copy import deepcopy
 from pprint import pprint
@@ -79,8 +79,15 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
     }
     
     # Store Sensed Objects #
-    for obj_i in sensedObjects:
-        matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
+    if isinstance( sensedObjects, dict ):
+        for lbl_i, obj_i in sensedObjects.items():
+            matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
+    elif isinstance( sensedObjects, (list,deque,) ):
+        for obj_i in sensedObjects:
+            matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
+    else:
+        raise ValueError( f"Could not parse a list of objects of type {type(sensedObjects)}" )
+    print( f"There are {len(matches)} symbols to match!" )
     
     # Match OpenCV Objects to Sensed Objects #
     for obj_j in lastScen:
@@ -88,8 +95,10 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
         kMin_i = None
         for k_i, v_i in matches.items():
             d_ij = euclidean_distance_between_symbols( v_i["sensed"], obj_j )
+            # print( v_i["sensed"], obj_j )
+            # print( f"d_ij: {d_ij}" )
             if d_ij is None:
-                continue
+                raise ValueError( f"Cannot compute a distance between {type(v_i['sensed'])} and {type(obj_j)}" )
             if d_ij <= env_var("_ACCEPT_POSN_ERR") and d_ij < dMin:
                 dMin   = d_ij
                 kMin_i = k_i 
@@ -155,10 +164,10 @@ def print_header( text : str, preWidth : int, totWidth : int, capitalize = True,
 
 
 
-########## MAKE PLOTS ##############################################################################
+########## GATHER DATA #############################################################################
 _MIN_STATE_SIZE_BYTES = 500.0
 
-totRes = dict()
+totRes : dict[str,dict] = dict()
 
 fileDex = -1
 try:
@@ -197,17 +206,20 @@ try:
             ### Episode Accounting ###
             results = {
                 ## Steps ##
+                "Nstep"   : deque(),
+                "tStep"   : deque(),
                 "tEpisd"  : deque(), # Total Makespan [s]
                 "rSuccess": deque(), # Success Rate
             }
 
             ### For every episode ###
             for episodePath in testRecord:
+                data = None 
+                print( f"\n\nGarbage collector: Collected {gc.collect()} objects!" )
                 fileDex += 1
                 print_header( f"EP: {fileDex}, {episodePath}", preWidth = 5, totWidth = 75, capitalize = False )
-                epPrefix   = f"{episodePath}".replace( ".pkl", "" )
-                statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE_BYTES))    ]
-                statePaths.sort( key = lambda x: dex_key( x ) )
+                epPrefix = f"{episodePath}".replace( ".pkl", "" )
+                
 
                 ### Makespan Metrics ###
                 print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
@@ -243,50 +255,150 @@ try:
                 results["tEpisd"].append( data[-1]['t'] - data[0]['t'] )
                 results["rSuccess"].append( resEp )
 
+                ##### Per-Episode Accounting ##################################
+                ### Steps ###
+                Nstep    = 0
+                tStepBgn = 0
+                tStepEnd = 0
+                tStepDqu = deque()
+
+                ##### Per-Message Accounting #####
+                for datum in data:
+                    dtmMsg = datum['msg']
+                    dtmT   = datum['t']
+                    dtmDat = datum['data']
+
+                    ##### Phase 1: Perception #############################
+                    if "BGN: Phase 1" in dtmMsg:
+                        # ASSUMPTION: PHASE 1 MESSAGE SENT ONLY ONCE PER STEP, See `p1pp2`
+                        Nstep += 1
+                        if tStepBgn > 0:
+                            tStepEnd = dtmT
+                            tStepDqu.append( tStepEnd - tStepBgn )
+                        tStepBgn = dtmT
+
+                ### Steps ###
+                results["Nstep"].append( Nstep )
+                results["tStep"].extend( tStepDqu )
+
+                # DONE w `data`
+                data = None 
+
 
                 ##### Perception Metrics -vs- Ground Truth ################
+                statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE_BYTES))    ]
+                statePaths.sort( key = lambda x: dex_key( x ) )
+                statePaths = deque( statePaths )
                 
                 ### Load States ###
-                state = deque()
-                if len( statePaths ) == 1:
-                    print( f"\t{statePaths[0]}, {int(os.path.getsize(statePaths[0])/1e6)}MB" )
-                    with open( statePaths[0], 'rb' ) as f:
-                        state = pickle.load(f)
-                elif len( statePaths ) > 1:
-                    ### For every state file ###
-                    for sPath in statePaths:
-                        try:
-                            print( f"\t{sPath}, {int(os.path.getsize(sPath)/1e6)}MB" )
-                            with open( sPath, 'rb' ) as f:
-                                state.append( pickle.load(f) )
-                        except Exception as e:
-                            print( f">>>> SKIP {sPath}: {e} >>>>" )
-                            continue
-                        if state is None:
-                            print( f">>>> SKIP {sPath}: NONE STATE >>>>" )
-                            continue
-                        print( f"\t\t{type(state[-1])}" )
-                else:
-                    raise ValueError( "ZERO State Files!!" )
-                print( f"Loaded {len( state )} states!" )
+                _STATE_RAM_LIMIT_MB = 16e3
+                state  = deque()
+                sRAMmb = deque()
+                sIndex = 0
+                gotNum = False
 
-                ### For every state ###
-                for j, s_j in enumerate( state ):
-                    print_header( f"State {j+1}", preWidth = 5, totWidth = 50, capitalize = False )
+                def pop_state():
+                    """ Fetch next state """
+                    sRAMmb.popleft()
+                    return state.popleft()
+                
+                def p_numbered( fName : str ):
+                    lastTwo = fName.split('.')[0][-1:]
+                    try:
+                        int( lastTwo )
+                        return True
+                    except ValueError:
+                        return False
+                    
+                
+
+                while len( statePaths ) or len( state ):
+
+                    # 1. Load until limit 
+                    while sum( sRAMmb ) < _STATE_RAM_LIMIT_MB:
+                        if len( statePaths ):
+                            sPath  = statePaths.popleft()
+                            gotNum = gotNum or p_numbered( sPath )
+                            if gotNum and (not p_numbered( sPath )):
+                                continue
+                            pathSz = int(os.path.getsize(sPath)/1e6)
+                            try:
+                                print( f"\t{sPath}, {pathSz}MB" )
+                                with open( sPath, 'rb' ) as f:
+                                    state.append( pickle.load(f) )
+                                    sRAMmb.append( pathSz )
+                            except Exception as e:
+                                print( f">>>> SKIP {sPath}: {e} >>>>" )
+                                continue
+                        else:
+                            break
+                    print( f"Loaded {len( state )} states!" )
+
+                    ### For every state ###
+                    
 
                     # print( list( s_j.keys() ) ) # ['labels', 'image', 'depth', 'clouds', 'objects', 'symbols']
                     # "objects": deque(), # Collection of readings obtained from the masked images
                     # "symbols": dict(), #- Lookup of objects obtained from the readings
-                    sense  = s_j['symbols']
-                    truth  = reconcile_scene( s_j['objects'] )
-                    conf_j = current_scene_confusion( sense, truth )
-                    print( conf_j )
+                    s_i = pop_state()
+                    if not isinstance( s_i, (list,deque,) ):
+                        s_i = [s_i,]
+                    for s_j in s_i:
+                        sense  = s_j['symbols']
+                        print( f"Symbols: {sense}" )
+                        truth  = reconcile_scene( s_j['objects'] )
+                        print( f"Objects: {truth}" )
+                        if not (len( sense ) or len( truth )):
+                            continue
+                        print_header( f"State {sIndex+1}", preWidth = 5, totWidth = 50, capitalize = False )
+                        sIndex += 1
+                        
+                        conf_j = current_scene_confusion( sense, truth )
+                        print( conf_j )
+                        sense = None
+                        truth = None
+                state = None
                     
             totRes[ setNam ][ test ] = results
-            pprint( totRes )
-except KeyboardInterrupt:
+            # pprint( totRes )
+except (KeyboardInterrupt, IndexError,):
     print( "\n\nSESSION CLOSED BY USER!" )
     crash_out()
+
+
+
+########## MAKE PLOTS ##############################################################################
+
+### Per color scenario ... ###
+for scenario, scenDct in totRes.items():
+    mSeries = deque()
+    sNames  = deque()
+
+    ##### Makespan ########################################################
+    # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
+
+    ##### Makespan [Time] ######################## 
+    for setting, stnDct in scenDct.items():
+        mSeries.append( stnDct['tEpisd'] )
+        sNames.append(  setting )
+    make_multi_histo( mSeries, sNames, 
+                      plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
+                      fName     = f"{_PLOT_DIR}Histo-Time_{scenario}{plotExt}", 
+                      xLabel    = 'Time [s]', 
+                      forceYlim = True, savefig = True )
+    
+
+    ##### Makespan [Steps] #######################
+    for setting, stnDct in scenDct.items():
+        mSeries.append( stnDct['Nstep'] )
+        sNames.append(  setting )
+    make_multi_histo( mSeries, sNames, 
+                      plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
+                      fName     = f"{_PLOT_DIR}Histo-Step_{scenario}{plotExt}", 
+                      xLabel    = 'Steps', 
+                      forceYlim = True, savefig = True )
+
+
 
 ########## EXIT ####################################################################################
 crash_out()
