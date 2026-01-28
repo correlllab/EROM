@@ -10,10 +10,12 @@ import numpy as np
 from aspire.env_config import env_var
 from aspire.symbols import GraspObj, ObjPose, euclidean_distance_between_symbols
 from aspire.BlocksTask import set_blocks_env
+from aspire.symbols import extract_position, extract_pose_as_homog
 
 from TaskPlanner import set_experiment_env
+from State import OCV_State_Tracker
 from draw_beliefs import set_render_env
-from utils import deep_copy_memory_list
+from draw_plots import make_histo, make_multi_histo
 
 ##### Environment && Constants ############################################
 set_blocks_env()
@@ -116,10 +118,6 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
     }
 
 
-from State import OCV_State_Tracker
-from aspire.symbols import extract_position, extract_pose_as_homog
-
-
 def reconcile_scene( actualObjects : list[GraspObj] ):
     """ Merge all the readings """
     _BLEND_FACTOR = 0.200
@@ -144,23 +142,25 @@ def reconcile_scene( actualObjects : list[GraspObj] ):
     return rtnSym
 
 
-########## SAVE: DATA PROCESSING ###################################################################
-_SAVE_DATA      = True
-_LOAD_DATA      = True 
-_MIN_STATE_SIZE = 500.0
-
-records = deque()
-grTruth = deque()
-
 def print_header( text : str, preWidth : int, totWidth : int, capitalize = True, _HDR_CHR : str = '#' ):
     """ Print a pleasant header """
     if capitalize:
         text = f"{text}".upper()
-    totStr = f"\n{preWidth*_HDR_CHR[0]} {text} "
-    totStr += max( totWidth-len(totStr)+1, 0 )*_HDR_CHR[0]
+    totStr = '\n'*int(totWidth/25) + f"{preWidth*_HDR_CHR[0]} {text} "
+    pstStr = max( totWidth-len(totStr)+1, 0 )*_HDR_CHR[0]
+    if not len( pstStr ):
+        pstStr = f"{preWidth*_HDR_CHR[0]}"
+    totStr += pstStr
     print( totStr )
 
 
+
+########## MAKE PLOTS ##############################################################################
+_MIN_STATE_SIZE_BYTES = 500.0
+
+totRes = dict()
+
+fileDex = -1
 try:
     ### For every block set ###
     for iii, paths in enumerate( datasets ):
@@ -169,9 +169,12 @@ try:
         suffix = "_" + setNam
         skip   = False
 
+        totRes[ setNam ] = dict()
+
         ### For every scenario ###
         for ii, test in enumerate( tests ):
-            print_header( f"TEST: {test}", preWidth = 10, totWidth = 100, capitalize = True )
+            
+            print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
             ##### Init ####################################################
             path     = paths[ii]
             longTNam = longTestNames[ii]
@@ -191,19 +194,20 @@ try:
 
             ##### Episode Basics ##########################################
 
+            ### Episode Accounting ###
+            results = {
+                ## Steps ##
+                "tEpisd"  : deque(), # Total Makespan [s]
+                "rSuccess": deque(), # Success Rate
+            }
+
             ### For every episode ###
             for episodePath in testRecord:
-                print_header( f"EP: {episodePath}", preWidth = 5, totWidth = 75, capitalize = False )
+                fileDex += 1
+                print_header( f"EP: {fileDex}, {episodePath}", preWidth = 5, totWidth = 75, capitalize = False )
                 epPrefix   = f"{episodePath}".replace( ".pkl", "" )
-                statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE))    ]
+                statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE_BYTES))    ]
                 statePaths.sort( key = lambda x: dex_key( x ) )
-
-                ### Episode Accounting ###
-                results = {
-                    ## Steps ##
-                    "tEpisd"  : deque(), # Total Makespan [s]
-                    "rSuccess": deque(), # Success Rate
-                }
 
                 ### Makespan Metrics ###
                 print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
@@ -268,7 +272,8 @@ try:
 
                 ### For every state ###
                 for j, s_j in enumerate( state ):
-                    print( f"\n##### State {j+1} #####" )
+                    print_header( f"State {j+1}", preWidth = 5, totWidth = 50, capitalize = False )
+
                     # print( list( s_j.keys() ) ) # ['labels', 'image', 'depth', 'clouds', 'objects', 'symbols']
                     # "objects": deque(), # Collection of readings obtained from the masked images
                     # "symbols": dict(), #- Lookup of objects obtained from the readings
@@ -276,14 +281,9 @@ try:
                     truth  = reconcile_scene( s_j['objects'] )
                     conf_j = current_scene_confusion( sense, truth )
                     print( conf_j )
-
-
-                
                     
-                    
-                    
-                    
-
+            totRes[ setNam ][ test ] = results
+            pprint( totRes )
 except KeyboardInterrupt:
     print( "\n\nSESSION CLOSED BY USER!" )
     crash_out()
