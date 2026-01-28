@@ -87,7 +87,7 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
             matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
     else:
         raise ValueError( f"Could not parse a list of objects of type {type(sensedObjects)}" )
-    print( f"There are {len(matches)} symbols to match!" )
+    # print( f"There are {len(matches)} symbols to match!" )
     
     # Match OpenCV Objects to Sensed Objects #
     for obj_j in lastScen:
@@ -170,6 +170,9 @@ _MIN_STATE_SIZE_BYTES = 500.0
 totRes : dict[str,dict] = dict()
 
 fileDex = -1
+banDex  = [70,79,80,93,95,96,142,144,146,147,148,149,150,151,152,153,154,155,156,157,158,159,161,]
+
+
 try:
     ### For every block set ###
     for iii, paths in enumerate( datasets ):
@@ -188,8 +191,8 @@ try:
             path     = paths[ii]
             longTNam = longTestNames[ii]
             
-            testRecord = [os.path.join( path, item ) for item in os.listdir( path ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}"))]
-            trueRecord = [os.path.join( path, item ) for item in os.listdir( path ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}"))    ]
+            testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}"))]
+            trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}"))    ]
 
             def dex_key( x ):
                 dex = f"{x}".split('_')[-1].replace( ".pkl", "" )
@@ -210,6 +213,9 @@ try:
                 "tStep"   : deque(),
                 "tEpisd"  : deque(), # Total Makespan [s]
                 "rSuccess": deque(), # Success Rate
+                ## 2. Symbol Grounding ##
+                "rConfuse" : deque(),
+                "rFindFail": deque(),
             }
 
             ### For every episode ###
@@ -261,6 +267,10 @@ try:
                 tStepBgn = 0
                 tStepEnd = 0
                 tStepDqu = deque()
+                ### 2. Symbol Grounding ###
+                Nground    = 0
+                totFound   = 0
+                totConfuse = 0
 
                 ##### Per-Message Accounting #####
                 for datum in data:
@@ -270,7 +280,6 @@ try:
 
                     ##### Phase 1: Perception #############################
                     if "BGN: Phase 1" in dtmMsg:
-                        # ASSUMPTION: PHASE 1 MESSAGE SENT ONLY ONCE PER STEP, See `p1pp2`
                         Nstep += 1
                         if tStepBgn > 0:
                             tStepEnd = dtmT
@@ -286,6 +295,11 @@ try:
 
 
                 ##### Perception Metrics -vs- Ground Truth ################
+
+                # WARNING, HACK: SKIP OVER FILES WITH PERCEPTION ISSUES
+                if fileDex in banDex:
+                    continue
+
                 statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE_BYTES))    ]
                 statePaths.sort( key = lambda x: dex_key( x ) )
                 statePaths = deque( statePaths )
@@ -354,11 +368,19 @@ try:
                         sIndex += 1
                         
                         conf_j = current_scene_confusion( sense, truth )
+                        totFound   += conf_j['N_sensed' ]
+                        totConfuse += conf_j['N_confuse']
+                        Nground    += conf_j['N_true'   ]
                         print( conf_j )
                         sense = None
                         truth = None
                 state = None
                     
+                ### 2. Symbol Grounding ###
+                results["rGround"].append( Nground / Nstep )
+                results["rConfuse"].append( totConfuse / totFound )
+                results["rFindFail"].append( (Nground - totFound) / Nground )
+
             totRes[ setNam ][ test ] = results
             # pprint( totRes )
 except (KeyboardInterrupt, IndexError,):
@@ -393,9 +415,22 @@ for scenario, scenDct in totRes.items():
         mSeries.append( stnDct['Nstep'] )
         sNames.append(  setting )
     make_multi_histo( mSeries, sNames, 
-                      plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
+                      plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Steps]", 
                       fName     = f"{_PLOT_DIR}Histo-Step_{scenario}{plotExt}", 
                       xLabel    = 'Steps', 
+                      forceYlim = True, savefig = True )
+    
+
+    ##### Confusion Rate ##################################################
+
+    ##### Makespan [Steps] #######################
+    for setting, stnDct in scenDct.items():
+        mSeries.append( stnDct['rConfuse'] )
+        sNames.append(  setting )
+    make_multi_histo( mSeries, sNames, 
+                      plotTitle = f"{datNamLong[ scenario ]}, {setting}\nConfusion Rate", 
+                      fName     = f"{_PLOT_DIR}Histo-Conf_{scenario}{plotExt}", 
+                      xLabel    = 'Confusion Rate', 
                       forceYlim = True, savefig = True )
 
 
