@@ -90,6 +90,7 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
     # print( f"There are {len(matches)} symbols to match!" )
     
     # Match OpenCV Objects to Sensed Objects #
+    usedSet = set([])
     for obj_j in lastScen:
         dMin   = 6e10
         kMin_i = None
@@ -102,7 +103,9 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
             if d_ij <= env_var("_ACCEPT_POSN_ERR") and d_ij < dMin:
                 dMin   = d_ij
                 kMin_i = k_i 
-        if kMin_i is not None:
+                # kMin_i = id( k_i ) 
+        if (kMin_i is not None) and (kMin_i not in usedSet):
+            usedSet.add( kMin_i )
             matches[ kMin_i ]["known"] = obj_j
             matches[ kMin_i ]["d"    ] = dMin
         
