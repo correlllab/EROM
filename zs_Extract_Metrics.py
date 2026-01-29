@@ -71,12 +71,12 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
     
     if (sensedObjects is None) or (not len( sensedObjects )):
         return {
-        "N_confuse": 0,
-        "N_halluc" : 0,
-        "N_missing": len( lastScen ),
-        "N_sensed" : 0,
-        "N_true"   : len( lastScen ),
-    }
+            "N_confuse": 0,
+            "N_halluc" : 0,
+            "N_missing": len( lastScen ),
+            "N_sensed" : 0,
+            "N_true"   : len( lastScen ),
+        }
     
     # Store Sensed Objects #
     if isinstance( sensedObjects, dict ):
@@ -393,13 +393,13 @@ except (KeyboardInterrupt, IndexError,):
 
 ### Per color scenario ... ###
 for scenario, scenDct in totRes.items():
-    mSeries = deque()
-    sNames  = deque()
-
+    
     ##### Makespan ########################################################
     # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
 
     ##### Makespan [Time] ######################## 
+    mSeries = deque()
+    sNames  = deque()
     for setting, stnDct in scenDct.items():
         mSeries.append( stnDct['tEpisd'] )
         sNames.append(  setting )
@@ -411,6 +411,8 @@ for scenario, scenDct in totRes.items():
     
 
     ##### Makespan [Steps] #######################
+    mSeries = deque()
+    sNames  = deque()
     for setting, stnDct in scenDct.items():
         mSeries.append( stnDct['Nstep'] )
         sNames.append(  setting )
@@ -424,6 +426,8 @@ for scenario, scenDct in totRes.items():
     ##### Confusion / Perception Rates ####################################
 
     ##### Makespan [Steps] #######################
+    mSeries = deque()
+    sNames  = deque()
     for setting, stnDct in scenDct.items():
         mSeries.append( stnDct['rConfuse'] )
         sNames.append(  setting )
