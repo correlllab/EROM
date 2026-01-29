@@ -359,9 +359,9 @@ try:
                         s_i = [s_i,]
                     for s_j in s_i:
                         sense  = s_j['symbols']
-                        print( f"Symbols: {sense}" )
+                        # print( f"Symbols: {sense}" )
                         truth  = reconcile_scene( s_j['objects'] )
-                        print( f"Objects: {truth}" )
+                        # print( f"Objects: {truth}" )
                         if not (len( sense ) or len( truth )):
                             continue
                         print_header( f"State {sIndex+1}", preWidth = 5, totWidth = 50, capitalize = False )
@@ -377,9 +377,9 @@ try:
                 state = None
                     
                 ### 2. Symbol Grounding ###
-                results["rGround"].append( Nground / Nstep )
-                results["rConfuse"].append( totConfuse / totFound )
-                results["rFindFail"].append( (Nground - totFound) / Nground )
+                if totFound:
+                    results["rConfuse"].append( totConfuse / totFound )
+                    results["rFindFail"].append( (Nground - totFound) / Nground )
 
             totRes[ setNam ][ test ] = results
             # pprint( totRes )
@@ -421,7 +421,7 @@ for scenario, scenDct in totRes.items():
                       forceYlim = True, savefig = True )
     
 
-    ##### Confusion Rate ##################################################
+    ##### Confusion / Perception Rates ####################################
 
     ##### Makespan [Steps] #######################
     for setting, stnDct in scenDct.items():
