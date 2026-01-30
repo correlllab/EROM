@@ -500,8 +500,8 @@ def red_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Red Block """
     # Convert BGR to HSV
     hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
-    lower     = np.array( [120, 120, 120,] )  # Example: lower bound for RED
-    upper     = np.array( [255, 255, 255,] ) # Example: upper bound for RED
+    lower     = np.array( [145, 120, 120,] )  # Example: lower bound for RED
+    upper     = np.array( [179, 255, 255,] ) # Example: upper bound for RED
     # Create a mask for blue color
     return cv2.inRange( hsv_image, lower, upper)
 
@@ -510,8 +510,9 @@ def blu_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Blue Block """
     # Convert BGR to HSV
     hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
-    lower     = np.array( [200/2, 150,  37,]) # Example: lower bound for BLUE
-    upper     = np.array( [255/2, 255, 255,]) # Example: upper bound for BLUE
+    nudge     = 0
+    lower     = np.array( [ 95, 128, int(0.35*255),]) # Example: lower bound for BLUE
+    upper     = np.array( [135, 255, int(1.00*255),]) # Example: upper bound for BLUE
     # Create a mask for blue color
     return cv2.inRange( hsv_image, lower, upper)
 
@@ -520,8 +521,8 @@ def grn_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Green Block """
     # Convert BGR to HSV
     hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
-    lower     = np.array( [ 80/2, 150,  15,] ) # Example: lower bound for GREEN
-    upper     = np.array( [190/2, 255, 255,] ) # Example: upper bound for GREEN
+    lower     = np.array( [ 40, 150,  15,] ) # Example: lower bound for GREEN
+    upper     = np.array( [ 95, 255, 255,] ) # Example: upper bound for GREEN
     # Create a mask for blue color
     return cv2.inRange( hsv_image, lower, upper)
 
@@ -1074,10 +1075,13 @@ class OCV_State_Tracker:
                     # cpcd  = deepcopy( pcd_i ),
                     cpcd  = pcd_i,
                 )
-                if p_symbol_inside_workspace_bounds( obj_i ): # Sometimes extraneous shit gets picked up!
+                if p_symbol_inside_workspace_bounds( obj_i, noPad = True, addMargin = 0.120 ): # Sometimes extraneous shit gets picked up!
                     self.jps.arr_show( res )
                     self.current['objects'].append( obj_i )
                     Nadd += 1
+                    print( f"{label} can be found at {obj_i}" )
+                else:
+                    print( f"{label} reading is OUT OF BOUNDS!, {obj_i}" )
 
         imag = None
         dpth = None
@@ -1182,14 +1186,32 @@ class OCV_State_Tracker:
 
     def reconcile_scene( self ):
         """ Merge all the readings """
-        _BLEND_FACTOR = 0.200
+        _BLEND_FACTOR = 0.200 # 0.200 # 0.500
+
+        def p_collides( reading : GraspObj, objDct : dict[str,GraspObj] ):
+            for obj in objDct.values():
+                if (euclidean_distance_between_symbols( reading, obj ) < env_var("_ACCEPT_POSN_ERR")) and (obj.label != reading.label):
+                    return True
+            return False
+
         for obj_i in self.current['objects']:
+            if not p_symbol_inside_workspace_bounds( obj_i, noPad = True, addMargin = 0.120 ):
+                continue
+            if p_collides( obj_i, self.current['symbols'] ):
+                continue
+            # if len( obj_i.cpcd ):
+            #     aabb = obj_i.cpcd.calc_aabb()
+            #     if max(aabb[1,2], aabb[0,2]) < (0.25 * env_var("_BLOCK_SCALE")):
+            #         continue
             lbl_i = obj_i.label
             # WARNING: THE FOLLOWING ASSUMES ONE OF EACH LABEL!
             if lbl_i in self.current['symbols']:
                 obj_j  = self.current['symbols'][ lbl_i ]
                 posn_i = extract_position( obj_i )
                 posn_j = extract_position( obj_j )
+                # dst_ij = np.linalg.norm( np.subtract( posn_i, posn_j ) )
+                # factor = np.exp( -dst_ij*10 )*_BLEND_FACTOR
+                # posn_r = posn_i * factor + posn_j * (1.0 - factor)
                 posn_r = posn_i * _BLEND_FACTOR + posn_j * (1.0 - _BLEND_FACTOR)
                 pose_r = extract_pose_as_homog( obj_j )
                 pose_r[:3,3] = posn_r

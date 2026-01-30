@@ -8,7 +8,7 @@ from typing import Deque, Any
 import numpy as np
 
 from aspire.env_config import env_var
-from aspire.symbols import GraspObj, ObjPose, euclidean_distance_between_symbols
+from aspire.symbols import GraspObj, ObjPose, euclidean_distance_between_symbols, p_symbol_inside_workspace_bounds
 from aspire.BlocksTask import set_blocks_env
 from aspire.symbols import extract_position, extract_pose_as_homog
 
@@ -133,15 +133,22 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
 def reconcile_scene( actualObjects : list[GraspObj] ):
     """ Merge all the readings """
     _BLEND_FACTOR = 0.200
-    symbols = dict()
+    symbols = dict() # This is the final dictionary of symbols
     for obj_i in actualObjects:
+        if not p_symbol_inside_workspace_bounds( obj_i ):
+            continue
+        aabb = obj_i.cpcd.calc_aabb()
+        if max(aabb[1,2], aabb[0,2]) < (0.25 * env_var("_BLOCK_SCALE")):
+            continue
         lbl_i = obj_i.label
         # WARNING: THE FOLLOWING ASSUMES ONE OF EACH LABEL!
         if lbl_i in symbols:
             obj_j  = symbols[ lbl_i ]
             posn_i = extract_position( obj_i )
             posn_j = extract_position( obj_j )
-            posn_r = posn_i * _BLEND_FACTOR + posn_j * (1.0 - _BLEND_FACTOR)
+            dst_ij = np.linalg.norm( np.subtract( posn_i, posn_j ) )
+            factor = np.exp( -dst_ij*10 )*_BLEND_FACTOR
+            posn_r = posn_i * factor + posn_j * (1.0 - factor)
             pose_r = extract_pose_as_homog( obj_j )
             pose_r[:3,3] = posn_r
             obj_j.pose = ObjPose( pose_r )
@@ -173,7 +180,8 @@ _MIN_STATE_SIZE_BYTES = 500.0
 totRes : dict[str,dict] = dict()
 
 fileDex = -1
-banDex  = [70,79,80,93,95,96,142,144,146,147,148,149,150,151,152,153,154,155,156,157,158,159,161,]
+# banDex  = [70,79,80,93,95,96,142,144,146,147,148,149,150,151,152,153,154,155,156,157,158,159,161,]
+banDex  = []
 
 
 try:
@@ -361,6 +369,7 @@ try:
                     if not isinstance( s_i, (list,deque,) ):
                         s_i = [s_i,]
                     for s_j in s_i:
+                        # FIXME: THIS IS NOT TRUE AT ALLLLLLL !!!!!!
                         sense  = s_j['symbols']
                         # print( f"Symbols: {sense}" )
                         truth  = reconcile_scene( s_j['objects'] )
