@@ -527,7 +527,6 @@ def grn_block_mask( img : np.ndarray ) -> np.ndarray:
     return cv2.inRange( hsv_image, lower, upper)
 
 _BLK_HI =  85
-_WHT_LO = 155 # 165 # 167
 
 def blk_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
@@ -537,12 +536,23 @@ def blk_block_mask( img : np.ndarray ) -> np.ndarray:
     # return cv2.inRange( hsv_image, lower, upper)
     return cv2.inRange( img, lower, upper)
 
-_LO_FCT = 2.30
-_HI_FCT = 2.40 #1.95
+_WHITE_HUE_LO = int(180/360*179)
+_WHITE_HUE_HI = int(210/360*179)
+_WHITE_HUE_MD = int((_WHITE_HUE_LO+_WHITE_HUE_HI)/2)
 
-_GRY_LO = np.array( [60*_LO_FCT, 60*_LO_FCT, 65*_LO_FCT,] )
-_GRY_HI = np.array( [90*_HI_FCT, 90*_HI_FCT,120*_HI_FCT,] )
-_GY_VEC = np.array( [64, 76, 87,] )
+_WHITE_SAT_LO = int( 0/100*255)
+_WHITE_SAT_HI = int(50/100*255)
+_WHITE_SAT_MD = int((_WHITE_SAT_LO+_WHITE_SAT_HI)/2)
+
+_WHITE_VAL_LO = int( 50/100*255)
+_WHITE_VAL_HI = int(100/100*255)
+_WHITE_VAL_MD = int((_WHITE_VAL_LO+_WHITE_VAL_HI)/2)
+
+
+_GRY_LO = np.array( [int(182/360*179), int(20/100*255), int( 80/100*255),] )
+_GRY_HI = np.array( [int(210/360*179), int(40/100*255), int(100/100*255),] )
+_WHT_LO = np.array( [int(178/360*179), int( 0/100*255), int( 98/100*255),] )
+_WHT_HI = np.array( [int(182/360*179), int(10/100*255), int(100/100*255),] )
 _B_LVL  = 0.125 # 0.0625
 
 
@@ -561,14 +571,15 @@ def sobel_mask_intolerant( img : np.ndarray ) -> np.ndarray:
 
 def gry_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    _VERBOSE = False
+    _VERBOSE = True
     jps      = None 
     if _VERBOSE:
         jps     = JupyterPlotServer()
-    lower   = _GRY_LO # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
-    upper   = _GRY_HI # Example: upper bound for BLACK
-    boxMsk  = cv2.inRange( img, lower, upper)
-    brdrMsk = sobel_mask_intolerant( img )
+    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
+    lower     = _GRY_LO # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
+    upper     = _GRY_HI # Example: upper bound for BLACK
+    boxMsk    = cv2.inRange( hsv_image, lower, upper)
+    brdrMsk   = sobel_mask_intolerant( img )
     if _VERBOSE:
         print( "GREY MASK" )
         jps.arr_show( boxMsk )
@@ -582,14 +593,15 @@ def gry_block_mask( img : np.ndarray ) -> np.ndarray:
 def wht_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the White Block """
     # Convert BGR to HSV
-    _VERBOSE = False
+    _VERBOSE = True
     jps = None
     if _VERBOSE:
         jps = JupyterPlotServer()
-    lower = np.array( [_WHT_LO, _WHT_LO, _WHT_LO,] ) # Example: lower bound for WHITE
-    upper = np.array( [255, 255, 255,] ) # Example: upper bound for WHITE
+    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
+    lower     = _WHT_LO # Example: lower bound for WHITE
+    upper     = _WHT_HI # Example: upper bound for WHITE
     # Create a mask for blue color
-    rtnMsk  = cv2.inRange( img, lower, upper)
+    rtnMsk  = cv2.inRange( hsv_image, lower, upper)
     brdrMsk = sobel_mask_intolerant( img )
     rtnMsk  = np.logical_and( rtnMsk, ~brdrMsk )
     if _VERBOSE:
@@ -881,7 +893,7 @@ def get_mpcd_pose( point_cloud : MPCD ):
 ##### "Ground Truth" Tracker ############################################## 
 
 _CLUMP_POP_PX  = 7 # Number of neighbors to be considered part of a clump
-_EXPAND_DEPTH  = 2
+_EXPAND_DEPTH  = 3
 _MIN_PXL_DNSTY = 0.25
 _MIN_MID_RATIO = 0.40
 
@@ -906,11 +918,11 @@ class OCV_State_Tracker:
         self.actions  = deque() # Sequence of Actions
         self.current  = dict() #- All data relating to the current state
         self.maskFunc = { # ----- Function lookup to segment out the blocks in the experiments
-            "redBlock": { "func": red_block_mask, "grow": 0 },
-            "grnBlock": { "func": grn_block_mask, "grow": 0 },
-            "bluBlock": { "func": blu_block_mask, "grow": 0 },
-            "blkBlock": { "func": blk_block_mask, "grow": 0 },
-            "whtBlock": { "func": [gry_block_mask, wht_block_mask,], "grow": _EXPAND_DEPTH },
+            "redBlock": { "func": red_block_mask, "grow": 0, "clump": 7 },
+            "grnBlock": { "func": grn_block_mask, "grow": 0, "clump": 7 },
+            "bluBlock": { "func": blu_block_mask, "grow": 0, "clump": 7 },
+            "blkBlock": { "func": blk_block_mask, "grow": 0, "clump": 7 },
+            "whtBlock": { "func": [gry_block_mask, wht_block_mask,], "grow": 4, "clump": 4 },
         }
         self.new_scene()
 
@@ -927,7 +939,7 @@ class OCV_State_Tracker:
             blcMsk = self.maskFunc[ blockName ]['func']( imgArr )
         
         if self.maskFunc[ blockName ]['grow'] > 0:
-            blcMsk = grow_clumped_mask( blcMsk, _CLUMP_POP_PX, self.maskFunc[ blockName ]['grow'] )
+            blcMsk = grow_clumped_mask( blcMsk, self.maskFunc[ blockName ]['clump'], self.maskFunc[ blockName ]['grow'] )
         
         clstrs = cluster_mask_arr( blcMsk )
         pixMax = -6e10
