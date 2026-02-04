@@ -526,33 +526,41 @@ def grn_block_mask( img : np.ndarray ) -> np.ndarray:
     # Create a mask for blue color
     return cv2.inRange( hsv_image, lower, upper)
 
-_BLK_HI =  85
+# _BLK_HI = 75 # 80 # 85
 
 def blk_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    lower = np.array( [  0,   0,  0,] ) # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
-    upper = np.array( [_BLK_HI, _BLK_HI, _BLK_HI,] ) # Example: upper bound for BLACK
+    _VERBOSE = 1
+    jps      = None 
+    if _VERBOSE:
+        jps     = JupyterPlotServer()
+    hsv_image = cv2.cvtColor( img, cv2.COLOR_RGB2HSV )
+    lower     = np.array( [int( 90/360*179), int(20/100*255), int(  9/100*255),] ) # Example: lower bound for BLACK, NOTE: THIS ONE IS GOING TO BE DIFFICULT!
+    upper     = np.array( [int(210/360*179), int(77/100*255), int( 45/100*255),] ) # Example: upper bound for BLACK
     # Create a mask for blue color
-    # return cv2.inRange( hsv_image, lower, upper)
-    return cv2.inRange( img, lower, upper)
+    rtnMsk = cv2.inRange( hsv_image, lower, upper)
+    if _VERBOSE:
+        print( "BLACK MASK" )
+        jps.arr_show( rtnMsk )
+    return rtnMsk
 
-_WHITE_HUE_LO = int(180/360*179)
-_WHITE_HUE_HI = int(210/360*179)
-_WHITE_HUE_MD = int((_WHITE_HUE_LO+_WHITE_HUE_HI)/2)
+# _WHITE_HUE_LO = int(180/360*179)
+# _WHITE_HUE_HI = int(210/360*179)
+# _WHITE_HUE_MD = int((_WHITE_HUE_LO+_WHITE_HUE_HI)/2)
 
-_WHITE_SAT_LO = int( 0/100*255)
-_WHITE_SAT_HI = int(50/100*255)
-_WHITE_SAT_MD = int((_WHITE_SAT_LO+_WHITE_SAT_HI)/2)
+# _WHITE_SAT_LO = int( 0/100*255)
+# _WHITE_SAT_HI = int(50/100*255)
+# _WHITE_SAT_MD = int((_WHITE_SAT_LO+_WHITE_SAT_HI)/2)
 
-_WHITE_VAL_LO = int( 50/100*255)
-_WHITE_VAL_HI = int(100/100*255)
-_WHITE_VAL_MD = int((_WHITE_VAL_LO+_WHITE_VAL_HI)/2)
+# _WHITE_VAL_LO = int( 50/100*255)
+# _WHITE_VAL_HI = int(100/100*255)
+# _WHITE_VAL_MD = int((_WHITE_VAL_LO+_WHITE_VAL_HI)/2)
 
 
 _GRY_LO = np.array( [int(182/360*179), int(20/100*255), int( 80/100*255),] )
 _GRY_HI = np.array( [int(210/360*179), int(40/100*255), int(100/100*255),] )
-_WHT_LO = np.array( [int(178/360*179), int( 0/100*255), int( 98/100*255),] )
-_WHT_HI = np.array( [int(182/360*179), int(10/100*255), int(100/100*255),] )
+_WHT_LO = np.array( [int(  0/360*179), int( 0/100*255), int( 98/100*255),] )
+_WHT_HI = np.array( [int(182/360*179), int(20/100*255), int(100/100*255),] )
 _B_LVL  = 0.125 # 0.0625
 
 
@@ -571,7 +579,7 @@ def sobel_mask_intolerant( img : np.ndarray ) -> np.ndarray:
 
 def gry_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    _VERBOSE = True
+    _VERBOSE = 0
     jps      = None 
     if _VERBOSE:
         jps     = JupyterPlotServer()
@@ -593,7 +601,7 @@ def gry_block_mask( img : np.ndarray ) -> np.ndarray:
 def wht_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the White Block """
     # Convert BGR to HSV
-    _VERBOSE = True
+    _VERBOSE = 0
     jps = None
     if _VERBOSE:
         jps = JupyterPlotServer()
@@ -901,6 +909,7 @@ class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
     
     _CLUST_MIN = 2000 #125 # 250 # 500 # 750 # 1000
+    _PCD_MIN   =  100 
     _DIST_MIN  =    0.070
     _DIST_MAX  =    1.250
     _SCAL_MIN  =    0.350 # 0.350 # 0.500
@@ -921,8 +930,8 @@ class OCV_State_Tracker:
             "redBlock": { "func": red_block_mask, "grow": 0, "clump": 7 },
             "grnBlock": { "func": grn_block_mask, "grow": 0, "clump": 7 },
             "bluBlock": { "func": blu_block_mask, "grow": 0, "clump": 7 },
-            "blkBlock": { "func": blk_block_mask, "grow": 0, "clump": 7 },
-            "whtBlock": { "func": [gry_block_mask, wht_block_mask,], "grow": 4, "clump": 4 },
+            "blkBlock": { "func": blk_block_mask, "grow": 2, "clump": 6 },
+            "whtBlock": { "func": [gry_block_mask, wht_block_mask,], "grow": 4, "clump": 5 },
         }
         self.new_scene()
 
@@ -961,7 +970,9 @@ class OCV_State_Tracker:
                 continue 
             if ratio_i < _MIN_MID_RATIO:
                 continue
+
             Nclm_i  = dnsty_i * Npix_i * ratio_i
+            
             print( f"Density: {dnsty_i}, Ratio: {ratio_i}" )
             if _VERBOSE: 
                 print( f"Block mask of {Npix_i} points!" )
@@ -1001,7 +1012,10 @@ class OCV_State_Tracker:
                 elif scl > 1.0:
                     # factor *= (1.0 - (scl - 1.0))
                     factor.append( 1.0 - (scl - 1.0) )
-            Nclm_i *= max( factor )  
+            
+            # Nclm_i *= max( factor )  
+            Nclm_i *= min( factor )  
+            
             if _VERBOSE: 
                 print( f"Scale is {scal_i} * {env_var('_BLOCK_SCALE')}" )
             if (self._SCAL_MIN <= scal_i[0] <= self._SCAL_MAX) and (self._SCAL_MIN <= scal_i[1] <= self._SCAL_MAX):
@@ -1087,7 +1101,11 @@ class OCV_State_Tracker:
                     # cpcd  = deepcopy( pcd_i ),
                     cpcd  = pcd_i,
                 )
-                if p_symbol_inside_workspace_bounds( obj_i, noPad = True, addMargin = 0.120 ): # Sometimes extraneous shit gets picked up!
+                if p_symbol_inside_workspace_bounds( 
+                    obj_i, 
+                    noPad     = False, 
+                    addMargin = 0.120 # 0.060 # 0.120 
+                ) and (len( pcd_i ) >= self._PCD_MIN): # Sometimes extraneous shit gets picked up!
                     self.jps.arr_show( res )
                     self.current['objects'].append( obj_i )
                     Nadd += 1
