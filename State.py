@@ -530,7 +530,7 @@ def grn_block_mask( img : np.ndarray ) -> np.ndarray:
 
 def blk_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    _VERBOSE = 1
+    _VERBOSE = 0
     jps      = None 
     if _VERBOSE:
         jps     = JupyterPlotServer()
@@ -904,12 +904,13 @@ _CLUMP_POP_PX  = 7 # Number of neighbors to be considered part of a clump
 _EXPAND_DEPTH  = 3
 _MIN_PXL_DNSTY = 0.25
 _MIN_MID_RATIO = 0.40
+_N_MIN_POINTS  = 4000
 
 class OCV_State_Tracker:
     """ Use OpenCV to infer something closer to the "Ground Truth", Prefer plain JSON """
     
-    _CLUST_MIN = 2000 #125 # 250 # 500 # 750 # 1000
-    _PCD_MIN   =  100 
+    _CLUST_MIN = _N_MIN_POINTS # 125 # 250 # 500 # 750 # 1000
+    _PCD_MIN   = _N_MIN_POINTS # 600 # 100
     _DIST_MIN  =    0.070
     _DIST_MAX  =    1.250
     _SCAL_MIN  =    0.350 # 0.350 # 0.500
