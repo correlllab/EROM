@@ -1,5 +1,5 @@
 ########## INIT ####################################################################################
-import pickle, os, gc
+import pickle, os, gc, traceback
 from collections import deque
 from copy import deepcopy
 from pprint import pprint
@@ -15,7 +15,8 @@ from aspire.symbols import extract_position, extract_pose_as_homog
 from TaskPlanner import set_experiment_env
 from State import OCV_State_Tracker
 from draw_beliefs import set_render_env
-from draw_plots import make_histo, make_multi_histo
+from draw_plots import make_whisker, make_multi_histo
+from Memory import most_likely_objects
 
 ##### Environment && Constants ############################################
 set_blocks_env()
@@ -53,13 +54,25 @@ datNamLong = {
     "RBW": "Red-Black-White",
 }
 
+blcNam = {
+    "RGB": ['redBlock','grnBlock','bluBlock',], 
+    "RBW": ['redBlock','blkBlock','whtBlock',],
+}
+
 plotExt = ".pdf"
 
 
 ########## HELPER FUNCTIONS ########################################################################
 
-def crash_out():
+def play_tone( duration_s = 5, freq_Hz = 650 ):
+    """ Play a notification tone """
+    os.system( f'play -nq -t alsa synth {duration_s} sine {freq_Hz}' )
+
+
+def crash_out( notify = True ):
     """ End the program with Brutal Finality """
+    if notify:
+        play_tone()
     print( "\n\n" )
     os.system( 'kill %d' % os.getpid() ) 
 
@@ -77,6 +90,8 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
             "N_sensed" : 0,
             "N_true"   : len( lastScen ),
         }
+    elif len( actualObjects ):
+        sensedObjects = most_likely_objects( sensedObjects, nameList = [item.label for item in actualObjects] )
     
     # Store Sensed Objects #
     if isinstance( sensedObjects, dict ):
@@ -96,26 +111,35 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
         kMin_i = None
         for k_i, v_i in matches.items():
             d_ij = euclidean_distance_between_symbols( v_i["sensed"], obj_j )
-            # print( v_i["sensed"], obj_j )
-            # print( f"d_ij: {d_ij}" )
             if d_ij is None:
                 raise ValueError( f"Cannot compute a distance between {type(v_i['sensed'])} and {type(obj_j)}" )
             if d_ij <= env_var("_ACCEPT_POSN_ERR") and d_ij < dMin:
                 dMin   = d_ij
                 kMin_i = k_i 
-                # kMin_i = id( k_i ) 
         if (kMin_i is not None) and (kMin_i not in usedSet):
             usedSet.add( kMin_i )
             matches[ kMin_i ]["known"] = obj_j
             matches[ kMin_i ]["d"    ] = dMin
         
+    def max_class( obj : GraspObj ):
+        """ Get most likely class """
+        p = 0.0
+        c = None
+        for k, v in obj.labels.items():
+            if v > p:
+                p = v
+                c = k
+        return c
+
     # Compute Number of Total, Confused, Hallucinated, and Missing Objects #
     Ncnf = 0 # Number of confusions
     Nhal = 0 # Number of hallucinations, False positive
     for k_i, v_i in matches.items():
         # If the sensed block was real, Then check for confusion
         if v_i["known"] is not None:
-            if v_i["known"].label != v_i["sensed"].label:
+            # if v_i["known"].label != v_i["sensed"].label:
+            if v_i["known"].label != max_class( v_i["sensed"] ):
+                # print( v_i["known"].label, v_i["sensed"].label, v_i["sensed"] )
                 Ncnf += 1
         # Else block was NOT real, The system hallucinated it! 
         else:
@@ -135,11 +159,12 @@ def reconcile_scene( actualObjects : list[GraspObj] ):
     _BLEND_FACTOR = 0.200
     symbols = dict() # This is the final dictionary of symbols
     for obj_i in actualObjects:
-        if not p_symbol_inside_workspace_bounds( obj_i ):
+        if not p_symbol_inside_workspace_bounds( obj_i, noPad = False, addMargin = 0.120 ):
             continue
-        aabb = obj_i.cpcd.calc_aabb()
-        if max(aabb[1,2], aabb[0,2]) < (0.25 * env_var("_BLOCK_SCALE")):
-            continue
+        if len( obj_i.cpcd ):
+            aabb = obj_i.cpcd.calc_aabb()
+            if max(aabb[1,2], aabb[0,2]) < (0.25 * env_var("_BLOCK_SCALE")):
+                continue
         lbl_i = obj_i.label
         # WARNING: THE FOLLOWING ASSUMES ONE OF EACH LABEL!
         if lbl_i in symbols:
@@ -174,6 +199,8 @@ def print_header( text : str, preWidth : int, totWidth : int, capitalize = True,
 
 
 
+
+
 ########## GATHER DATA #############################################################################
 _MIN_STATE_SIZE_BYTES = 500.0
 
@@ -181,7 +208,8 @@ totRes : dict[str,dict] = dict()
 
 fileDex = -1
 # banDex  = [70,79,80,93,95,96,142,144,146,147,148,149,150,151,152,153,154,155,156,157,158,159,161,]
-banDex  = []
+banDex  = [72,142,]
+# banDex  = []
 
 
 try:
@@ -227,6 +255,8 @@ try:
                 ## 2. Symbol Grounding ##
                 "rConfuse" : deque(),
                 "rFindFail": deque(),
+                ### 4. Acting ###
+                "rActFail": deque(),
             }
 
             ### For every episode ###
@@ -282,6 +312,13 @@ try:
                 Nground    = 0
                 totFound   = 0
                 totConfuse = 0
+                estimates  = deque()
+                jj         = 0
+                start      = False
+                added      = False
+                ### 4. Acting ###
+                Naction   = 0
+                NfailActn = 0
 
                 ##### Per-Message Accounting #####
                 for datum in data:
@@ -296,10 +333,33 @@ try:
                             tStepEnd = dtmT
                             tStepDqu.append( tStepEnd - tStepBgn )
                         tStepBgn = dtmT
+                        start    = True
+
+                    ##### Phase 2: Grounding ##############################
+                    if ("END: Phase 2" in dtmMsg) and start and len( dtmDat[:] ):
+                        estimates.append( dtmDat[:] )
+                        start = False
+
+                    if ("memory" in dtmMsg) and start and len( dtmDat["beliefs"] ):
+                        estimates.append( dtmDat["beliefs"] )
+                        start = False
+
+                    ##### Phase 4: Execution ##############################
+                    if "BGN: Phase 4" in dtmMsg:
+                        Naction   += 1
+                        actionFail = False
+
+                    if ("BT END" in dtmMsg):
+                        if ("fail" in f"{dtmMsg}".lower()):
+                            NfailActn += 1
+                            actionFail = True
+
 
                 ### Steps ###
                 results["Nstep"].append( Nstep )
                 results["tStep"].extend( tStepDqu )
+                ### 4. Acting ###
+                results["rActFail"].append( NfailActn / Naction )
 
                 # DONE w `data`
                 data = None 
@@ -335,7 +395,7 @@ try:
                     except ValueError:
                         return False
                     
-                
+                print( f"There are {len(estimates)} sensed states!" )
 
                 while len( statePaths ) or len( state ):
 
@@ -369,21 +429,25 @@ try:
                     if not isinstance( s_i, (list,deque,) ):
                         s_i = [s_i,]
                     for s_j in s_i:
-                        # FIXME: THIS IS NOT TRUE AT ALLLLLLL !!!!!!
-                        sense  = s_j['symbols']
                         # print( f"Symbols: {sense}" )
                         truth  = reconcile_scene( s_j['objects'] )
                         # print( f"Objects: {truth}" )
-                        if not (len( sense ) or len( truth )):
+                        if not len( truth ):
                             continue
                         print_header( f"State {sIndex+1}", preWidth = 5, totWidth = 50, capitalize = False )
                         sIndex += 1
-                        
-                        conf_j = current_scene_confusion( sense, truth )
-                        totFound   += conf_j['N_sensed' ]
-                        totConfuse += conf_j['N_confuse']
-                        Nground    += conf_j['N_true'   ]
-                        print( conf_j )
+                        # sense  = s_j['symbols'] # This is NOT true!
+                        # WARNING: THIS SMELLS
+                        try:
+                            sense = estimates[jj]
+                            jj   += 1
+                            conf_j = current_scene_confusion( sense, truth )
+                            totFound   += conf_j['N_sensed' ]
+                            totConfuse += conf_j['N_confuse']
+                            Nground    += conf_j['N_true'   ]
+                            print( conf_j )
+                        except IndexError:
+                            pass
                         sense = None
                         truth = None
                 state = None
@@ -395,7 +459,10 @@ try:
 
             totRes[ setNam ][ test ] = results
             # pprint( totRes )
-except (KeyboardInterrupt, IndexError,):
+except (IndexError,):
+    traceback.print_exc()
+    crash_out()
+except (KeyboardInterrupt,):
     print( "\n\nSESSION CLOSED BY USER!" )
     crash_out()
 
@@ -420,6 +487,11 @@ for scenario, scenDct in totRes.items():
                       fName     = f"{_PLOT_DIR}Histo-Time_{scenario}{plotExt}", 
                       xLabel    = 'Time [s]', 
                       forceYlim = True, savefig = True )
+    make_whisker( mSeries, sNames, 
+                  plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
+                  fName = f"{_PLOT_DIR}Whisker-Time_{scenario}{plotExt}", 
+                  yLabel = None, 
+                  forceYlim = True, savefig = True )
     
 
     ##### Makespan [Steps] #######################
@@ -433,11 +505,16 @@ for scenario, scenDct in totRes.items():
                       fName     = f"{_PLOT_DIR}Histo-Step_{scenario}{plotExt}", 
                       xLabel    = 'Steps', 
                       forceYlim = True, savefig = True )
+    make_whisker( mSeries, sNames, 
+                  plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Steps]", 
+                  fName = f"{_PLOT_DIR}Whisker-Step_{scenario}{plotExt}", 
+                  yLabel = None, 
+                  forceYlim = True, savefig = True )
     
 
     ##### Confusion / Perception Rates ####################################
 
-    ##### Makespan [Steps] #######################
+    ##### Confusion ##############################
     mSeries = deque()
     sNames  = deque()
     for setting, stnDct in scenDct.items():
@@ -448,6 +525,12 @@ for scenario, scenDct in totRes.items():
                       fName     = f"{_PLOT_DIR}Histo-Conf_{scenario}{plotExt}", 
                       xLabel    = 'Confusion Rate', 
                       forceYlim = True, savefig = True )
+    
+
+    ##### Failure  Rates ####################################
+
+    ##### Makespan [Steps] #######################
+    
 
 
 

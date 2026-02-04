@@ -1050,11 +1050,16 @@ class OCV_State_Tracker:
             "depth"  : dict(), #- Lookup of depth images used
             "clouds" : deque(), # Collection of clouds obtained from the masked images
             "objects": deque(), # Collection of readings obtained from the masked images
+            "sensed" : list(), # Collection of symbols obtained from the robot
             "symbols": dict(), #- Lookup of objects obtained from the readings
         }
         if len( self.scenes ) > self._N_RETAIN:
             self.dump_scene()
 
+
+    def log_sensed( self, sensed ):
+        """ Log what the robot saw """
+        self.current['sensed'] = sensed
 
 
     def get_last_scene( self, backDex : int = 1 ) -> list[GraspObj]:

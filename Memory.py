@@ -49,7 +49,7 @@ _REVERSE_QUERIES = {
 ########## HELPER FUNCTIONS ########################################################################
 
 
-def most_likely_objects( objList : list[GraspObj], method : str | list = "sufficient" ):
+def most_likely_objects( objList : list[GraspObj], method : str | list = "sufficient", nameList = None ):
     """ Get the `N` most likely combinations of object classes """
     ### Combination Generator ###
 
@@ -61,7 +61,7 @@ def most_likely_objects( objList : list[GraspObj], method : str | list = "suffic
         comboList = deque()
 
         ## Generate all class combinations with joint probabilities ##
-        blkNam = env_var("_ACTUAL_NAMES") # Prevent repeated fetch
+        blkNam = env_var("_ACTUAL_NAMES") if (nameList is None) else nameList # Prevent repeated fetch
         Nnames = len( blkNam )
         Nobjct = len( objList )
         Ncombo = Nnames ** Nobjct
