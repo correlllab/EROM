@@ -31,9 +31,11 @@ from magpie_control.realsense_wrapper import MPCD
 
 
 
+########## SETTINGS ################################################################################
 set_object_env()
 set_camera_env()
 
+_RAM_SAVER = True
 
 
 ########## LOGGER ##################################################################################
@@ -530,7 +532,7 @@ def grn_block_mask( img : np.ndarray ) -> np.ndarray:
 
 def blk_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    _VERBOSE = 0
+    _VERBOSE = 0 and (not _RAM_SAVER)
     jps      = None 
     if _VERBOSE:
         jps     = JupyterPlotServer()
@@ -579,7 +581,7 @@ def sobel_mask_intolerant( img : np.ndarray ) -> np.ndarray:
 
 def gry_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the Black Block """
-    _VERBOSE = 0
+    _VERBOSE = 0 and (not _RAM_SAVER)
     jps      = None 
     if _VERBOSE:
         jps     = JupyterPlotServer()
@@ -601,7 +603,7 @@ def gry_block_mask( img : np.ndarray ) -> np.ndarray:
 def wht_block_mask( img : np.ndarray ) -> np.ndarray:
     """ Return a mask that segments the White Block """
     # Convert BGR to HSV
-    _VERBOSE = 0
+    _VERBOSE = 0 and (not _RAM_SAVER)
     jps = None
     if _VERBOSE:
         jps = JupyterPlotServer()
@@ -939,7 +941,7 @@ class OCV_State_Tracker:
 
     def find_block_mask( self, blockName : str, imgArr : np.ndarray, depArr : np.ndarray ):
         """ Search for the block, I guess! """
-        _VERBOSE = False # True # False
+        _VERBOSE = False and (not _RAM_SAVER)
 
         if isinstance( self.maskFunc[ blockName ]['func'], list ):
             blcMsk = np.zeros( imgArr.shape[:2] )
@@ -1112,7 +1114,8 @@ class OCV_State_Tracker:
                     noPad     = False, 
                     addMargin = 0.120 # 0.060 # 0.120 
                 ) and (len( pcd_i ) >= self._PCD_MIN): # Sometimes extraneous shit gets picked up!
-                    self.jps.arr_show( res )
+                    if not _RAM_SAVER:
+                        self.jps.arr_show( res )
                     self.current['objects'].append( obj_i )
                     Nadd += 1
                     print( f"{label} can be found at {obj_i}" )
