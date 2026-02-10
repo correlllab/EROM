@@ -26,8 +26,12 @@ set_render_env()
 
 ########## SETUP ###################################################################################
 _JSON_PATH  = "data/allData.txt"
-_DATA_DRIVE = "DATA_TANK"
+
+# _DATA_DRIVE = "DATA_TANK"
+_DATA_DRIVE = "STARGAZER/DATA_TANK"
+
 _PLOT_DIR   = "data/plots/"
+_GC_CYCLE   = False 
 
 tests = [
     "KC-KP",
@@ -91,7 +95,8 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
             "N_true"   : len( lastScen ),
         }
     elif len( actualObjects ):
-        sensedObjects = most_likely_objects( sensedObjects, nameList = [item.label for item in actualObjects] )
+        pass
+        # sensedObjects = most_likely_objects( sensedObjects, nameList = [item.label for item in actualObjects] )
     
     # Store Sensed Objects #
     if isinstance( sensedObjects, dict ):
@@ -262,7 +267,8 @@ try:
             ### For every episode ###
             for episodePath in testRecord:
                 data = None 
-                print( f"\n\nGarbage collector: Collected {gc.collect()} objects!" )
+                if _GC_CYCLE:
+                    print( f"\n\nGarbage collector: Collected {gc.collect()} objects!" )
                 fileDex += 1
                 print_header( f"EP: {fileDex}, {episodePath}", preWidth = 5, totWidth = 75, capitalize = False )
                 epPrefix = f"{episodePath}".replace( ".pkl", "" )
@@ -312,7 +318,7 @@ try:
                 Nground    = 0
                 totFound   = 0
                 totConfuse = 0
-                estimates  = deque()
+                # estimates  = deque()
                 jj         = 0
                 start      = False
                 added      = False
@@ -337,11 +343,11 @@ try:
 
                     ##### Phase 2: Grounding ##############################
                     if ("END: Phase 2" in dtmMsg) and start and len( dtmDat[:] ):
-                        estimates.append( dtmDat[:] )
+                        # estimates.append( dtmDat[:] )
                         start = False
 
                     if ("memory" in dtmMsg) and start and len( dtmDat["beliefs"] ):
-                        estimates.append( dtmDat["beliefs"] )
+                        # estimates.append( dtmDat["beliefs"] )
                         start = False
 
                     ##### Phase 4: Execution ##############################
@@ -395,7 +401,7 @@ try:
                     except ValueError:
                         return False
                     
-                print( f"There are {len(estimates)} sensed states!" )
+                # print( f"There are {len(estimates)} sensed states!" )
 
                 while len( statePaths ) or len( state ):
 
@@ -429,9 +435,10 @@ try:
                     if not isinstance( s_i, (list,deque,) ):
                         s_i = [s_i,]
                     for s_j in s_i:
-                        # print( f"Symbols: {sense}" )
-                        truth  = reconcile_scene( s_j['objects'] )
-                        # print( f"Objects: {truth}" )
+                        sense  = s_j['sensed']
+                        print( f"Symbols: {sense}" )
+                        truth  = list( s_j['symbols'].values() )
+                        print( f"Objects: {truth}" )
                         if not len( truth ):
                             continue
                         print_header( f"State {sIndex+1}", preWidth = 5, totWidth = 50, capitalize = False )
@@ -439,7 +446,7 @@ try:
                         # sense  = s_j['symbols'] # This is NOT true!
                         # WARNING: THIS SMELLS
                         try:
-                            sense = estimates[jj]
+                            # sense = estimates[jj]
                             jj   += 1
                             conf_j = current_scene_confusion( sense, truth )
                             totFound   += conf_j['N_sensed' ]
