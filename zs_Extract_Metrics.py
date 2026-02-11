@@ -499,7 +499,7 @@ for scenario, scenDct in totRes.items():
                   plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
                   fName = f"{_PLOT_DIR}Whisker-Time_{scenario}{plotExt}", 
                   yLabel = None, 
-                  forceYlim = True, savefig = True )
+                  savefig = True )
     
 
     ##### Makespan [Steps] #######################
