@@ -29,7 +29,8 @@ set_render_env()
 # _DATA_DRIVE = "DATA_TANK"
 _DATA_DRIVE = "STARGAZER/DATA_TANK"
 
-_PLOT_DIR   = "data/plots/"
+# _PLOT_DIR   = "data/plots/"
+_PLOT_DIR   = "/media/james/FILEPILE/EROM/data/plots/"
 _GC_CYCLE   = False 
 
 tests = [
@@ -477,6 +478,8 @@ except (KeyboardInterrupt,):
 
 ### Per color scenario ... ###
 for scenario, scenDct in totRes.items():
+
+    pickle.dump( totRes, f"{_PLOT_DIR}outData.pkl" )
     
     ##### Makespan ########################################################
     # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
