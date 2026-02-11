@@ -25,7 +25,6 @@ set_render_env()
 
 
 ########## SETUP ###################################################################################
-_JSON_PATH  = "data/allData.txt"
 
 # _DATA_DRIVE = "DATA_TANK"
 _DATA_DRIVE = "STARGAZER/DATA_TANK"
@@ -107,7 +106,6 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
             matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
     else:
         raise ValueError( f"Could not parse a list of objects of type {type(sensedObjects)}" )
-    # print( f"There are {len(matches)} symbols to match!" )
     
     # Match OpenCV Objects to Sensed Objects #
     usedSet = set([])
