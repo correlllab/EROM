@@ -478,8 +478,6 @@ except (KeyboardInterrupt,):
 
 ### Per color scenario ... ###
 for scenario, scenDct in totRes.items():
-
-    pickle.dump( totRes, f"{_PLOT_DIR}outData.pkl" )
     
     ##### Makespan ########################################################
     # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
@@ -539,7 +537,12 @@ for scenario, scenDct in totRes.items():
 
     ##### Makespan [Steps] #######################
     
-
+try:
+    with open( f"{_PLOT_DIR}outData.pkl", 'wb' ) as f:
+        pickle.dump( totRes, f )
+except Exception as e:
+    traceback.print_exc()
+    print( f"COULD NOT SAVE FILE: {e}" )
 
 
 ########## EXIT ####################################################################################
