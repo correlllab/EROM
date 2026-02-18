@@ -16,7 +16,7 @@ from TaskPlanner import set_experiment_env
 from State import OCV_State_Tracker
 from draw_beliefs import set_render_env
 from draw_plots import make_whisker, make_multi_histo
-from Memory import most_likely_objects
+
 
 ##### Environment && Constants ############################################
 set_blocks_env()
@@ -24,7 +24,10 @@ set_experiment_env()
 set_render_env()
 
 
+
 ########## SETUP ###################################################################################
+_SAVE_DATA = True
+_PLOT_DATA = True
 
 # _DATA_DRIVE = "DATA_TANK"
 _DATA_DRIVE = "STARGAZER/DATA_TANK"
@@ -202,6 +205,12 @@ def print_header( text : str, preWidth : int, totWidth : int, capitalize = True,
     print( totStr )
 
 
+def copy_GraspObj_thin( objLst : list[GraspObj] ) -> list[GraspObj]:
+    """ Copy a MUCH SMALLER version of the symbol! """
+    rtnLst = deque()
+    for obj in objLst:
+        rtnLst.append( obj.copy( thin = True ) )
+    return list( rtnLst )
 
 
 
@@ -215,334 +224,357 @@ fileDex = -1
 banDex  = [72,142,]
 # banDex  = []
 
-
-try:
-    ### For every block set ###
-    for iii, paths in enumerate( datasets ):
-        
-        setNam = dataLabels[iii]
-        suffix = "_" + setNam
-        skip   = False
-
-        totRes[ setNam ] = dict()
-
-        ### For every scenario ###
-        for ii, test in enumerate( tests ):
+if _SAVE_DATA:
+    try:
+        ### For every block set ###
+        for iii, paths in enumerate( datasets ):
             
-            print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
-            ##### Init ####################################################
-            path     = paths[ii]
-            longTNam = longTestNames[ii]
-            
-            testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}"))]
-            trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}"))    ]
+            setNam = dataLabels[iii]
+            suffix = "_" + setNam
+            skip   = False
 
-            def dex_key( x ):
-                dex = f"{x}".split('_')[-1].replace( ".pkl", "" )
-                if len( dex ) >= 2:
-                    return dex
-                elif len( dex ) < 2:
-                    return '0'*(2-len( dex )) + dex
-                else:
-                    raise ValueError( "`dex_key`: This should NOT have happened!" )
+            totRes[ setNam ] = dict()
+
+            ### For every scenario ###
+            for ii, test in enumerate( tests ):
                 
-
-            ##### Episode Basics ##########################################
-
-            ### Episode Accounting ###
-            results = {
-                ## Steps ##
-                "Nstep"   : deque(),
-                "tStep"   : deque(),
-                "tEpisd"  : deque(), # Total Makespan [s]
-                "rSuccess": deque(), # Success Rate
-                ## 2. Symbol Grounding ##
-                "rConfuse" : deque(),
-                "rFindFail": deque(),
-                ### 4. Acting ###
-                "rActFail": deque(),
-            }
-
-            ### For every episode ###
-            for episodePath in testRecord:
-                data = None 
-                if _GC_CYCLE:
-                    print( f"\n\nGarbage collector: Collected {gc.collect()} objects!" )
-                fileDex += 1
-                print_header( f"EP: {fileDex}, {episodePath}", preWidth = 5, totWidth = 75, capitalize = False )
-                epPrefix = f"{episodePath}".replace( ".pkl", "" )
+                print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
+                ##### Init ####################################################
+                path     = paths[ii]
+                longTNam = longTestNames[ii]
                 
+                testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}"))]
+                trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}"))    ]
 
-                ### Makespan Metrics ###
-                print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
-                try:
-                    with open( episodePath, 'rb' ) as f:
-                        data = pickle.load( f )
-                except EOFError as e:
-                    print( f"LOAD ERROR: {e}" )
-                    continue
+                def dex_key( x ):
+                    dex = f"{x}".split('_')[-1].replace( ".pkl", "" )
+                    if len( dex ) >= 2:
+                        return dex
+                    elif len( dex ) < 2:
+                        return '0'*(2-len( dex )) + dex
+                    else:
+                        raise ValueError( "`dex_key`: This should NOT have happened!" )
+                    
 
-                end   =  False
-                resEp = 0
-                for i in range(1,11):
+                ##### Episode Basics ##########################################
+
+                ### Episode Accounting ###
+                results = {
+                    ## Objects ##
+                    "frames": deque(),
+                    ## Steps ##
+                    "Nstep"   : deque(),
+                    "tStep"   : deque(),
+                    "tEpisd"  : deque(), # Total Makespan [s]
+                    "rSuccess": deque(), # Success Rate
+                    ## 2. Symbol Grounding ##
+                    "rConfuse" : deque(),
+                    "rFindFail": deque(),
+                    ### 4. Acting ###
+                    "rActFail": deque(),
+                }
+
+                ### For every episode ###
+                for episodePath in testRecord:
+                    data = None 
+                    if _GC_CYCLE:
+                        print( f"\n\nGarbage collector: Collected {gc.collect()} objects!" )
+                    fileDex += 1
+                    print_header( f"EP: {fileDex}, {episodePath}", preWidth = 5, totWidth = 75, capitalize = False )
+                    epPrefix = f"{episodePath}".replace( ".pkl", "" )
+                    
+
+                    ### Makespan Metrics ###
+                    print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
                     try:
-                        msg = data[-i]['msg']
-                    except IndexError as e:
-                        print(e)
-                        break
-                    if ("Status.FAILURE" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                        with open( episodePath, 'rb' ) as f:
+                            data = pickle.load( f )
+                    except EOFError as e:
+                        print( f"LOAD ERROR: {e}" )
+                        continue
+
+                    end   =  False
+                    resEp = 0
+                    for i in range(1,11):
+                        try:
+                            msg = data[-i]['msg']
+                        except IndexError as e:
+                            print(e)
+                            break
+                        if ("Status.FAILURE" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                            resEp = 0
+                            print( f"FAILURE" )
+                            end = True
+                            break
+                        elif ("Status.SUCCESS" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
+                            resEp = 1
+                            print( f"SUCCESS" )
+                            end = True
+                            break
+                    if not end:
                         resEp = 0
                         print( f"FAILURE" )
-                        end = True
-                        break
-                    elif ("Status.SUCCESS" in msg) and ("BT END" not in msg) and ("Behavior" not in msg):
-                        resEp = 1
-                        print( f"SUCCESS" )
-                        end = True
-                        break
-                if not end:
-                    resEp = 0
-                    print( f"FAILURE" )
 
-                results["tEpisd"].append( data[-1]['t'] - data[0]['t'] )
-                results["rSuccess"].append( resEp )
+                    results["tEpisd"].append( data[-1]['t'] - data[0]['t'] )
+                    results["rSuccess"].append( resEp )
 
-                ##### Per-Episode Accounting ##################################
-                ### Steps ###
-                Nstep    = 0
-                tStepBgn = 0
-                tStepEnd = 0
-                tStepDqu = deque()
-                ### 2. Symbol Grounding ###
-                Nground    = 0
-                totFound   = 0
-                totConfuse = 0
-                # estimates  = deque()
-                jj         = 0
-                start      = False
-                added      = False
-                ### 4. Acting ###
-                Naction   = 0
-                NfailActn = 0
+                    ##### Per-Episode Accounting ##################################
+                    ### Steps ###
+                    Nstep    = 0
+                    tStepBgn = 0
+                    tStepEnd = 0
+                    tStepDqu = deque()
+                    ### 2. Symbol Grounding ###
+                    Nground    = 0
+                    totFound   = 0
+                    totConfuse = 0
+                    # estimates  = deque()
+                    jj         = 0
+                    start      = False
+                    added      = False
+                    ### 4. Acting ###
+                    Naction   = 0
+                    NfailActn = 0
 
-                ##### Per-Message Accounting #####
-                for datum in data:
-                    dtmMsg = datum['msg']
-                    dtmT   = datum['t']
-                    dtmDat = datum['data']
+                    ##### Per-Message Accounting #####
+                    for datum in data:
+                        dtmMsg = datum['msg']
+                        dtmT   = datum['t']
+                        dtmDat = datum['data']
 
-                    ##### Phase 1: Perception #############################
-                    if "BGN: Phase 1" in dtmMsg:
-                        Nstep += 1
-                        if tStepBgn > 0:
-                            tStepEnd = dtmT
-                            tStepDqu.append( tStepEnd - tStepBgn )
-                        tStepBgn = dtmT
-                        start    = True
+                        ##### Phase 1: Perception #############################
+                        if "BGN: Phase 1" in dtmMsg:
+                            Nstep += 1
+                            if tStepBgn > 0:
+                                tStepEnd = dtmT
+                                tStepDqu.append( tStepEnd - tStepBgn )
+                            tStepBgn = dtmT
+                            start    = True
 
-                    ##### Phase 2: Grounding ##############################
-                    if ("END: Phase 2" in dtmMsg) and start and len( dtmDat[:] ):
-                        # estimates.append( dtmDat[:] )
-                        start = False
+                        ##### Phase 2: Grounding ##############################
+                        if ("END: Phase 2" in dtmMsg) and start and len( dtmDat[:] ):
+                            # estimates.append( dtmDat[:] )
+                            start = False
 
-                    if ("memory" in dtmMsg) and start and len( dtmDat["beliefs"] ):
-                        # estimates.append( dtmDat["beliefs"] )
-                        start = False
+                        if ("memory" in dtmMsg) and start and len( dtmDat["beliefs"] ):
+                            # estimates.append( dtmDat["beliefs"] )
+                            start = False
 
-                    ##### Phase 4: Execution ##############################
-                    if "BGN: Phase 4" in dtmMsg:
-                        Naction   += 1
-                        actionFail = False
+                        ##### Phase 4: Execution ##############################
+                        if "BGN: Phase 4" in dtmMsg:
+                            Naction   += 1
+                            actionFail = False
 
-                    if ("BT END" in dtmMsg):
-                        if ("fail" in f"{dtmMsg}".lower()):
-                            NfailActn += 1
-                            actionFail = True
+                        if ("BT END" in dtmMsg):
+                            if ("fail" in f"{dtmMsg}".lower()):
+                                NfailActn += 1
+                                actionFail = True
 
 
-                ### Steps ###
-                results["Nstep"].append( Nstep )
-                results["tStep"].extend( tStepDqu )
-                ### 4. Acting ###
-                results["rActFail"].append( NfailActn / Naction )
+                    ### Steps ###
+                    results["Nstep"].append( Nstep )
+                    results["tStep"].extend( tStepDqu )
+                    ### 4. Acting ###
+                    results["rActFail"].append( NfailActn / Naction )
 
-                # DONE w `data`
-                data = None 
+                    # DONE w `data`
+                    data = None 
 
 
-                ##### Perception Metrics -vs- Ground Truth ################
+                    ##### Perception Metrics -vs- Ground Truth ################
 
-                # WARNING, HACK: SKIP OVER FILES WITH PERCEPTION ISSUES
-                if fileDex in banDex:
-                    continue
+                    # WARNING, HACK: SKIP OVER FILES WITH PERCEPTION ISSUES
+                    if fileDex in banDex:
+                        continue
 
-                statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE_BYTES))    ]
-                statePaths.sort( key = lambda x: dex_key( x ) )
-                statePaths = deque( statePaths )
-                
-                ### Load States ###
-                _STATE_RAM_LIMIT_MB = 16e3
-                state  = deque()
-                sRAMmb = deque()
-                sIndex = 0
-                gotNum = False
-
-                def pop_state():
-                    """ Fetch next state """
-                    sRAMmb.popleft()
-                    return state.popleft()
-                
-                def p_numbered( fName : str ):
-                    lastTwo = fName.split('.')[0][-1:]
-                    try:
-                        int( lastTwo )
-                        return True
-                    except ValueError:
-                        return False
+                    statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE_BYTES))    ]
+                    statePaths.sort( key = lambda x: dex_key( x ) )
+                    statePaths = deque( statePaths )
                     
-                # print( f"There are {len(estimates)} sensed states!" )
+                    ### Load States ###
+                    _STATE_RAM_LIMIT_MB = 16e3
+                    state  = deque()
+                    sRAMmb = deque()
+                    sIndex = 0
+                    gotNum = False
 
-                while len( statePaths ) or len( state ):
-
-                    # 1. Load until limit 
-                    while sum( sRAMmb ) < _STATE_RAM_LIMIT_MB:
-                        if len( statePaths ):
-                            sPath  = statePaths.popleft()
-                            gotNum = gotNum or p_numbered( sPath )
-                            if gotNum and (not p_numbered( sPath )):
-                                continue
-                            pathSz = int(os.path.getsize(sPath)/1e6)
-                            try:
-                                print( f"\t{sPath}, {pathSz}MB" )
-                                with open( sPath, 'rb' ) as f:
-                                    state.append( pickle.load(f) )
-                                    sRAMmb.append( pathSz )
-                            except Exception as e:
-                                print( f">>>> SKIP {sPath}: {e} >>>>" )
-                                continue
-                        else:
-                            break
-                    print( f"Loaded {len( state )} states!" )
-
-                    ### For every state ###
+                    def pop_state():
+                        """ Fetch next state """
+                        sRAMmb.popleft()
+                        return state.popleft()
                     
-
-                    # print( list( s_j.keys() ) ) # ['labels', 'image', 'depth', 'clouds', 'objects', 'symbols']
-                    # "objects": deque(), # Collection of readings obtained from the masked images
-                    # "symbols": dict(), #- Lookup of objects obtained from the readings
-                    s_i = pop_state()
-                    if not isinstance( s_i, (list,deque,) ):
-                        s_i = [s_i,]
-                    for s_j in s_i:
-                        sense  = s_j['sensed']
-                        print( f"Symbols: {sense}" )
-                        truth  = list( s_j['symbols'].values() )
-                        print( f"Objects: {truth}" )
-                        if not len( truth ):
-                            continue
-                        print_header( f"State {sIndex+1}", preWidth = 5, totWidth = 50, capitalize = False )
-                        sIndex += 1
-                        # sense  = s_j['symbols'] # This is NOT true!
-                        # WARNING: THIS SMELLS
+                    def p_numbered( fName : str ):
+                        lastTwo = fName.split('.')[0][-1:]
                         try:
-                            # sense = estimates[jj]
-                            jj   += 1
-                            conf_j = current_scene_confusion( sense, truth )
-                            totFound   += conf_j['N_sensed' ]
-                            totConfuse += conf_j['N_confuse']
-                            Nground    += conf_j['N_true'   ]
-                            print( conf_j )
-                        except IndexError:
-                            pass
-                        sense = None
-                        truth = None
-                state = None
-                    
-                ### 2. Symbol Grounding ###
-                if totFound:
-                    results["rConfuse"].append( totConfuse / totFound )
-                    results["rFindFail"].append( (Nground - totFound) / Nground )
+                            int( lastTwo )
+                            return True
+                        except ValueError:
+                            return False
+                        
+                    # print( f"There are {len(estimates)} sensed states!" )
 
-            totRes[ setNam ][ test ] = results
-            # pprint( totRes )
-except (IndexError,):
-    traceback.print_exc()
-    crash_out()
-except (KeyboardInterrupt,):
-    print( "\n\nSESSION CLOSED BY USER!" )
-    crash_out()
+                    while len( statePaths ) or len( state ):
+
+                        # 1. Load until limit 
+                        while sum( sRAMmb ) < _STATE_RAM_LIMIT_MB:
+                            if len( statePaths ):
+                                sPath  = statePaths.popleft()
+                                gotNum = gotNum or p_numbered( sPath )
+                                if gotNum and (not p_numbered( sPath )):
+                                    continue
+                                pathSz = int(os.path.getsize(sPath)/1e6)
+                                try:
+                                    print( f"\t{sPath}, {pathSz}MB" )
+                                    with open( sPath, 'rb' ) as f:
+                                        state.append( pickle.load(f) )
+                                        sRAMmb.append( pathSz )
+                                except Exception as e:
+                                    print( f">>>> SKIP {sPath}: {e} >>>>" )
+                                    continue
+                            else:
+                                break
+                        print( f"Loaded {len( state )} states!" )
+
+                        ### For every state ###
+                        
+
+                        # print( list( s_j.keys() ) ) # ['labels', 'image', 'depth', 'clouds', 'objects', 'symbols']
+                        # "objects": deque(), # Collection of readings obtained from the masked images
+                        # "symbols": dict(), #- Lookup of objects obtained from the readings
+                        s_i = pop_state()
+                        if not isinstance( s_i, (list,deque,) ):
+                            s_i = [s_i,]
+                        for s_j in s_i:
+                            sense  = s_j['sensed']
+                            print( f"Symbols: {sense}" )
+                            truth  = list( s_j['symbols'].values() )
+                            print( f"Objects: {truth}" )
+
+
+                            results["frames"].append({
+                                'sense': copy_GraspObj_thin( sense ),
+                                'truth': copy_GraspObj_thin( truth ),
+                            })                            
+
+
+                            if not len( truth ):
+                                continue
+                            print_header( f"State {sIndex+1}", preWidth = 5, totWidth = 50, capitalize = False )
+                            sIndex += 1
+                            # sense  = s_j['symbols'] # This is NOT true!
+                            # WARNING: THIS SMELLS
+                            try:
+                                # sense = estimates[jj]
+                                jj   += 1
+                                conf_j = current_scene_confusion( sense, truth )
+                                totFound   += conf_j['N_sensed' ]
+                                totConfuse += conf_j['N_confuse']
+                                Nground    += conf_j['N_true'   ]
+                                print( conf_j )
+                            except IndexError:
+                                pass
+                            sense = None
+                            truth = None
+                    state = None
+                        
+                    ### 2. Symbol Grounding ###
+                    if totFound or Nground:
+                        results["rConfuse"].append( totConfuse / Nground )
+                        results["rFindFail"].append( (Nground - totFound) / Nground )
+
+                totRes[ setNam ][ test ] = results
+                # pprint( totRes )
+    except (IndexError,):
+        traceback.print_exc()
+        crash_out()
+    except (KeyboardInterrupt,):
+        print( "\n\nSESSION CLOSED BY USER!" )
+        crash_out()
+
+    try:
+        with open( f"{_PLOT_DIR}outData.pkl", 'wb' ) as f:
+            pickle.dump( totRes, f )
+    except Exception as e:
+        traceback.print_exc()
+        print( f"COULD NOT SAVE FILE: {e}" )
 
 
 
 ########## MAKE PLOTS ##############################################################################
 
-### Per color scenario ... ###
-for scenario, scenDct in totRes.items():
-    
-    ##### Makespan ########################################################
-    # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
+if _PLOT_DATA:
 
-    ##### Makespan [Time] ######################## 
-    mSeries = deque()
-    sNames  = deque()
-    for setting, stnDct in scenDct.items():
-        mSeries.append( stnDct['tEpisd'] )
-        sNames.append(  setting )
-    make_multi_histo( mSeries, sNames, 
+    try:
+        with open( f"{_PLOT_DIR}outData.pkl", 'rb' ) as f:
+            totRes = pickle.load( f )
+            pprint( totRes )
+    except Exception as e:
+        traceback.print_exc()
+        print( f"COULD NOT SAVE FILE: {e}" )
+        crash_out()
+
+    ### Per color scenario ... ###
+    for scenario, scenDct in totRes.items():
+        
+        ##### Makespan ########################################################
+        # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
+
+        ##### Makespan [Time] ######################## 
+        mSeries = deque()
+        sNames  = deque()
+        for setting, stnDct in scenDct.items():
+            mSeries.append( stnDct['tEpisd'] )
+            sNames.append(  setting )
+        make_multi_histo( mSeries, sNames, 
+                        plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
+                        fName     = f"{_PLOT_DIR}Histo-Time_{scenario}{plotExt}", 
+                        xLabel    = 'Time [s]', 
+                        forceYlim = True, savefig = True )
+        make_whisker( mSeries, sNames, 
                       plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
-                      fName     = f"{_PLOT_DIR}Histo-Time_{scenario}{plotExt}", 
-                      xLabel    = 'Time [s]', 
-                      forceYlim = True, savefig = True )
-    make_whisker( mSeries, sNames, 
-                  plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
-                  fName = f"{_PLOT_DIR}Whisker-Time_{scenario}{plotExt}", 
-                  yLabel = None, 
-                  savefig = True )
-    
+                      fName = f"{_PLOT_DIR}Whisker-Time_{scenario}{plotExt}", 
+                      yLabel = None, 
+                      forceYlim = False, savefig = True )
+        
 
-    ##### Makespan [Steps] #######################
-    mSeries = deque()
-    sNames  = deque()
-    for setting, stnDct in scenDct.items():
-        mSeries.append( stnDct['Nstep'] )
-        sNames.append(  setting )
-    make_multi_histo( mSeries, sNames, 
-                      plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Steps]", 
-                      fName     = f"{_PLOT_DIR}Histo-Step_{scenario}{plotExt}", 
-                      xLabel    = 'Steps', 
-                      forceYlim = True, savefig = True )
-    make_whisker( mSeries, sNames, 
-                  plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Steps]", 
-                  fName = f"{_PLOT_DIR}Whisker-Step_{scenario}{plotExt}", 
-                  yLabel = None, 
-                  forceYlim = True, savefig = True )
-    
+        ##### Makespan [Steps] #######################
+        mSeries = deque()
+        sNames  = deque()
+        for setting, stnDct in scenDct.items():
+            mSeries.append( stnDct['Nstep'] )
+            sNames.append(  setting )
+        make_multi_histo( mSeries, sNames, 
+                        plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Steps]", 
+                        fName     = f"{_PLOT_DIR}Histo-Step_{scenario}{plotExt}", 
+                        xLabel    = 'Steps', 
+                        forceYlim = True, savefig = True )
+        make_whisker( mSeries, sNames, 
+                    plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Steps]", 
+                    fName = f"{_PLOT_DIR}Whisker-Step_{scenario}{plotExt}", 
+                    yLabel = None, 
+                    forceYlim = True, savefig = True )
+        
 
-    ##### Confusion / Perception Rates ####################################
+        ##### Confusion / Perception Rates ####################################
 
-    ##### Confusion ##############################
-    mSeries = deque()
-    sNames  = deque()
-    for setting, stnDct in scenDct.items():
-        mSeries.append( stnDct['rConfuse'] )
-        sNames.append(  setting )
-    make_multi_histo( mSeries, sNames, 
-                      plotTitle = f"{datNamLong[ scenario ]}, {setting}\nConfusion Rate", 
-                      fName     = f"{_PLOT_DIR}Histo-Conf_{scenario}{plotExt}", 
-                      xLabel    = 'Confusion Rate', 
-                      forceYlim = True, savefig = True )
-    
+        ##### Confusion ##############################
+        mSeries = deque()
+        sNames  = deque()
+        for setting, stnDct in scenDct.items():
+            mSeries.append( stnDct['rConfuse'] )
+            sNames.append(  setting )
+        make_multi_histo( mSeries, sNames, 
+                        plotTitle = f"{datNamLong[ scenario ]}, {setting}\nConfusion Rate", 
+                        fName     = f"{_PLOT_DIR}Histo-Conf_{scenario}{plotExt}", 
+                        xLabel    = 'Confusion Rate', 
+                        forceYlim = True, savefig = True )
+        
 
-    ##### Failure  Rates ####################################
+        ##### Failure  Rates ####################################
 
-    ##### Makespan [Steps] #######################
-    
-try:
-    with open( f"{_PLOT_DIR}outData.pkl", 'wb' ) as f:
-        pickle.dump( totRes, f )
-except Exception as e:
-    traceback.print_exc()
-    print( f"COULD NOT SAVE FILE: {e}" )
+        ##### Makespan [Steps] #######################
+        
+
 
 
 ########## EXIT ####################################################################################
