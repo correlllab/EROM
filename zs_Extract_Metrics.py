@@ -604,7 +604,7 @@ if _PLOT_DATA:
                           fName     = f"{_PLOT_DIR}Histo-Step_{scenario}{plotExt}", 
                           xLabel    = 'Steps', 
                           yLabel    = 'Occurrences',
-                          forceYlim = True, savefig = True, decimals = 1 )
+                          forceYlim = True, savefig = True, decimals = 0 )
         make_whisker( mSeries, sNames, 
                       plotTitle = f"{datNamLong[ scenario ]}, Makespan Distribution [Steps]", 
                       fName = f"{_PLOT_DIR}Whisker-Step_{scenario}{plotExt}", 

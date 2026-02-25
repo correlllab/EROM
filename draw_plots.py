@@ -1,7 +1,7 @@
 ########## PLOTTING FUNCTIONS ######################################################################
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
+from collections import deque
 
 
 _TITLE_FONT_SIZE = 13
@@ -48,16 +48,42 @@ def make_histo( series, plotTitle, fName, xLabel = 'Makespan', yLabel = 'Occurre
 
 
 def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
-                      forceYlim = True, savefig = True, titleFontSize_pt = _TITLE_FONT_SIZE, decimals = 3 ):
+                      forceYlim = True, savefig = True, titleFontSize_pt = _TITLE_FONT_SIZE, decimals = 3, wholeStep = 5 ):
     """ Create Histogram across Categories on the same Axes """
     init_tight_fig( savefig )
     figure_data_report( multiSeries, seriesNames, plotTitle )
-    _, bin_edges, _ = plt.hist( multiSeries, label = seriesNames )
+
+    if decimals == 0:
+        data = deque()
+        for series in multiSeries:
+            data.extend( series )
+        sMin = int( min( data ) )
+        sMax = int( max( data ) )
+        bins = deque([sMin,])
+        while (bins[-1] + wholeStep) < sMax:
+            bins.append( bins[-1] + wholeStep )
+        if bins[-1] < sMax:
+            bins.append( bins[-1] + wholeStep )
+
+        _, bin_edges, _ = plt.hist( multiSeries, label = seriesNames, bins = bins )
+    else:
+        _, bin_edges, _ = plt.hist( multiSeries, label = seriesNames )
+
     # bin_ticks = 0.5 * (bin_edges[1:] + bin_edges[:-1])
     if decimals > 0:
         bin_ticks = [float(f"{item:.{decimals}f}") for item in bin_edges[:-1]]
     else:
-        bin_ticks = [int(float(f"{item}")) for item in bin_edges[:-1]]
+        bMin = int( min( bin_edges ) )
+        bMax = int( max( bin_edges ) )
+        bTix = deque()
+        bTix.append( bMin )
+        while (bTix[-1] + wholeStep) < bMax:
+            bTix.append( bTix[-1] + wholeStep )
+        if bTix[-1] < bMax:
+            bTix.append( bTix[-1] + wholeStep )
+        # bin_ticks = [float(f"{item:.{decimals}f}") for item in bin_edges[:-1]]
+        bin_ticks = list( bTix )
+        # bin_ticks = [int(float(f"{item}")) for item in bin_edges[:-1]]
     if plotTitle is not None:
         plt.title( plotTitle, fontsize = titleFontSize_pt ) # Set the title && font size
     if xLabel is not None:
