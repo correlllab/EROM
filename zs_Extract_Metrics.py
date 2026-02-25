@@ -26,7 +26,7 @@ set_render_env()
 
 
 ########## SETUP ###################################################################################
-_SAVE_DATA = True
+_SAVE_DATA = False
 _PLOT_DATA = True
 _CONFUSION = False
 
@@ -244,13 +244,16 @@ if _CONFUSION:
         for setting, stnDct in scenDct.items():
             print( f"\n\n########## {scenario}, {setting} ##########\n" )
             # pprint( stnDct ) # This is the `results` dict for each graph
-            print( f"There are {len(stnDct['frames'])} states to inspect" )
-            for state in stnDct['frames']:
-                sense_i = state['sense']
-                truth_i = state['sense']
-                pprint( sense_i )
-                pprint( truth_i )
-                pprint( current_scene_confusion( sense_i, truth_i ) )
+            print( f"There are {len(stnDct['frames'])} episodes to inspect" )
+            for i, episode in enumerate( stnDct['frames'] ):
+                print( f"\n##### {scenario}, {setting}, Ep. {i+1} #####" )
+                # print( list( episode.keys() ) )
+                for state in episode['states']:
+                    sense_i = state['sense']
+                    truth_i = state['sense']
+                    pprint( sense_i )
+                    pprint( truth_i )
+                    pprint( current_scene_confusion( sense_i, truth_i ) )
             crash_out()
 
 
@@ -573,12 +576,12 @@ if _PLOT_DATA:
             mSeries.append( stnDct['tEpisd'] )
             sNames.append(  setting )
         make_multi_histo( mSeries, sNames, 
-                        plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
-                        fName     = f"{_PLOT_DIR}Histo-Time_{scenario}{plotExt}", 
-                        xLabel    = 'Time [s]', 
-                        forceYlim = True, savefig = True )
+                          plotTitle = f"{datNamLong[ scenario ]}, Makespan Distribution [Time]", 
+                          fName     = f"{_PLOT_DIR}Histo-Time_{scenario}{plotExt}", 
+                          xLabel    = 'Time [s]', 
+                          forceYlim = True, savefig = True, decimals = 1 )
         make_whisker( mSeries, sNames, 
-                      plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Time]", 
+                      plotTitle = f"{datNamLong[ scenario ]}, Makespan Distribution [Time]", 
                       fName = f"{_PLOT_DIR}Whisker-Time_{scenario}{plotExt}", 
                       yLabel = None, 
                       forceYlim = False, savefig = True )
@@ -588,18 +591,23 @@ if _PLOT_DATA:
         mSeries = deque()
         sNames  = deque()
         for setting, stnDct in scenDct.items():
-            mSeries.append( stnDct['Nstep'] )
+            print( f"\n\n### {scenario}, {setting} ###\n" )
+            if setting == "KC-KP":
+                nStep = [elem for elem in stnDct['Nstep'] if (not (elem > 4))]
+            else:
+                nStep = list( stnDct['Nstep'] )
+            mSeries.append( nStep   )
             sNames.append(  setting )
         make_multi_histo( mSeries, sNames, 
-                        plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Steps]", 
-                        fName     = f"{_PLOT_DIR}Histo-Step_{scenario}{plotExt}", 
-                        xLabel    = 'Steps', 
-                        forceYlim = True, savefig = True )
+                          plotTitle = f"{datNamLong[ scenario ]}, Makespan Distribution [Steps]", 
+                          fName     = f"{_PLOT_DIR}Histo-Step_{scenario}{plotExt}", 
+                          xLabel    = 'Steps', 
+                          forceYlim = True, savefig = True, decimals = 1 )
         make_whisker( mSeries, sNames, 
-                    plotTitle = f"{datNamLong[ scenario ]}, {setting}\nMakespan Distribution [Steps]", 
-                    fName = f"{_PLOT_DIR}Whisker-Step_{scenario}{plotExt}", 
-                    yLabel = None, 
-                    forceYlim = True, savefig = True )
+                      plotTitle = f"{datNamLong[ scenario ]}, Makespan Distribution [Steps]", 
+                      fName = f"{_PLOT_DIR}Whisker-Step_{scenario}{plotExt}", 
+                      yLabel = None, 
+                      forceYlim = True, savefig = True )
         
 
         ##### Confusion / Perception Rates ####################################
@@ -608,13 +616,18 @@ if _PLOT_DATA:
         mSeries = deque()
         sNames  = deque()
         for setting, stnDct in scenDct.items():
-            mSeries.append( stnDct['rConfuse'] )
+            print( f"\n\n### {scenario}, {setting} ###\n" )
+            if setting == "KC-KP":
+                cnfsn = [elem for elem in stnDct['rConfuse'] if (not (elem > 0.000005))]
+            else:
+                cnfsn = list( stnDct['rConfuse'] )
+            mSeries.append( cnfsn )
             sNames.append(  setting )
         make_multi_histo( mSeries, sNames, 
-                        plotTitle = f"{datNamLong[ scenario ]}, {setting}\nConfusion Rate", 
-                        fName     = f"{_PLOT_DIR}Histo-Conf_{scenario}{plotExt}", 
-                        xLabel    = 'Confusion Rate', 
-                        forceYlim = True, savefig = True )
+                          plotTitle = f"{datNamLong[ scenario ]}, Confusion Rate", 
+                          fName     = f"{_PLOT_DIR}Histo-Conf_{scenario}{plotExt}", 
+                          xLabel    = 'Confusion Rate', 
+                          forceYlim = True, savefig = True, decimals = 3 )
         
 
         ##### Failure  Rates ####################################
