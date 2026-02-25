@@ -28,6 +28,7 @@ set_render_env()
 ########## SETUP ###################################################################################
 _SAVE_DATA = True
 _PLOT_DATA = True
+_CONFUSION = False
 
 # _DATA_DRIVE = "DATA_TANK"
 _DATA_DRIVE = "STARGAZER/DATA_TANK"
@@ -35,6 +36,7 @@ _DATA_DRIVE = "STARGAZER/DATA_TANK"
 # _PLOT_DIR   = "data/plots/"
 _PLOT_DIR   = "/media/james/FILEPILE/EROM/data/plots/"
 _GC_CYCLE   = False 
+_F_EXTRACT  = f"{_PLOT_DIR}outData.pkl"
 
 tests = [
     "KC-KP",
@@ -124,6 +126,7 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
                 dMin   = d_ij
                 kMin_i = k_i 
         if (kMin_i is not None) and (kMin_i not in usedSet):
+            print( f"d = {dMin} between {obj_j} and {matches[ kMin_i ]['sensed']}" )
             usedSet.add( kMin_i )
             matches[ kMin_i ]["known"] = obj_j
             matches[ kMin_i ]["d"    ] = dMin
@@ -144,10 +147,16 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
     for k_i, v_i in matches.items():
         # If the sensed block was real, Then check for confusion
         if v_i["known"] is not None:
+            print(v_i["known"].label, v_i["sensed"].label)
+            if (v_i["sensed"].label is not None) and (v_i["sensed"].label != env_var("_NULL_NAME")):
+                if v_i["known"].label != v_i["sensed"].label:
+                    Ncnf += 1
+            else:
             # if v_i["known"].label != v_i["sensed"].label:
-            if v_i["known"].label != max_class( v_i["sensed"] ):
-                # print( v_i["known"].label, v_i["sensed"].label, v_i["sensed"] )
-                Ncnf += 1
+                print( f"USING MAX" )
+                if v_i["known"].label != max_class( v_i["sensed"] ):
+                    # print( v_i["known"].label, v_i["sensed"].label, v_i["sensed"] )
+                    Ncnf += 1
         # Else block was NOT real, The system hallucinated it! 
         else:
             Nhal += 1 
@@ -214,14 +223,46 @@ def copy_GraspObj_thin( objLst : list[GraspObj] ) -> list[GraspObj]:
 
 
 
+########## WHAT IS GOING ON WITH CONFUSION? ########################################################
+# banDex  = [70,79,80,93,95,96,142,144,146,147,148,149,150,151,152,153,154,155,156,157,158,159,161,]
+banDex  = [72,142,]
+fileDex = -1
+
+if _CONFUSION:
+    totRes = None
+    try:
+        with open( _F_EXTRACT, 'rb' ) as f:
+            totRes = pickle.load(f)
+    except Exception as e:
+        traceback.print_exc()
+        print( f"COULD NOT SAVE FILE: {e}" )
+        crash_out()
+
+    ### Per color scenario ... ###
+    for scenario, scenDct in totRes.items():
+        # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
+        for setting, stnDct in scenDct.items():
+            print( f"\n\n########## {scenario}, {setting} ##########\n" )
+            # pprint( stnDct ) # This is the `results` dict for each graph
+            print( f"There are {len(stnDct['frames'])} states to inspect" )
+            for state in stnDct['frames']:
+                sense_i = state['sense']
+                truth_i = state['sense']
+                pprint( sense_i )
+                pprint( truth_i )
+                pprint( current_scene_confusion( sense_i, truth_i ) )
+            crash_out()
+
+
+
+
 ########## GATHER DATA #############################################################################
 _MIN_STATE_SIZE_BYTES = 500.0
 
 totRes : dict[str,dict] = dict()
 
 fileDex = -1
-# banDex  = [70,79,80,93,95,96,142,144,146,147,148,149,150,151,152,153,154,155,156,157,158,159,161,]
-banDex  = [72,142,]
+
 # banDex  = []
 
 if _SAVE_DATA:
@@ -276,7 +317,8 @@ if _SAVE_DATA:
 
                 ### For every episode ###
                 for episodePath in testRecord:
-                    data = None 
+                    eFrames = deque()
+                    data    = None 
                     if _GC_CYCLE:
                         print( f"\n\nGarbage collector: Collected {gc.collect()} objects!" )
                     fileDex += 1
@@ -451,7 +493,7 @@ if _SAVE_DATA:
                             print( f"Objects: {truth}" )
 
 
-                            results["frames"].append({
+                            eFrames.append({
                                 'sense': copy_GraspObj_thin( sense ),
                                 'truth': copy_GraspObj_thin( truth ),
                             })                            
@@ -476,7 +518,12 @@ if _SAVE_DATA:
                             sense = None
                             truth = None
                     state = None
-                        
+                    
+                    results["frames"].append( {
+                        'path'   : episodePath,
+                        'setting': f"{setNam}, {test}",
+                        'states' : list( eFrames )
+                    } )
                     ### 2. Symbol Grounding ###
                     if totFound or Nground:
                         results["rConfuse"].append( totConfuse / Nground )
@@ -492,7 +539,7 @@ if _SAVE_DATA:
         crash_out()
 
     try:
-        with open( f"{_PLOT_DIR}outData.pkl", 'wb' ) as f:
+        with open( _F_EXTRACT, 'wb' ) as f:
             pickle.dump( totRes, f )
     except Exception as e:
         traceback.print_exc()
@@ -505,7 +552,7 @@ if _SAVE_DATA:
 if _PLOT_DATA:
 
     try:
-        with open( f"{_PLOT_DIR}outData.pkl", 'rb' ) as f:
+        with open( _F_EXTRACT, 'rb' ) as f:
             totRes = pickle.load( f )
             pprint( totRes )
     except Exception as e:
