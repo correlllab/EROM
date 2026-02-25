@@ -1,6 +1,7 @@
 ########## PLOTTING FUNCTIONS ######################################################################
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 
 
 _TITLE_FONT_SIZE = 13
@@ -47,21 +48,29 @@ def make_histo( series, plotTitle, fName, xLabel = 'Makespan', yLabel = 'Occurre
 
 
 def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
-                      forceYlim = True, savefig = True, titleFontSize_pt = _TITLE_FONT_SIZE ):
+                      forceYlim = True, savefig = True, titleFontSize_pt = _TITLE_FONT_SIZE, decimals = 3 ):
     """ Create Histogram across Categories on the same Axes """
     init_tight_fig( savefig )
     figure_data_report( multiSeries, seriesNames, plotTitle )
-    plt.hist( multiSeries, label = seriesNames )
+    _, bin_edges, _ = plt.hist( multiSeries, label = seriesNames )
+    # bin_ticks = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+    if decimals > 0:
+        bin_ticks = [float(f"{item:.{decimals}f}") for item in bin_edges[:-1]]
+    else:
+        bin_ticks = [int(float(f"{item}")) for item in bin_edges[:-1]]
     if plotTitle is not None:
         plt.title( plotTitle, fontsize = titleFontSize_pt ) # Set the title && font size
     if xLabel is not None:
         plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
+        # Set the x-axis tick positions to the midpoints
+        plt.xticks( bin_ticks )
     if yLabel is not None:
         plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
     if savefig:
         plt.legend( loc = 'upper right' )
     if forceYlim:
         plt.ylim( (0, _N_TRIALS,) )
+        plt.yticks( list( range(0, _N_TRIALS+1, 2) ) )
     plt.tight_layout()
     if savefig:
         plt.savefig( fName )
