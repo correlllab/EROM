@@ -26,8 +26,8 @@ set_render_env()
 
 
 ########## SETUP ###################################################################################
-_SAVE_DATA = False
-_PLOT_DATA = True
+_SAVE_DATA = True
+_PLOT_DATA = False
 _CONFUSION = False
 
 # _DATA_DRIVE = "DATA_TANK"
@@ -86,6 +86,17 @@ def crash_out( notify = True ):
     os.system( 'kill %d' % os.getpid() ) 
 
 
+def max_class( obj : GraspObj ):
+    """ Get most likely class """
+    p = 0.0
+    c = None
+    for k, v in obj.labels.items():
+        if v > p:
+            p = v
+            c = k
+    return c
+
+
 def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : list[GraspObj] ):
     """ Return the number of `sensedObjects` that *contradict* the current scene """
     lastScen = actualObjects
@@ -130,16 +141,6 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
             usedSet.add( kMin_i )
             matches[ kMin_i ]["known"] = obj_j
             matches[ kMin_i ]["d"    ] = dMin
-        
-    def max_class( obj : GraspObj ):
-        """ Get most likely class """
-        p = 0.0
-        c = None
-        for k, v in obj.labels.items():
-            if v > p:
-                p = v
-                c = k
-        return c
 
     # Compute Number of Total, Confused, Hallucinated, and Missing Objects #
     Ncnf = 0 # Number of confusions
@@ -222,6 +223,49 @@ def copy_GraspObj_thin( objLst : list[GraspObj] ) -> list[GraspObj]:
     return list( rtnLst )
 
 
+def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], dThresh = None ):
+    """ Get a list of position variations between two scenes """
+    if dThresh is None:
+        dThresh = env_var("_BLOCK_SCALE")*4.0
+    namSet : set[str] = set([])
+
+    def get_block( blcLst : list[GraspObj], name : str ):
+        """ Get a block from `blcLst` by `name` """
+        for blc in blcLst:
+            if (blc.label is None) or (blc.label ==  env_var("_NULL_NAME")):
+                if max_class( blc ) == name:
+                    return blc
+            elif (blc.label == name):
+                return blc
+        return None
+    
+    def get_names( scene : list[GraspObj] ):
+        nonlocal namSet
+        name = None
+        for blc in scene:
+            if (blc.label is None) or (blc.label ==  env_var("_NULL_NAME")):
+                name = max_class( blc )
+            else:
+                name = blc.label
+            if name not in (None, env_var("_NULL_NAME"),):
+                namSet.add( name )
+
+    get_names( lastScene )
+    get_names( thisScene )
+
+    varLst = deque()
+    for name in namSet:
+        lstBlc = get_block( lastScene, name )
+        thsBlc = get_block( thisScene, name )
+        if (None not in [lstBlc, thsBlc,]):
+            d_n = euclidean_distance_between_symbols( lstBlc, thsBlc )
+            if d_n <= dThresh:
+                varLst.append( d_n )
+    return list( varLst )
+    
+    
+
+
 
 ########## WHAT IS GOING ON WITH CONFUSION? ########################################################
 # banDex  = [70,79,80,93,95,96,142,144,146,147,148,149,150,151,152,153,154,155,156,157,158,159,161,]
@@ -248,13 +292,21 @@ if _CONFUSION:
             for i, episode in enumerate( stnDct['frames'] ):
                 print( f"\n##### {scenario}, {setting}, Ep. {i+1} #####" )
                 # print( list( episode.keys() ) )
-                for state in episode['states']:
+                sense_im1 = None
+                truth_im1 = None
+                snsVar    = deque()
+                truVar    = deque()
+                for i, state in enumerate( episode['states'] ):
                     sense_i = state['sense']
                     truth_i = state['sense']
-                    pprint( sense_i )
-                    pprint( truth_i )
-                    pprint( current_scene_confusion( sense_i, truth_i ) )
-            crash_out()
+                    if i > 0:
+                        snsVar.extend( get_posn_variation( sense_i, sense_im1 ) )
+                        truVar.extend( get_posn_variation( truth_i, truth_im1 ) )
+                    sense_im1 = sense_i 
+                    truth_im1 = truth_i 
+                print( snsVar )
+                print( truVar )
+            # crash_out()
 
 
 
@@ -314,8 +366,11 @@ if _SAVE_DATA:
                     ## 2. Symbol Grounding ##
                     "rConfuse" : deque(),
                     "rFindFail": deque(),
+                    ### 3. Planning ###
+                    "actions": deque(),
                     ### 4. Acting ###
                     "rActFail": deque(),
+                    "actStat" : deque(),
                 }
 
                 ### For every episode ###
@@ -377,7 +432,11 @@ if _SAVE_DATA:
                     jj         = 0
                     start      = False
                     added      = False
+                    ### 3. Planning ###
+                    actions = deque()
+                    planned = False
                     ### 4. Acting ###
+                    actStat = deque()
                     Naction   = 0
                     NfailActn = 0
 
@@ -405,6 +464,13 @@ if _SAVE_DATA:
                             # estimates.append( dtmDat["beliefs"] )
                             start = False
 
+                        ##### Phase 3: Planning ###############################
+                        if ("END: Phase 3" in dtmMsg):
+                            actions.append( dtmDat )
+                            if not len( dtmDat['next'] ):
+                                actStat.append( None )
+                            
+
                         ##### Phase 4: Execution ##############################
                         if "BGN: Phase 4" in dtmMsg:
                             Naction   += 1
@@ -414,12 +480,19 @@ if _SAVE_DATA:
                             if ("fail" in f"{dtmMsg}".lower()):
                                 NfailActn += 1
                                 actionFail = True
+                                actStat.append( False )
+                            elif ("succ" in f"{dtmMsg}".lower()):
+                                actStat.append( True )
+                                
 
 
                     ### Steps ###
                     results["Nstep"].append( Nstep )
                     results["tStep"].extend( tStepDqu )
+                    ### 4. Planning ###
+                    results["actions"].append( list( actions ) )
                     ### 4. Acting ###
+                    results["actStat" ].append( list( actStat ) )
                     results["rActFail"].append( NfailActn / Naction )
 
                     # DONE w `data`
