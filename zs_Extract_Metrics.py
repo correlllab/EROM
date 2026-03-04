@@ -26,9 +26,9 @@ set_render_env()
 
 
 ########## SETUP ###################################################################################
-_SAVE_DATA = True
+_SAVE_DATA = False
 _PLOT_DATA = False
-_CONFUSION = False
+_CONFUSION = True
 
 # _DATA_DRIVE = "DATA_TANK"
 _DATA_DRIVE = "STARGAZER/DATA_TANK"
@@ -223,7 +223,124 @@ def copy_GraspObj_thin( objLst : list[GraspObj] ) -> list[GraspObj]:
     return list( rtnLst )
 
 
-def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], dThresh = None ):
+def tokenize( expr : str ):
+    """ Break a text `expr` into parts """
+    _reserved = ['[', ']', ',',]
+    expr += ' ' # Terminator hack
+    token  = ""
+    tokens = deque()
+
+    def p_reserved( char ):
+        return (char in _reserved)
+
+    def store_token():
+        nonlocal token, tokens
+        if len( token ):
+            try:
+                tokens.append( float( token ) )
+            except ValueError:
+                tokens.append( token )
+        token  = ""
+
+    def store_char( char ):
+        nonlocal tokens
+        store_token()
+        tokens.append( char )
+
+    for char in expr:
+        if char.isspace():
+            store_token()
+        elif p_reserved( char ):
+            store_char( char )
+        else:
+            token += char
+
+    return tokens
+
+
+def extract_pose_from_tokens( tokens : list[str] ):
+    depth = 0
+    matrx = deque()
+    array = deque()
+    for token in tokens:
+        if token =='[':
+            depth += 1
+            continue
+        if token ==']':
+            depth -= 1
+            continue
+        if depth == 2:
+            array.append( token )
+        elif depth == 1:
+            if len( array ):
+                matrx.append( list( array ) )
+                array = deque()
+    if depth == 0:
+        return np.array( list( matrx ) )
+    else:
+        return None
+    
+
+def extract_name_from_tokens( tokens : list[str] ):
+    for token in tokens:
+        if 'Block' in token:
+            return token
+    return None
+
+
+def parse_action( action : dict[str,list[str]] = None ):
+    """ Get the intended class, origin, destination of the block """
+
+    def get_name_and_origin( lines : list[str] ) -> np.ndarray:
+        """ Get the origin and name of the block """
+        accum  = False
+        tokens = deque()
+        name   = None
+        pose   = None
+        for line in lines:
+            if ('Pick' in line) or ('Unstack' in line):
+                accum = True
+            if accum:
+                linTkn = tokenize( line )
+                tokens.extend( linTkn )
+            name = extract_name_from_tokens( tokens )
+            pose = extract_pose_from_tokens( tokens )
+            if (name is not None) and (pose is not None):
+                return name, pose
+        return None, None
+    
+
+    def get_desination( lines : list[str] ) -> np.ndarray:
+        """ Get the origin and name of the block """
+        accum  = False
+        tokens = deque()
+        pose   = None
+        for line in lines:
+            if ('Place' in line) or ('Stack' in line):
+                accum = True
+            if accum:
+                linTkn = tokenize( line )
+                tokens.extend( linTkn )
+            pose = extract_pose_from_tokens( tokens )
+            if (pose is not None):
+                return pose
+        return None
+
+
+    if action is not None:
+        lines = action['next']
+        nam, src = get_name_and_origin( lines )
+        dst      = get_desination( lines )
+
+    return {
+        'name'   : nam,
+        'bgnPose': src,
+        'endPose': dst,
+    }
+
+
+
+def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], dThresh = None, action = None ):
     """ Get a list of position variations between two scenes """
     if dThresh is None:
         dThresh = env_var("_BLOCK_SCALE")*4.0
@@ -288,25 +405,34 @@ if _CONFUSION:
         for setting, stnDct in scenDct.items():
             print( f"\n\n########## {scenario}, {setting} ##########\n" )
             # pprint( stnDct ) # This is the `results` dict for each graph
-            print( f"There are {len(stnDct['frames'])} episodes to inspect" )
+
+            print( f"There are {len(stnDct['frames' ])} episodes to inspect" )
+            print( f"There are {len(stnDct['actions'])} episodes to inspect" )
+            
             for i, episode in enumerate( stnDct['frames'] ):
                 print( f"\n##### {scenario}, {setting}, Ep. {i+1} #####" )
-                # print( list( episode.keys() ) )
-                sense_im1 = None
-                truth_im1 = None
+                actions   = stnDct['actions'][i]
+                sense_jm1 = None
+                truth_jm1 = None
                 snsVar    = deque()
                 truVar    = deque()
-                for i, state in enumerate( episode['states'] ):
-                    sense_i = state['sense']
-                    truth_i = state['sense']
-                    if i > 0:
-                        snsVar.extend( get_posn_variation( sense_i, sense_im1 ) )
-                        truVar.extend( get_posn_variation( truth_i, truth_im1 ) )
-                    sense_im1 = sense_i 
-                    truth_im1 = truth_i 
+                print( f"There are {len(episode['states' ])} states to inspect" )
+                print( f"There are {len(actions)} actions to inspect" )
+                # print( f"There are {len(episode['actions'])} actions to inspect" )
+                for j, state in enumerate( episode['states'] ):
+                    jj      = j - 1
+                    sense_j = state['sense']
+                    truth_j = state['sense']
+                    if j > 0:
+                        action_j = actions[jj]
+                        pprint( action_j )
+                        snsVar.extend( get_posn_variation( sense_j, sense_jm1 ) )
+                        truVar.extend( get_posn_variation( truth_j, truth_jm1 ) )
+                    sense_jm1 = sense_j
+                    truth_jm1 = truth_j
                 print( snsVar )
                 print( truVar )
-            # crash_out()
+            crash_out()
 
 
 
