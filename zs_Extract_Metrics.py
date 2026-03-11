@@ -262,19 +262,21 @@ def extract_pose_from_tokens( tokens : list[str] ):
     depth = 0
     matrx = deque()
     array = deque()
+
+    # print( f"Inspect: {tokens}" )
+
     for token in tokens:
         if token =='[':
             depth += 1
-            continue
         if token ==']':
             depth -= 1
-            continue
-        if depth == 2:
+        if (depth == 2) and (not isinstance( token, str )):
             array.append( token )
         elif depth == 1:
             if len( array ):
                 matrx.append( list( array ) )
                 array = deque()
+        # print( f"\tToken: {token}, Depth: {depth}, Arr: {array}, Mtx: {matrx}" )
     if depth == 0:
         return np.array( list( matrx ) )
     else:
@@ -288,49 +290,66 @@ def extract_name_from_tokens( tokens : list[str] ):
     return None
 
 
-def parse_action( action : dict[str,list[str]] = None ):
-    """ Get the intended class, origin, destination of the block """
+def get_name_and_origin( lines : list[str] ) -> np.ndarray:
+    """ Get the origin and name of the block """
+    accum  = False
+    tokens = deque()
+    name   = None
+    pose   = None
 
-    def get_name_and_origin( lines : list[str] ) -> np.ndarray:
-        """ Get the origin and name of the block """
-        accum  = False
-        tokens = deque()
-        name   = None
-        pose   = None
-        for line in lines:
-            if ('Pick' in line) or ('Unstack' in line):
-                accum = True
-            if accum:
-                linTkn = tokenize( line )
-                tokens.extend( linTkn )
+    # if isinstance( lines, str ):
+    #     lines = lines.split('\n')
+
+    for line in lines:
+        if ('Pick' in line) or ('Unstack' in line):
+            accum = True
+        if accum:
+            linTkn = tokenize( line )
+            tokens.extend( linTkn )
             name = extract_name_from_tokens( tokens )
             pose = extract_pose_from_tokens( tokens )
             if (name is not None) and (pose is not None):
                 return name, pose
-        return None, None
-    
+    return None, None
 
-    def get_desination( lines : list[str] ) -> np.ndarray:
-        """ Get the origin and name of the block """
-        accum  = False
-        tokens = deque()
-        pose   = None
-        for line in lines:
-            if ('Place' in line) or ('Stack' in line):
-                accum = True
-            if accum:
-                linTkn = tokenize( line )
-                tokens.extend( linTkn )
+
+def get_desination( lines : list[str] ) -> np.ndarray:
+    """ Get the origin and name of the block """
+    accum  = False
+    tokens = deque()
+    pose   = None
+
+    # print( f"\nDESTINATION FROM {len(lines)} LINES!\n" )
+
+    # if isinstance( lines, str ):
+    #     lines = lines.split('\n')
+
+    for line in lines:
+        # print( f"\t\tLine: {line}" )
+        if ('Place' in line) or ('Stack' in line):
+            accum = True
+            # print( "\t\tACCUMULATING!" )
+        if accum:
+            linTkn = tokenize( line )
+            tokens.extend( linTkn )
             pose = extract_pose_from_tokens( tokens )
             if (pose is not None):
                 return pose
-        return None
+    return None
 
 
+def parse_action( action : dict[str,list[str]] = None ):
+    """ Get the intended class, origin, destination of the block """
     if action is not None:
-        lines = action['next']
-        nam, src = get_name_and_origin( lines )
-        dst      = get_desination( lines )
+        Lines = action['next']
+
+        # print( f"There are {len(Lines)} lines!" )
+        # for line in Lines:
+        #     print( f"\t{line}" )
+
+        dst      = get_desination( Lines )
+        nam, src = get_name_and_origin( Lines )
+        
 
     return {
         'name'   : nam,
@@ -345,6 +364,17 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
     if dThresh is None:
         dThresh = env_var("_BLOCK_SCALE")*4.0
     namSet : set[str] = set([])
+    if action is not None:
+        action = parse_action( action )
+
+    def exclude_source( scene : list[GraspObj], actDct : dict[str,str|np.ndarray] ):
+        """ Exclude the location of the block we tried to move """
+        nonlocal namSet
+        dMin = 6e10
+        bMin = None
+        for blc in scene:
+            
+
 
     def get_block( blcLst : list[GraspObj], name : str ):
         """ Get a block from `blcLst` by `name` """
@@ -426,13 +456,14 @@ if _CONFUSION:
                     if j > 0:
                         action_j = actions[jj]
                         pprint( action_j )
+                        pprint( parse_action( action_j ) )
                         snsVar.extend( get_posn_variation( sense_j, sense_jm1 ) )
                         truVar.extend( get_posn_variation( truth_j, truth_jm1 ) )
                     sense_jm1 = sense_j
                     truth_jm1 = truth_j
                 print( snsVar )
                 print( truVar )
-            crash_out()
+            crash_out( notify = False )
 
 
 
