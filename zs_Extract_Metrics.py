@@ -73,6 +73,7 @@ blcNam = {
 plotExt = ".pdf"
 
 
+
 ########## HELPER FUNCTIONS ########################################################################
 
 def play_tone( duration_s = 5, freq_Hz = 650 ):
@@ -257,12 +258,10 @@ def tokenize( expr : str ):
 
 
 def extract_pose_from_tokens( tokens : list[str] ):
+    """ Tokenize and parse a pose string """
     depth = 0
     matrx = deque()
     array = deque()
-
-    # print( f"Inspect: {tokens}" )
-
     for token in tokens:
         if token =='[':
             depth += 1
@@ -274,7 +273,6 @@ def extract_pose_from_tokens( tokens : list[str] ):
             if len( array ):
                 matrx.append( list( array ) )
                 array = deque()
-        # print( f"\tToken: {token}, Depth: {depth}, Arr: {array}, Mtx: {matrx}" )
     if depth == 0:
         return np.array( list( matrx ) )
     else:
@@ -282,6 +280,7 @@ def extract_pose_from_tokens( tokens : list[str] ):
     
 
 def extract_name_from_tokens( tokens : list[str] ):
+    """ Get a block name from a list of tokens """
     for token in tokens:
         if 'Block' in token:
             return token
@@ -294,10 +293,6 @@ def get_name_and_origin( lines : list[str] ) -> np.ndarray:
     tokens = deque()
     name   = None
     pose   = None
-
-    # if isinstance( lines, str ):
-    #     lines = lines.split('\n')
-
     for line in lines:
         if ('Pick' in line) or ('Unstack' in line):
             accum = True
@@ -316,17 +311,9 @@ def get_desination( lines : list[str] ) -> np.ndarray:
     accum  = False
     tokens = deque()
     pose   = None
-
-    # print( f"\nDESTINATION FROM {len(lines)} LINES!\n" )
-
-    # if isinstance( lines, str ):
-    #     lines = lines.split('\n')
-
     for line in lines:
-        # print( f"\t\tLine: {line}" )
         if ('Place' in line) or ('Stack' in line):
             accum = True
-            # print( "\t\tACCUMULATING!" )
         if accum:
             linTkn = tokenize( line )
             tokens.extend( linTkn )
@@ -349,7 +336,6 @@ def parse_action( action : dict[str,list[str]] = None ):
     }
 
 
-
 def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], action = None ):
     """ Get a list of position variations between two scenes """
     namSet : set[str] = set([])
@@ -365,22 +351,6 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
             print( namSet )
         except KeyError:
             pass
-
-
-        # dMin = 6e10
-        # bMin = None
-        # for blc in scene:
-        #     d_i = euclidean_distance_between_symbols( actDct[ "bgnPose" ], blc )
-        #     if (d_i <= dMin):
-        #         dMin = d_i
-        #         bMin = blc
-        # if bMin is not None:
-        #     try:
-        #         print( f"Try to ignore {extract_label( bMin )} in {namSet}" )
-        #         namSet.remove( extract_label( bMin ) )
-        #         print( namSet )
-        #     except KeyError:
-        #         pass
 
     def get_block( blcLst : list[GraspObj], name : str ):
         """ Get a block from `blcLst` by `name` """
@@ -411,8 +381,6 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
             print( f"Distance: {d_n} b/n {lstBlc} and {thsBlc}" )
             varLst.append( d_n )
     return list( varLst )
-    
-    
 
 
 
@@ -466,6 +434,7 @@ if _CONFUSION:
                 print( snsVar )
                 print( truVar )
             crash_out( notify = False )
+
 
 
 ########## EXTRACT DATA FOR PLOTTING ###############################################################
@@ -523,6 +492,7 @@ if _SAVE_THIN:
         traceback.print_exc()
         print( f"COULD NOT SAVE FILE: {e}" )
                 
+
 
 ########## GATHER DATA #############################################################################
 _MIN_STATE_SIZE_BYTES = 500.0
@@ -696,8 +666,6 @@ if _SAVE_DATA:
                                 actStat.append( False )
                             elif ("succ" in f"{dtmMsg}".lower()):
                                 actStat.append( True )
-                                
-
 
                     ### Steps ###
                     results["Nstep"].append( Nstep )
@@ -741,8 +709,6 @@ if _SAVE_DATA:
                             return True
                         except ValueError:
                             return False
-                        
-                    # print( f"There are {len(estimates)} sensed states!" )
 
                     while len( statePaths ) or len( state ):
 
@@ -767,9 +733,6 @@ if _SAVE_DATA:
                         print( f"Loaded {len( state )} states!" )
 
                         ### For every state ###
-                        
-
-                        # print( list( s_j.keys() ) ) # ['labels', 'image', 'depth', 'clouds', 'objects', 'symbols']
                         # "objects": deque(), # Collection of readings obtained from the masked images
                         # "symbols": dict(), #- Lookup of objects obtained from the readings
                         s_i = pop_state()
@@ -792,7 +755,6 @@ if _SAVE_DATA:
                                 continue
                             print_header( f"State {sIndex+1}", preWidth = 5, totWidth = 50, capitalize = False )
                             sIndex += 1
-                            # sense  = s_j['symbols'] # This is NOT true!
                             # WARNING: THIS SMELLS
                             try:
                                 # sense = estimates[jj]
