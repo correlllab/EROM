@@ -26,9 +26,11 @@ set_render_env()
 
 
 ########## SETUP ###################################################################################
+_CONFUSION = False
+_SAVE_THIN = True
 _SAVE_DATA = False
 _PLOT_DATA = False
-_CONFUSION = True
+
 
 # _DATA_DRIVE = "DATA_TANK"
 _DATA_DRIVE = "STARGAZER/DATA_TANK"
@@ -337,16 +339,9 @@ def get_desination( lines : list[str] ) -> np.ndarray:
 def parse_action( action : dict[str,list[str]] = None ):
     """ Get the intended class, origin, destination of the block """
     if action is not None:
-        Lines = action['next']
-
-        # print( f"There are {len(Lines)} lines!" )
-        # for line in Lines:
-        #     print( f"\t{line}" )
-
+        Lines    = action['next']
         dst      = get_desination( Lines )
         nam, src = get_name_and_origin( Lines )
-        
-
     return {
         'name'   : nam,
         'bgnPose': src,
@@ -459,7 +454,7 @@ if _CONFUSION:
                 for j, state in enumerate( episode['states'] ):
                     jj      = j - 1
                     sense_j = state['sense']
-                    truth_j = state['sense']
+                    truth_j = state['truth']
                     if j > 0:
                         action_j = actions[jj]
                         # pprint( action_j )
@@ -473,7 +468,61 @@ if _CONFUSION:
             crash_out( notify = False )
 
 
+########## EXTRACT DATA FOR PLOTTING ###############################################################
+if _SAVE_THIN:
+    
+    ### Open Data File ###
+    totRes = None
+    try:
+        with open( _F_EXTRACT, 'rb' ) as f:
+            totRes = pickle.load(f)
+    except Exception as e:
+        traceback.print_exc()
+        print( f"COULD NOT SAVE FILE: {e}" )
+        crash_out()
 
+    ### Per color scenario ... ###
+    for scenario, scenDct in totRes.items():
+        # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
+        for setting, stnDct in scenDct.items():
+            stnVar = {
+                'sensePosnVar' : deque(),
+                'truthPosnVar' : deque(),
+            }
+            print( f"\n\n########## {scenario}, {setting} ##########\n" )
+            for i, episode in enumerate( stnDct['frames'] ):
+                print( f"\n##### {scenario}, {setting}, Ep. {i+1} #####" )
+                actions   = stnDct['actions'][i]
+                sense_jm1 = None
+                truth_jm1 = None
+                snsVar    = deque()
+                truVar    = deque()
+                for j, state in enumerate( episode['states'] ):
+                    jj      = j - 1
+                    sense_j = state['sense']
+                    truth_j = state['truth']
+                    if j > 0:
+                        action_j = actions[jj]
+                        pprint( parse_action( action_j ) )
+                        snsVar.extend( get_posn_variation( sense_j, sense_jm1, action = action_j ) )
+                        truVar.extend( get_posn_variation( truth_j, truth_jm1, action = action_j ) )
+                    sense_jm1 = sense_j
+                    truth_jm1 = truth_j
+                stnVar[ 'sensePosnVar' ].extend( snsVar )
+                stnVar[ 'truthPosnVar' ].extend( truVar )
+            totRes[ scenario ][ setting ][ 'posnVar' ] = {
+                'sense': deque( stnVar[ 'sensePosnVar' ] ),
+                'truth': deque( stnVar[ 'truthPosnVar' ] ),
+            }
+
+    ### Save Data File ###
+    try:
+        with open( _F_EXTRACT, 'wb' ) as f:
+            pickle.dump( totRes, f )
+    except Exception as e:
+        traceback.print_exc()
+        print( f"COULD NOT SAVE FILE: {e}" )
+                
 
 ########## GATHER DATA #############################################################################
 _MIN_STATE_SIZE_BYTES = 500.0
