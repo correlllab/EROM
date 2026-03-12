@@ -902,6 +902,20 @@ def get_mpcd_pose( point_cloud : MPCD ):
 
 ##### "Ground Truth" Tracker ############################################## 
 
+def extract_label( obj : GraspObj ):
+    """ Get most likely class """
+    if (obj.label is None) or (obj.label == env_var("_NULL_NAME")):
+        p = 0.0
+        c = None
+        for k, v in obj.labels.items():
+            if v > p:
+                p = v
+                c = k
+        return c
+    else:
+        return obj.label
+
+
 _CLUMP_POP_PX  = 7 # Number of neighbors to be considered part of a clump
 _EXPAND_DEPTH  = 3
 _MIN_PXL_DNSTY = 0.25
@@ -1242,7 +1256,10 @@ class OCV_State_Tracker:
             #     aabb = obj_i.cpcd.calc_aabb()
             #     if max(aabb[1,2], aabb[0,2]) < (0.25 * env_var("_BLOCK_SCALE")):
             #         continue
-            lbl_i = obj_i.label
+
+            # lbl_i = obj_i.label
+            lbl_i = extract_label( obj_i )            
+            
             # WARNING: THE FOLLOWING ASSUMES ONE OF EACH LABEL!
             if lbl_i in self.current['symbols']:
                 obj_j  = self.current['symbols'][ lbl_i ]
@@ -1323,7 +1340,7 @@ class OCV_State_Tracker:
         for k_i, v_i in matches.items():
             # If the sensed block was real, Then check for confusion
             if v_i["known"] is not None:
-                if v_i["known"].label != v_i["sensed"].label:
+                if extract_label( v_i["known"] ) != extract_label( v_i["sensed"] ):
                     Ncnf += 1
             # Else block was NOT real, The system hallucinated it! 
             else:
