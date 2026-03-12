@@ -86,15 +86,18 @@ def crash_out( notify = True ):
     os.system( 'kill %d' % os.getpid() ) 
 
 
-def max_class( obj : GraspObj ):
+def extract_label( obj : GraspObj ):
     """ Get most likely class """
-    p = 0.0
-    c = None
-    for k, v in obj.labels.items():
-        if v > p:
-            p = v
-            c = k
-    return c
+    if (obj.label is None) or (obj.label == env_var("_NULL_NAME")):
+        p = 0.0
+        c = None
+        for k, v in obj.labels.items():
+            if v > p:
+                p = v
+                c = k
+        return c
+    else:
+        return obj.label
 
 
 def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : list[GraspObj] ):
@@ -149,15 +152,8 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
         # If the sensed block was real, Then check for confusion
         if v_i["known"] is not None:
             print(v_i["known"].label, v_i["sensed"].label)
-            if (v_i["sensed"].label is not None) and (v_i["sensed"].label != env_var("_NULL_NAME")):
-                if v_i["known"].label != v_i["sensed"].label:
-                    Ncnf += 1
-            else:
-            # if v_i["known"].label != v_i["sensed"].label:
-                print( f"USING MAX" )
-                if v_i["known"].label != max_class( v_i["sensed"] ):
-                    # print( v_i["known"].label, v_i["sensed"].label, v_i["sensed"] )
-                    Ncnf += 1
+            if extract_label( v_i["known"] ) != extract_label( v_i["sensed"] ):
+                Ncnf += 1
         # Else block was NOT real, The system hallucinated it! 
         else:
             Nhal += 1 
@@ -359,10 +355,8 @@ def parse_action( action : dict[str,list[str]] = None ):
 
 
 
-def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], dThresh = None, action = None ):
+def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], action = None ):
     """ Get a list of position variations between two scenes """
-    if dThresh is None:
-        dThresh = env_var("_BLOCK_SCALE")*4.0
     namSet : set[str] = set([])
     if action is not None:
         action = parse_action( action )
@@ -370,19 +364,33 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
     def exclude_source( scene : list[GraspObj], actDct : dict[str,str|np.ndarray] ):
         """ Exclude the location of the block we tried to move """
         nonlocal namSet
-        dMin = 6e10
-        bMin = None
-        for blc in scene:
-            
+        try:
+            print( f"Try to ignore {actDct['name']} in {namSet}" )
+            namSet.remove( actDct['name'] )
+            print( namSet )
+        except KeyError:
+            pass
 
+
+        # dMin = 6e10
+        # bMin = None
+        # for blc in scene:
+        #     d_i = euclidean_distance_between_symbols( actDct[ "bgnPose" ], blc )
+        #     if (d_i <= dMin):
+        #         dMin = d_i
+        #         bMin = blc
+        # if bMin is not None:
+        #     try:
+        #         print( f"Try to ignore {extract_label( bMin )} in {namSet}" )
+        #         namSet.remove( extract_label( bMin ) )
+        #         print( namSet )
+        #     except KeyError:
+        #         pass
 
     def get_block( blcLst : list[GraspObj], name : str ):
         """ Get a block from `blcLst` by `name` """
         for blc in blcLst:
-            if (blc.label is None) or (blc.label ==  env_var("_NULL_NAME")):
-                if max_class( blc ) == name:
-                    return blc
-            elif (blc.label == name):
+            if extract_label( blc ) == name:
                 return blc
         return None
     
@@ -390,15 +398,14 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
         nonlocal namSet
         name = None
         for blc in scene:
-            if (blc.label is None) or (blc.label ==  env_var("_NULL_NAME")):
-                name = max_class( blc )
-            else:
-                name = blc.label
+            name = extract_label( blc )
             if name not in (None, env_var("_NULL_NAME"),):
                 namSet.add( name )
 
     get_names( lastScene )
     get_names( thisScene )
+    if action is not None:
+        exclude_source( lastScene, action )
 
     varLst = deque()
     for name in namSet:
@@ -406,8 +413,8 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
         thsBlc = get_block( thisScene, name )
         if (None not in [lstBlc, thsBlc,]):
             d_n = euclidean_distance_between_symbols( lstBlc, thsBlc )
-            if d_n <= dThresh:
-                varLst.append( d_n )
+            print( f"Distance: {d_n} b/n {lstBlc} and {thsBlc}" )
+            varLst.append( d_n )
     return list( varLst )
     
     
@@ -455,10 +462,10 @@ if _CONFUSION:
                     truth_j = state['sense']
                     if j > 0:
                         action_j = actions[jj]
-                        pprint( action_j )
+                        # pprint( action_j )
                         pprint( parse_action( action_j ) )
-                        snsVar.extend( get_posn_variation( sense_j, sense_jm1 ) )
-                        truVar.extend( get_posn_variation( truth_j, truth_jm1 ) )
+                        snsVar.extend( get_posn_variation( sense_j, sense_jm1, action = action_j ) )
+                        truVar.extend( get_posn_variation( truth_j, truth_jm1, action = action_j ) )
                     sense_jm1 = sense_j
                     truth_jm1 = truth_j
                 print( snsVar )
