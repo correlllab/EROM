@@ -143,7 +143,7 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
                 dMin   = d_ij
                 kMin_i = k_i 
         if (kMin_i is not None) and (kMin_i not in usedSet):
-            print( f"d = {dMin} between {obj_j} and {matches[ kMin_i ]['sensed']}" )
+            # print( f"d = {dMin} between {obj_j} and {matches[ kMin_i ]['sensed']}" )
             usedSet.add( kMin_i )
             matches[ kMin_i ]["known"] = obj_j
             matches[ kMin_i ]["d"    ] = dMin
@@ -154,7 +154,7 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
     for k_i, v_i in matches.items():
         # If the sensed block was real, Then check for confusion
         if v_i["known"] is not None:
-            print(v_i["known"].label, v_i["sensed"].label)
+            # print(v_i["known"].label, v_i["sensed"].label)
             if extract_label( v_i["known"] ) != extract_label( v_i["sensed"] ):
                 Ncnf += 1
         # Else block was NOT real, The system hallucinated it! 
@@ -195,7 +195,7 @@ def reconcile_scene( actualObjects : list[GraspObj] ):
             obj_j.pose = ObjPose( pose_r )
         else:
             symbols[ lbl_i ] = obj_i
-    print( f"Processed {len(actualObjects)} readings!" )
+    # print( f"Processed {len(actualObjects)} readings!" )
     rtnSym = list( symbols.values() )
     
     OCV_State_Tracker.logical_Z_snap( rtnSym )
@@ -346,9 +346,9 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
         """ Exclude the location of the block we tried to move """
         nonlocal namSet
         try:
-            print( f"Try to ignore {actDct['name']} in {namSet}" )
+            # print( f"Try to ignore {actDct['name']} in {namSet}" )
             namSet.remove( actDct['name'] )
-            print( namSet )
+            # print( namSet )
         except KeyError:
             pass
 
@@ -378,7 +378,7 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
         thsBlc = get_block( thisScene, name )
         if (None not in [lstBlc, thsBlc,]):
             d_n = euclidean_distance_between_symbols( lstBlc, thsBlc )
-            print( f"Distance: {d_n} b/n {lstBlc} and {thsBlc}" )
+            # print( f"Distance: {d_n} b/n {lstBlc} and {thsBlc}" )
             varLst.append( d_n )
     return list( varLst )
 
@@ -440,57 +440,77 @@ if _CONFUSION:
 ########## EXTRACT DATA FOR PLOTTING ###############################################################
 if _SAVE_THIN:
     
-    ### Open Data File ###
-    totRes = None
     try:
-        with open( _F_EXTRACT, 'rb' ) as f:
-            totRes = pickle.load(f)
-    except Exception as e:
-        traceback.print_exc()
-        print( f"COULD NOT SAVE FILE: {e}" )
-        crash_out()
+        ### Open Data File ###
+        totRes = None
+        try:
+            with open( _F_EXTRACT, 'rb' ) as f:
+                totRes = pickle.load(f)
+        except Exception as e:
+            traceback.print_exc()
+            print( f"COULD NOT SAVE FILE: {e}" )
+            crash_out()
 
-    ### Per color scenario ... ###
-    for scenario, scenDct in totRes.items():
-        # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
-        for setting, stnDct in scenDct.items():
-            stnVar = {
-                'sensePosnVar' : deque(),
-                'truthPosnVar' : deque(),
-            }
-            print( f"\n\n########## {scenario}, {setting} ##########\n" )
-            for i, episode in enumerate( stnDct['frames'] ):
-                print( f"\n##### {scenario}, {setting}, Ep. {i+1} #####" )
-                actions   = stnDct['actions'][i]
-                sense_jm1 = None
-                truth_jm1 = None
-                snsVar    = deque()
-                truVar    = deque()
-                for j, state in enumerate( episode['states'] ):
-                    jj      = j - 1
-                    sense_j = state['sense']
-                    truth_j = state['truth']
-                    if j > 0:
-                        action_j = actions[jj]
-                        pprint( parse_action( action_j ) )
-                        snsVar.extend( get_posn_variation( sense_j, sense_jm1, action = action_j ) )
-                        truVar.extend( get_posn_variation( truth_j, truth_jm1, action = action_j ) )
-                    sense_jm1 = sense_j
-                    truth_jm1 = truth_j
-                stnVar[ 'sensePosnVar' ].extend( snsVar )
-                stnVar[ 'truthPosnVar' ].extend( truVar )
-            totRes[ scenario ][ setting ][ 'posnVar' ] = {
-                'sense': deque( stnVar[ 'sensePosnVar' ] ),
-                'truth': deque( stnVar[ 'truthPosnVar' ] ),
-            }
+        ### Per color scenario ... ###
+        for scenario, scenDct in totRes.items():
+            # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
+            for setting, stnDct in scenDct.items():
+                stnVar = {
+                    'sensePosnVar' : deque(),
+                    'truthPosnVar' : deque(),
+                }
+                print( f"\n\n########## {scenario}, {setting} ##########\n" )
+                for i, episode in enumerate( stnDct['frames'] ):
+                    print( f"\n##### {scenario}, {setting}, Ep. {i+1} #####" )
+                    actions   = stnDct['actions'][i]
+                    # print( f"Action Status: {stnDct['actStat']}" )
 
-    ### Save Data File ###
-    try:
-        with open( _F_EXTRACT, 'wb' ) as f:
-            pickle.dump( totRes, f )
-    except Exception as e:
-        traceback.print_exc()
-        print( f"COULD NOT SAVE FILE: {e}" )
+                    assert len( stnDct['actions'][i] ) == len( stnDct['actStat'][i] ), f"OH SHIT: {len( stnDct['actions'][i] )}, {len( stnDct['actStat'][i] )}"
+                    print()
+                    for j in range( len( stnDct['actions'][i] ) ):
+                        print( stnDct['actStat'][i][j] )
+                        pprint( parse_action( stnDct['actions'][i][j] ) )
+                        print()
+
+                    sense_jm1 = None
+                    truth_jm1 = None
+                    snsVar    = deque()
+                    truVar    = deque()
+
+                    print( f"There are {len(stnDct['actions'][i])} actions, {len(stnDct['actStat'][i])} statuses, and {len(episode['states'])} states!" )
+
+                    for j, state in enumerate( episode['states'] ):
+                        print( '>', end = '', flush = True )
+                        jj      = j - 1
+                        sense_j = state['sense']
+                        truth_j = state['truth']
+                        if (j > 0):
+                            if (jj < len(stnDct['actions'][i])):
+                                action_j = actions[jj]
+                            else:
+                                action_j = None
+                            # pprint( parse_action( action_j ) )
+                            snsVar.extend( get_posn_variation( sense_j, sense_jm1, action = action_j ) )
+                            truVar.extend( get_posn_variation( truth_j, truth_jm1, action = action_j ) )
+                        sense_jm1 = sense_j
+                        truth_jm1 = truth_j
+                    stnVar[ 'sensePosnVar' ].extend( snsVar )
+                    stnVar[ 'truthPosnVar' ].extend( truVar )
+                    print()
+                totRes[ scenario ][ setting ][ 'posnVar' ] = {
+                    'sense': deque( stnVar[ 'sensePosnVar' ] ),
+                    'truth': deque( stnVar[ 'truthPosnVar' ] ),
+                }
+
+        ### Save Data File ###
+        try:
+            with open( _F_EXTRACT, 'wb' ) as f:
+                pickle.dump( totRes, f )
+        except Exception as e:
+            traceback.print_exc()
+            print( f"COULD NOT SAVE FILE: {e}" )
+    except KeyboardInterrupt:
+        print( "Session ENDED by the user!" )
                 
 
 
@@ -889,4 +909,4 @@ if _PLOT_DATA:
 
 
 ########## EXIT ####################################################################################
-crash_out( notify = _SAVE_DATA )
+crash_out( notify = (_SAVE_DATA or _SAVE_THIN) )
