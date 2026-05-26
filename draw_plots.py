@@ -104,12 +104,13 @@ def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "outpu
     
 
 def make_whisker( multiSeries, seriesNames, plotTitle = None, fName = "output.pdf", yLabel = None, 
-                  forceYlim = True, savefig = True, titleFontSize_pt = _TITLE_FONT_SIZE ):
+                  forceYlim = True, savefig = True, titleFontSize_pt = _TITLE_FONT_SIZE, outliers = True ):
     init_tight_fig( savefig )
     figure_data_report( multiSeries, seriesNames, plotTitle )
     # Create the plot
-    plt.boxplot( x      = multiSeries,
-                 labels = seriesNames )
+    plt.boxplot( x          = multiSeries,
+                 labels     = seriesNames,
+                 showfliers = outliers   )
     if plotTitle is not None:
         plt.title( plotTitle, fontsize = titleFontSize_pt ) # Set the title && font size
     if yLabel is not None:

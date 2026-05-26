@@ -27,9 +27,9 @@ set_render_env()
 
 ########## SETUP ###################################################################################
 _CONFUSION = False
-_SAVE_THIN = True
+_SAVE_THIN = False
 _SAVE_DATA = False
-_PLOT_DATA = False
+_PLOT_DATA = True
 
 
 # _DATA_DRIVE = "DATA_TANK"
@@ -837,7 +837,7 @@ if _PLOT_DATA:
         ##### Makespan ########################################################
         # {'RGB': {'KC-KP': 'tEpisd': deque([ ...
 
-        ##### Makespan [Time] ######################## 
+        ##### Makespan [Time] ########################
         mSeries = deque()
         sNames  = deque()
         for setting, stnDct in scenDct.items():
@@ -903,7 +903,34 @@ if _PLOT_DATA:
 
         ##### Failure  Rates ####################################
 
-        ##### Makespan [Steps] #######################
+        ##### Position Variation (Sense) #############
+        mSeries = deque()
+        sNames  = deque()
+        for setting, stnDct in scenDct.items():
+            # print( list( stnDct['posnVar'].keys() ) )
+            mSeries.append( stnDct['posnVar']['sense'] )
+            sNames.append(  setting )
+        make_whisker( mSeries, sNames, 
+                      plotTitle = f"{datNamLong[ scenario ]}, Variation of Sensed Position [m]", 
+                      fName     = f"{_PLOT_DIR}Whisker-PosnVar-Sense_{scenario}{plotExt}", 
+                      yLabel    = "[m]", 
+                      forceYlim = False, 
+                      savefig   = True,
+                      outliers  = False )
+        
+        ##### Position Variation (Truth) #############
+        mSeries = deque()
+        sNames  = deque()
+        for setting, stnDct in scenDct.items():
+            mSeries.append( stnDct['posnVar']['truth'] )
+            sNames.append(  setting )
+        make_whisker( mSeries, sNames, 
+                      plotTitle = f"{datNamLong[ scenario ]}, Variation of Ground Truth Position [m]", 
+                      fName     = f"{_PLOT_DIR}Whisker-PosnVar-Truth_{scenario}{plotExt}", 
+                      yLabel    = "[m]", 
+                      forceYlim = False, 
+                      savefig   = True, 
+                      outliers  = False )
         
 
 
