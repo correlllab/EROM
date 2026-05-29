@@ -1,5 +1,5 @@
 ########## INIT ####################################################################################
-import pickle, os, gc, traceback
+import pickle, os, gc, traceback, json
 from collections import deque
 from copy import deepcopy
 from pprint import pprint
@@ -28,8 +28,8 @@ set_render_env()
 ########## SETUP ###################################################################################
 _CONFUSION = False
 _SAVE_THIN = False
-_SAVE_DATA = False
-_PLOT_DATA = True
+_SAVE_DATA = True
+_PLOT_DATA = False
 
 
 # _DATA_DRIVE = "DATA_TANK"
@@ -39,6 +39,7 @@ _DATA_DRIVE = "STARGAZER/DATA_TANK"
 _PLOT_DIR   = "/media/james/FILEPILE/EROM/data/plots/"
 _GC_CYCLE   = False 
 _F_EXTRACT  = f"{_PLOT_DIR}outData.pkl"
+_T_EXTRACT  = f"{_PLOT_DIR}outText.json"
 
 tests = [
     "KC-KP",
@@ -518,6 +519,7 @@ if _SAVE_THIN:
 _MIN_STATE_SIZE_BYTES = 500.0
 
 totRes : dict[str,dict] = dict()
+txtRes : dict[str,dict] = dict()
 
 fileDex = -1
 
@@ -533,11 +535,13 @@ if _SAVE_DATA:
             skip   = False
 
             totRes[ setNam ] = dict()
+            txtRes[ setNam ] = dict()
 
             ### For every scenario ###
             for ii, test in enumerate( tests ):
                 
                 print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
+                
                 ##### Init ####################################################
                 path     = paths[ii]
                 longTNam = longTestNames[ii]
@@ -558,6 +562,10 @@ if _SAVE_DATA:
                 ##### Episode Basics ##########################################
 
                 ### Episode Accounting ###
+                resText = {
+                    ## Messages ##
+                    "msgs": deque(),
+                }
                 results = {
                     ## Objects ##
                     "frames": deque(),
@@ -622,6 +630,8 @@ if _SAVE_DATA:
                     results["rSuccess"].append( resEp )
 
                     ##### Per-Episode Accounting ##################################
+                    ### Messages ###
+                    epMsgs = deque()
                     ### Steps ###
                     Nstep    = 0
                     tStepBgn = 0
@@ -631,7 +641,6 @@ if _SAVE_DATA:
                     Nground    = 0
                     totFound   = 0
                     totConfuse = 0
-                    # estimates  = deque()
                     jj         = 0
                     start      = False
                     added      = False
@@ -645,6 +654,7 @@ if _SAVE_DATA:
 
                     ##### Per-Message Accounting #####
                     for datum in data:
+                        epMsgs.append( datum['msg'] )
                         dtmMsg = datum['msg']
                         dtmT   = datum['t']
                         dtmDat = datum['data']
@@ -687,6 +697,7 @@ if _SAVE_DATA:
                             elif ("succ" in f"{dtmMsg}".lower()):
                                 actStat.append( True )
 
+                    resText["msgs"].append( epMsgs )
                     ### Steps ###
                     results["Nstep"].append( Nstep )
                     results["tStep"].extend( tStepDqu )
@@ -801,6 +812,7 @@ if _SAVE_DATA:
                         results["rFindFail"].append( (Nground - totFound) / Nground )
 
                 totRes[ setNam ][ test ] = results
+                txtRes[ setNam ][ test ] = resText
                 # pprint( totRes )
     except (IndexError,):
         traceback.print_exc()
@@ -812,6 +824,8 @@ if _SAVE_DATA:
     try:
         with open( _F_EXTRACT, 'wb' ) as f:
             pickle.dump( totRes, f )
+        with open( _T_EXTRACT, 'w' ) as f:
+            json.dump( txtRes, f, indent = 2 )
     except Exception as e:
         traceback.print_exc()
         print( f"COULD NOT SAVE FILE: {e}" )
@@ -825,11 +839,20 @@ if _PLOT_DATA:
     try:
         with open( _F_EXTRACT, 'rb' ) as f:
             totRes = pickle.load( f )
-            pprint( totRes )
+            # pprint( totRes )
     except Exception as e:
         traceback.print_exc()
         print( f"COULD NOT SAVE FILE: {e}" )
         crash_out()
+
+    trendData = {
+        # What influence does Position Variation have on action failure?
+        "Action Failure": deque(),
+        "Position Var"  : deque(),
+        # What influence do multiple blocks have on planning failure?
+        "Planning Fail" : deque(),
+        "Multiple Rate" : deque(),
+    }
 
     ### Per color scenario ... ###
     for scenario, scenDct in totRes.items():
@@ -843,6 +866,11 @@ if _PLOT_DATA:
         for setting, stnDct in scenDct.items():
             mSeries.append( stnDct['tEpisd'] )
             sNames.append(  setting )
+
+            trendData["Position Var"  ].append( np.mean( stnDct['posnVar']['sense'] ) )
+            trendData["Action Failure"].append( np.mean( stnDct['rActFail']         ) )
+
+
         make_multi_histo( mSeries, sNames, 
                           plotTitle = f"{datNamLong[ scenario ]}, Makespan Distribution [Time]", 
                           fName     = f"{_PLOT_DIR}Histo-Time_{scenario}{plotExt}", 
@@ -917,7 +945,7 @@ if _PLOT_DATA:
                       forceYlim = False, 
                       savefig   = True,
                       outliers  = False )
-        
+
         ##### Position Variation (Truth) #############
         mSeries = deque()
         sNames  = deque()
