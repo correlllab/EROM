@@ -697,7 +697,7 @@ if _SAVE_DATA:
                             elif ("succ" in f"{dtmMsg}".lower()):
                                 actStat.append( True )
 
-                    resText["msgs"].append( epMsgs )
+                    resText["msgs"].append( list( epMsgs ) )
                     ### Steps ###
                     results["Nstep"].append( Nstep )
                     results["tStep"].extend( tStepDqu )
@@ -810,7 +810,7 @@ if _SAVE_DATA:
                     if totFound or Nground:
                         results["rConfuse"].append( totConfuse / Nground )
                         results["rFindFail"].append( (Nground - totFound) / Nground )
-
+                resText["msgs"] = list( resText["msgs"] )
                 totRes[ setNam ][ test ] = results
                 txtRes[ setNam ][ test ] = resText
                 # pprint( totRes )
