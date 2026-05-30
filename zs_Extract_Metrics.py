@@ -28,8 +28,9 @@ set_render_env()
 ########## SETUP ###################################################################################
 _CONFUSION = False
 _SAVE_THIN = False
-_SAVE_DATA = True
+_SAVE_DATA = False
 _PLOT_DATA = False
+_SPLT_JSON = True
 
 
 # _DATA_DRIVE = "DATA_TANK"
@@ -383,6 +384,11 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
             varLst.append( d_n )
     return list( varLst )
 
+########## NEED TO FINE FAILURE PRECURSORS ######################################################### 
+if _SPLT_JSON:
+    txtRes = None
+    with open( _T_EXTRACT, 'w' ) as f:
+        txtRes = json.load(f)
 
 
 ########## WHAT IS GOING ON WITH CONFUSION? ########################################################
@@ -579,6 +585,7 @@ if _SAVE_DATA:
                     "rFindFail": deque(),
                     ### 3. Planning ###
                     "actions": deque(),
+                    "noPlan" : deque(),
                     ### 4. Acting ###
                     "rActFail": deque(),
                     "actStat" : deque(),
@@ -645,8 +652,9 @@ if _SAVE_DATA:
                     start      = False
                     added      = False
                     ### 3. Planning ###
-                    actions = deque()
-                    planned = False
+                    actions   = deque()
+                    planned   = False
+                    planFails = 0 # "noPlan" : deque(),
                     ### 4. Acting ###
                     actStat = deque()
                     Naction   = 0
@@ -682,6 +690,7 @@ if _SAVE_DATA:
                             actions.append( dtmDat )
                             if not len( dtmDat['next'] ):
                                 actStat.append( None )
+                                planFails += 1
                             
 
                         ##### Phase 4: Execution ##############################
@@ -703,6 +712,7 @@ if _SAVE_DATA:
                     results["tStep"].extend( tStepDqu )
                     ### 4. Planning ###
                     results["actions"].append( list( actions ) )
+                    results["noPlan"].append( planFails )
                     ### 4. Acting ###
                     results["actStat" ].append( list( actStat ) )
                     results["rActFail"].append( NfailActn / Naction )
