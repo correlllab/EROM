@@ -3,10 +3,13 @@ import pickle, os, gc, traceback, json
 
 from collections import deque
 
-from aspire.symbols import GraspObj
+import numpy as np
+
+from aspire.symbols import GraspObj, ObjPose
 from aspire.BlocksTask import set_blocks_env
 from TaskPlanner import set_experiment_env
 from draw_beliefs import set_render_env
+from magpie_control.realsense_wrapper import MPCD
 
 
 
@@ -118,10 +121,30 @@ class EROM_Reader:
                 for item in datumData:
                     rtnDqu.append( recur( item ) )
                 return list( rtnDqu )
+            elif isinstance( datumData, (tuple,) ):
+                rtnDqu = deque()
+                for item in datumData:
+                    rtnDqu.append( recur( item ) )
+                return tuple( rtnDqu )
+            elif isinstance( datumData, ObjPose ):
+                return datumData.pose.tolist()
             elif isinstance( datumData, GraspObj ):
                 return datumData.copy( thin = True )
-            else:
+            elif isinstance( datumData, np.ndarray ):
+                if isinstance( datumData.size, int ):
+                    if datumData.size > 100:
+                        return None
+                else:
+                    for s in datumData.size:
+                        if s > 100:
+                            return None
                 return datumData
+            # White List
+            elif isinstance( datumData, (str, float, int, np.float32, np.float64, np.int32, np.int64,) ) or ("status" in str(datumData.__class__.__name__).lower()):
+                return datumData
+            else:
+                print( "THROW OUT:", type( datumData ) )
+                return None
             
         return recur( dtmDat )
 
@@ -220,8 +243,8 @@ for iii, paths in enumerate( datasets ):
         path     = paths[ii]
         longTNam = longTestNames[ii]
 
-        testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}"))]
-        trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}"))    ]
+        testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}") and ("thin" not in f"{item}".lower()))]
+        trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}")     and ("thin" not in f"{item}".lower()))]
 
         ### For every episode ###
         for episodePath in testRecord:
