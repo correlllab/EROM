@@ -74,6 +74,19 @@ def dex_key( x ):
         raise ValueError( "`dex_key`: This should NOT have happened!" )
 
 
+def play_tone( duration_s = 5, freq_Hz = 650 ):
+    """ Play a notification tone """
+    os.system( f'play -nq -t alsa synth {duration_s} sine {freq_Hz}' )
+
+
+def crash_out( notify = True ):
+    """ End the program with Brutal Finality """
+    if notify:
+        play_tone()
+    print( "\n\n" )
+    os.system( 'kill %d' % os.getpid() ) 
+
+
 ########## DATA EXTRACTION CLASS ###################################################################
 
 class EROM_Reader:
@@ -219,3 +232,6 @@ for iii, paths in enumerate( datasets ):
                 print_header( f"STATE {_j_ + 1}, {sPath}", preWidth = 5, totWidth = 75, capitalize = False )
 
                 reader.thinify_state_file( sPath )
+
+########## EXIT ####################################################################################
+crash_out( notify = True )
