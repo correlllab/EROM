@@ -4,6 +4,11 @@ import pickle, os, gc, traceback, json
 from collections import deque
 
 from aspire.symbols import GraspObj
+from aspire.BlocksTask import set_blocks_env
+from TaskPlanner import set_experiment_env
+from draw_beliefs import set_render_env
+
+
 
 ########## CONSTANTS ###############################################################################
 
@@ -48,6 +53,12 @@ blcNam = {
 }
 
 plotExt = ".pdf"
+
+
+##### Environment && Constants ############################################
+set_blocks_env()
+set_experiment_env()
+set_render_env()
 
 
 ########## HELPER FUNCTIONS ########################################################################
@@ -141,7 +152,6 @@ class EROM_Reader:
             dtmMsg = datum['msg']
             dtmT   = datum['t']
             dtmDat = datum['data']
-
             
             if (dtmMsg == "BGN: Phase 1") and started:
                 if len( stepRecord ):
@@ -162,14 +172,16 @@ class EROM_Reader:
         if len( stepRecord ):
             epsdRecord.append( stepRecord )
 
+        return list( epsdRecord )
+
 
     def thinify_recordings_as_files( self ):
         """ Create files that are faster to process """
         prefix = self.episodePath.split('.')[0]
         infix  = "_Thin-Step_"
         dataSteps = self.split_data_into_steps()
-        for i, step in dataSteps:
-            postfix = f"{i}"
+        for _i_, step in enumerate(dataSteps):
+            postfix = f"{_i_}"
             outPath = prefix + infix + postfix + ".pkl"
             with open( outPath, 'wb' ) as f:
                 pickle.dump( step, f )
