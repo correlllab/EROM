@@ -3,6 +3,7 @@ import pickle, os, gc, traceback, json
 
 from collections import deque
 from typing import Any
+from pprint import pprint
 
 import numpy as np
 
@@ -247,20 +248,12 @@ class EROM_Reader:
             [os.path.join( directory, item ) for item in sorted( os.listdir( directory ) ) if (prefix in f"{item}") and ("_THIN" in item) and ("e_THIN" not in item)],
             key = lambda x: dex_key(x, offset=-2)
         )
-
-        # print( directory )
-        # print( fileName  )
-        # print( prefix    )
-        # for fName in assocStates:
-        #     print( fName )
-        # for fName in assocSteps:
-        #     print( fName )
         
         return assocStates, assocSteps
 
 
     @staticmethod
-    def planning_result_from_thin_step( step : list[dict[str,Any]] ):
+    def planning_result_from_thin_step( step : list[dict[str,Any]], prntPlan : bool = False ):
         """ Return the result of planning """
         for datum in step:
             try:
@@ -268,7 +261,8 @@ class EROM_Reader:
                     dtmDat = datum["data"]
                     if (dtmDat is not None) and len( dtmDat ):
                         if len( dtmDat["plan"] ):
-                            print( dtmDat )
+                            if prntPlan:
+                                pprint( dtmDat["plan"] )
                             return True
                         else:
                             return False
@@ -306,40 +300,31 @@ class EROM_Reader:
                 state_i = pickle.load(f)
             with open( fStep_i, 'rb' ) as f:
                 step_i = pickle.load(f)
-                # print( list( state_i.keys() ) ) # ['labels', 'image', 'depth', 'clouds', 'objects', 'sensed', 'symbols']
-                
-                # print( "\nsensed" )
-                
 
-                if len( state_i["sensed"] ) != 3:
+            if len( state_i["sensed"] ) != 3:
+                print()
+                if len( state_i["sensed"] ) > 3:
+                    print( "HALLUCINATION" )
+                elif len( state_i["sensed"] ) < 3:
+                    print( "MISSING BLOCK" )
+                    if EROM_Reader.planning_result_from_thin_step( step_i ):
+                        totalBad += 1
+
+                print( "Sensed" )
+                for object_j in state_i["sensed"]:
+                    print( object_j )
+
+                print( "Symbols" )
+                for name, object_j in state_i["symbols"].items():
+                    print( name, object_j )
+
+                print( "plan:", EROM_Reader.planning_result_from_thin_step( step_i, prntPlan=True ) )
+                print( "actn:", EROM_Reader.action_result_from_thin_step( step_i )   )
+            else:
+                print( "\nSymbols" )
+                for name, object_j in state_i["symbols"].items():
+                    print( name, object_j )
                     
-                    print()
-                    if len( state_i["sensed"] ) > 3:
-                        print( "HALLUCINATION" )
-                    elif len( state_i["sensed"] ) < 3:
-                        print( "MISSING BLOCK" )
-                        if EROM_Reader.planning_result_from_thin_step( step_i ):
-                            totalBad += 1
-
-                    print( "Sensed" )
-                    for object_j in state_i["sensed"]:
-                        print( object_j )
-
-                    print( "Symbols" )
-                    for name, object_j in state_i["symbols"].items():
-                        print( name, object_j )
-
-                    print( "plan:", EROM_Reader.planning_result_from_thin_step( step_i ))
-                    print( "actn:", EROM_Reader.action_result_from_thin_step( step_i ))
-                    # crash_out()
-
-                # print( "\nobjects" )
-                # for object_j in state_i["objects"]:
-                #     print( object_j )
-
-                # print( "\nsymbols" )
-                # for object_j in state_i["symbols"]:
-                #     print( object_j )
             
         print( f"\n\n{totalBad}/{totalSteps} BAD PLANNING ATTEMPTS\n\n" )
         return totalBad, totalSteps
