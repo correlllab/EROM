@@ -1087,7 +1087,7 @@ class OCV_State_Tracker:
             return None
 
 
-    def process_observation_data( self, obsData : dict, goalLabels : list[str], camPose : np.ndarray = None ):
+    def process_observation_data( self, obsData : dict, goalLabels : list[str], camPose : np.ndarray = None, timestep = None ):
         """ Transform observation data into information about the current state """
         if camPose is None:
             camPose = np.eye(4)
@@ -1118,7 +1118,7 @@ class OCV_State_Tracker:
                 obj_i = GraspObj( 
                     label = label, 
                     pose  = ObjPose( pos_i ), 
-                    ts    = now(), 
+                    ts    = timestep if (timestep is not None) else now(), 
                     score = 0.0,
                     # cpcd  = deepcopy( pcd_i ),
                     cpcd  = pcd_i,

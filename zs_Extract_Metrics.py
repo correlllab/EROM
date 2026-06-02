@@ -338,7 +338,7 @@ def parse_action( action : dict[str,list[str]] = None ):
     }
 
 
-def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], action = None ):
+def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], action = None, onlyBlock : str = None ):
     """ Get a list of position variations between two scenes """
     namSet : set[str] = set([])
     if action is not None:
@@ -375,6 +375,7 @@ def get_posn_variation( lastScene : list[GraspObj], thisScene : list[GraspObj], 
         exclude_source( lastScene, action )
 
     varLst = deque()
+    
     for name in namSet:
         lstBlc = get_block( lastScene, name )
         thsBlc = get_block( thisScene, name )
@@ -403,7 +404,7 @@ if _CONFUSION:
             totRes = pickle.load(f)
     except Exception as e:
         traceback.print_exc()
-        print( f"COULD NOT SAVE FILE: {e}" )
+        print( f"COULD NOT OPEN FILE: {e}" )
         crash_out()
 
     ### Per color scenario ... ###
