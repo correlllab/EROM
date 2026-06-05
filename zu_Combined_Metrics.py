@@ -7,11 +7,13 @@ from pprint import pprint
 
 import numpy as np
 
-from aspire.symbols import GraspObj, ObjPose
+from aspire.symbols import GraspObj, ObjPose, extract_position
 from aspire.BlocksTask import set_blocks_env
 from TaskPlanner import set_experiment_env
 from draw_beliefs import set_render_env
 from magpie_control.realsense_wrapper import MPCD
+
+from homog_utils import homog_xform, diff_mag
 
 
 
@@ -291,6 +293,11 @@ class EROM_Reader:
 
         totalSteps = len( assocStates )
         totalBad   = 0
+        rtnDct     = {
+            "N_halluc" : deque(),
+            "N_missng" : deque(),
+            "resPlan"  : deque(),
+        }
 
         for i in range( len( assocStates ) ):
             fState_i = assocStates[i]
@@ -300,6 +307,20 @@ class EROM_Reader:
                 state_i = pickle.load(f)
             with open( fStep_i, 'rb' ) as f:
                 step_i = pickle.load(f)
+
+            # Count hallucinations for this step
+            if len( state_i["sensed"] ) > 3:
+                rtnDct["N_halluc"].append( len( state_i["sensed"] )-3 )
+            else:
+                rtnDct["N_halluc"].append( 0 )
+            
+            # Count missing blocks for this step
+            if len( state_i["sensed"] ) < 3:
+                rtnDct["N_missng"].append( 3-len( state_i["sensed"] ) )
+            else:
+                rtnDct["N_missng"].append( 0 )
+
+            rtnDct["resPlan"].append( EROM_Reader.planning_result_from_thin_step( step_i ) )
 
             if len( state_i["sensed"] ) != 3:
                 print()
@@ -327,7 +348,8 @@ class EROM_Reader:
                     
             
         print( f"\n\n{totalBad}/{totalSteps} BAD PLANNING ATTEMPTS\n\n" )
-        return totalBad, totalSteps
+        return rtnDct
+
 
     @staticmethod
     def action_result_from_thin_step( step : list[dict[str,Any]] ):
@@ -338,12 +360,54 @@ class EROM_Reader:
             if "BT END: Status.FAILURE" in datum["msg"]:
                 return False
         return None
+    
+
+    @staticmethod
+    def get_avg_objects( objLst : list[GraspObj] ) -> dict[str,GraspObj]:
+        """ Get the average position from a list of objects """
+        rtnObj = dict()
+        objDct : dict[str,list[GraspObj]] = dict()
+        for obj in objLst:
+            if obj.label not in objDct:
+                objDct[ obj.label ] = deque()
+            objDct[ obj.label ].append( obj )
+        
+        for lbl, lst in objDct.items():
+            avgPsn = np.zeros(3)
+            for obj_j in lst:
+                avgPsn += extract_position( obj_j )
+            avgPsn /= len( lst )
+            rtnObj[ lbl ] = GraspObj(
+                label = lbl,
+                pose  = homog_xform( posnVctr = avgPsn )
+            )
+        pprint( rtnObj )
+        return rtnObj
 
     
     def action_failure_vs_position_variation( self ):
         """ What influence does Position Variation have on action failure? """
         
         assocStates, assocSteps = self.get_states_and_steps()
+
+        """
+        "labels" : list(), #- List of objects in this scene
+        "image"  : dict(), #- Lookup of color images used
+        "depth"  : dict(), #- Lookup of depth images used
+        "clouds" : deque(), # Collection of clouds obtained from the masked images
+
+        "objects": deque(), # Collection of readings obtained from the masked images
+        
+        "sensed" : list(), # Collection of symbols obtained from the robot
+        "symbols": dict(), #- Lookup of objects obtained from the readings
+        """
+
+        
+
+        rtnDct = {
+            "avgErr" : deque(),
+            "resActn": deque(),
+        }
 
         # 2. Get the position variation of the block to be manipulated
         for i in range( len( assocStates ) ):
@@ -354,39 +418,57 @@ class EROM_Reader:
 
             with open( fState_i, 'rb' ) as f:
                 state_i = pickle.load(f)
-                print( state_i["objects"][0].ts )
 
             with open( fStep_i, 'rb' ) as f:
                 step_i = pickle.load(f)
-                for datum in step_i:
-                    print( datum["t"], datum["msg"] )
 
 
-            if (state_i is not None) and (step_i is not None):
-                stepRes = EROM_Reader.action_result_from_thin_step( step_i )
-                print( f"Action Result: {stepRes}" )
+            stepRes = EROM_Reader.action_result_from_thin_step( step_i )
+            rtnDct["resActn"].append( stepRes )
+            
+            # print( f"Action Result: {stepRes}" )
 
-                # print( list( state_i.keys() ) )
-            break
+            truthDict = EROM_Reader.get_avg_objects( state_i["objects"] )
+            
+            if len( state_i["symbols"] ):
+                N = 0
+                d = 0.0
+                for lbl, obj_j in state_i["symbols"].items():
+                    if lbl in truthDict:
+                        N += 1
+                        d += diff_mag(
+                            extract_position( obj_j ),
+                            extract_position( truthDict[ lbl ] )
+                        )
+                if N:
+                    rtnDct["avgErr"].append( d/N )
+                else:
+                    rtnDct["avgErr"].append( -1.0 ) # Negative means no symbol found
+            else:
+                rtnDct["avgErr"].append( -1.0 ) # Negative means no symbol found
 
-        # 3. Histogram of action failures in each variation bin
-
+        return rtnDct
 
 ########## MAIN ####################################################################################
 
-_THINIFY   = False
-_POSN_ACTN = True
+_THINIFY  = False
+_MISC_DIR = "/media/james/STARGAZER/DATA_TANK/misc_data/" 
+_SIM_INFO_PATH = f"{_MISC_DIR}SimInfo.pkl" 
 
 totalBad = 0
 totalSteps = 0
 
+totRes = dict()
+
 try:
     ### For every block set ###
     for iii, paths in enumerate( datasets ):
-        
+
         setNam = dataLabels[iii]
         suffix = "_" + setNam
         skip   = False
+
+        totRes[ setNam ] = dict()
 
 
         ### For every scenario ###
@@ -394,6 +476,8 @@ try:
         # for ii, test in enumerate( tests[1:] ):
         # for ii, test in enumerate( tests[3:] ):
             
+            totRes[ setNam ][ test ] = deque()
+
             print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
 
             ##### Init ####################################################
@@ -404,7 +488,7 @@ try:
             trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}")     and ("thin" not in f"{item}".lower()))]
 
             ### For every episode ###
-            for episodePath in testRecord:
+            for _i_, episodePath in enumerate( testRecord ):
                 print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
                 try:
                     reader = EROM_Reader( episodePath, suppressLoad = True )
@@ -412,12 +496,18 @@ try:
                     print( f"\nSKIPPED: {episodePath}\n" )
                     continue
 
-                # reader.action_failure_vs_position_variation()
-                resBad, resStp = reader.planning_failure_vs_hallucination()
-                totalBad += resBad
-                totalSteps += resStp
-                
-    print( f"\n\n{totalBad}/{totalSteps} = {totalBad/totalSteps*100.0}% BAD PLANNING ATTEMPTS\n\n" )
+                resDct_i = reader.planning_failure_vs_hallucination()
+                resDct_i["episode"] = _i_+1
+                resDct_i.update( reader.action_failure_vs_position_variation() )
+                totRes[ setNam ][ test ].append( resDct_i )
+
+    with open( _SIM_INFO_PATH, 'wb' ) as f:
+        pickle.dump( totRes, f )
+
+
+
+
+    # print( f"\n\n{totalBad}/{totalSteps} = {totalBad/totalSteps*100.0}% BAD PLANNING ATTEMPTS\n\n" )
                 
 
                 # if _THINIFY:
