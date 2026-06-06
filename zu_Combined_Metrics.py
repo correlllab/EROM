@@ -451,16 +451,88 @@ class EROM_Reader:
 
 _THINIFY   = False
 _GET_STATS = False
+_EP_EVENTS = True
 
 _MISC_DIR = "/media/james/STARGAZER/DATA_TANK/misc_data/" 
 _SIM_INFO_PATH = f"{_MISC_DIR}SimInfo.pkl" 
 
-totalBad = 0
-totalSteps = 0
 
-totRes = dict()
+if _EP_EVENTS:
+    try:
+
+        totRes = dict() # Input Data 
+        totPrb = dict() # Output Metrics
+        
+        with open( _SIM_INFO_PATH, 'rb' ) as f:
+            totRes = pickle.load(f)
+
+        ### For every block set ###
+        for iii, paths in enumerate( datasets ):
+
+            setNam = dataLabels[iii]
+            suffix = "_" + setNam
+            skip   = False
+
+            ### For every scenario ###
+            for ii, test in enumerate( tests ):
+            # for ii, test in enumerate( tests[1:] ):
+            # for ii, test in enumerate( tests[3:] ):
+                
+                episodes = totRes[ setNam ][ test ] 
+
+                print_header( f"TEST, {setNam}: {test}, N_ep: {len( episodes )}", preWidth = 10, totWidth = 100, capitalize = True )
+
+                testRes = {
+                    "resPlan" : deque(),
+                    "N_halluc": deque(),
+                    "P(p|n)"  : dict()
+                }
+
+                for ep_jj in episodes:
+                    
+                    ##### What influence do hallucinated blocks have on planning failure? #####
+        
+                    # P(Plan)
+                    # P(N Halluc)
+
+                    # P(Plan | N Halluc)
+
+                    # print( list( ep_jj.keys() ) ) # 'N_halluc', 'N_missng', 'resPlan', 'episode', 'avgErr', 'resActn'
+                    X_halluc = ep_jj['N_halluc']
+                    Y_plannd = ep_jj['resPlan' ]
+
+                    for I, step_I in enumerate( X_halluc ):
+                        testRes["N_halluc"].append( X_halluc[I] )
+                        testRes["resPlan" ].append( Y_plannd[I] )
+
+                        if X_halluc[I] not in testRes["P(p|n)"]:
+                            testRes["P(p|n)"][ X_halluc[I] ] = deque()
+
+                        testRes["P(p|n)"][ X_halluc[I] ].append( Y_plannd[I] )
+
+                # print( len( testRes['resPlan'] ) )
+                pos = [ item for item in testRes['resPlan'] if (item == True)]
+                print( f"P(Plan) = {len( pos )/len( testRes['resPlan'] )}" )
+                # print( len( testRes['N_halluc'] ) )
+                N_h = sorted( list( testRes["P(p|n)"].keys() ) )
+                for k in N_h:
+                    pos_k = [ item for item in testRes["P(p|n)"][k] if (item == True)]
+                    print()
+                    print( f"P(Plan | {k} Halluc) = {len( pos_k )/len( testRes['P(p|n)'][k] )}" )
+                    print( f"P({k} Halluc), [N={len( testRes['P(p|n)'][k] )}] = {len( testRes['P(p|n)'][k] )/len( testRes['resPlan'] )}" )
+        
+
+        ##### What influence does Position Variation have on action failure? #####
+
+    except KeyboardInterrupt:
+        print( "\nSESSION ENDED BY USER!\n" )
 
 if _GET_STATS:
+
+    totalBad = 0
+    totalSteps = 0
+    totRes = dict()
+
     try:
         ### For every block set ###
         for iii, paths in enumerate( datasets ):
