@@ -426,8 +426,6 @@ class EROM_Reader:
             stepRes = EROM_Reader.action_result_from_thin_step( step_i )
             rtnDct["resActn"].append( stepRes )
             
-            # print( f"Action Result: {stepRes}" )
-
             truthDict = EROM_Reader.get_avg_objects( state_i["objects"] )
             
             if len( state_i["symbols"] ):
@@ -451,7 +449,9 @@ class EROM_Reader:
 
 ########## MAIN ####################################################################################
 
-_THINIFY  = False
+_THINIFY   = False
+_GET_STATS = False
+
 _MISC_DIR = "/media/james/STARGAZER/DATA_TANK/misc_data/" 
 _SIM_INFO_PATH = f"{_MISC_DIR}SimInfo.pkl" 
 
@@ -460,51 +460,53 @@ totalSteps = 0
 
 totRes = dict()
 
-try:
-    ### For every block set ###
-    for iii, paths in enumerate( datasets ):
+if _GET_STATS:
+    try:
+        ### For every block set ###
+        for iii, paths in enumerate( datasets ):
 
-        setNam = dataLabels[iii]
-        suffix = "_" + setNam
-        skip   = False
+            setNam = dataLabels[iii]
+            suffix = "_" + setNam
+            skip   = False
 
-        totRes[ setNam ] = dict()
-
-
-        ### For every scenario ###
-        for ii, test in enumerate( tests ):
-        # for ii, test in enumerate( tests[1:] ):
-        # for ii, test in enumerate( tests[3:] ):
-            
-            totRes[ setNam ][ test ] = deque()
-
-            print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
-
-            ##### Init ####################################################
-            path     = paths[ii]
-            longTNam = longTestNames[ii]
-
-            testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}") and ("thin" not in f"{item}".lower()))]
-            trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}")     and ("thin" not in f"{item}".lower()))]
-
-            ### For every episode ###
-            for _i_, episodePath in enumerate( testRecord ):
-                print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
-                try:
-                    reader = EROM_Reader( episodePath, suppressLoad = True )
-                except RuntimeError:
-                    print( f"\nSKIPPED: {episodePath}\n" )
-                    continue
-
-                resDct_i = reader.planning_failure_vs_hallucination()
-                resDct_i["episode"] = _i_+1
-                resDct_i.update( reader.action_failure_vs_position_variation() )
-                totRes[ setNam ][ test ].append( resDct_i )
-
-    with open( _SIM_INFO_PATH, 'wb' ) as f:
-        pickle.dump( totRes, f )
+            totRes[ setNam ] = dict()
 
 
+            ### For every scenario ###
+            for ii, test in enumerate( tests ):
+            # for ii, test in enumerate( tests[1:] ):
+            # for ii, test in enumerate( tests[3:] ):
+                
+                totRes[ setNam ][ test ] = deque()
+
+                print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
+
+                ##### Init ####################################################
+                path     = paths[ii]
+                longTNam = longTestNames[ii]
+
+                testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}") and ("thin" not in f"{item}".lower()))]
+                trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}")     and ("thin" not in f"{item}".lower()))]
+
+                ### For every episode ###
+                for _i_, episodePath in enumerate( testRecord ):
+                    print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
+                    try:
+                        reader = EROM_Reader( episodePath, suppressLoad = True )
+                    except RuntimeError:
+                        print( f"\nSKIPPED: {episodePath}\n" )
+                        continue
+
+                    resDct_i = reader.planning_failure_vs_hallucination()
+                    resDct_i["episode"] = _i_+1
+                    resDct_i.update( reader.action_failure_vs_position_variation() )
+                    totRes[ setNam ][ test ].append( resDct_i )
+
+        with open( _SIM_INFO_PATH, 'wb' ) as f:
+            pickle.dump( totRes, f )
+
+    except KeyboardInterrupt:
+        print( "\nSESSION ENDED BY USER!\n" )
 
 
     # print( f"\n\n{totalBad}/{totalSteps} = {totalBad/totalSteps*100.0}% BAD PLANNING ATTEMPTS\n\n" )
@@ -524,8 +526,7 @@ try:
 
                 #         reader.thinify_state_file( sPath )
 
-except KeyboardInterrupt:
-    print( "\nSESSION ENDED BY USER!\n" )
+
 
 ########## EXIT ####################################################################################
 crash_out( notify = False )
