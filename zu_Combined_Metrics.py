@@ -482,15 +482,19 @@ if _EP_EVENTS:
 
                 print_header( f"TEST, {setNam}: {test}, N_ep: {len( episodes )}", preWidth = 10, totWidth = 100, capitalize = True )
 
+                ##### What influence do hallucinated blocks have on planning failure? ##############
+
                 testRes = {
-                    "resPlan" : deque(),
-                    "N_halluc": deque(),
-                    "P(p|n)"  : dict()
+                    "resPlan"  : deque(),
+                    "N_halluc" : deque(),
+                    "N_missng" : deque(),
+                    "3 Blocks" : deque(),
+                    "P(p|mis)" : deque(),
+                    "<Err,Act>": deque(),
+                    "P(p|n_H)" : dict(),
                 }
 
                 for ep_jj in episodes:
-                    
-                    ##### What influence do hallucinated blocks have on planning failure? #####
         
                     # P(Plan)
                     # P(N Halluc)
@@ -500,29 +504,48 @@ if _EP_EVENTS:
                     # print( list( ep_jj.keys() ) ) # 'N_halluc', 'N_missng', 'resPlan', 'episode', 'avgErr', 'resActn'
                     X_halluc = ep_jj['N_halluc']
                     Y_plannd = ep_jj['resPlan' ]
+                    Z_missng = ep_jj['N_missng']
+                    D_posErr = ep_jj['avgErr'  ]
+                    A_result = ep_jj['resActn' ]
 
                     for I, step_I in enumerate( X_halluc ):
-                        testRes["N_halluc"].append( X_halluc[I] )
-                        testRes["resPlan" ].append( Y_plannd[I] )
+                        testRes["N_halluc" ].append( X_halluc[I] )
+                        testRes["resPlan"  ].append( Y_plannd[I] )
+                        testRes["N_missng" ].append( Z_missng[I] )
+                        testRes["<Err,Act>"].append( (D_posErr[I], A_result[I],) )
 
-                        if X_halluc[I] not in testRes["P(p|n)"]:
-                            testRes["P(p|n)"][ X_halluc[I] ] = deque()
+                        if X_halluc[I] not in testRes["P(p|n_H)"]:
+                            testRes["P(p|n_H)"][ X_halluc[I] ] = deque()
 
-                        testRes["P(p|n)"][ X_halluc[I] ].append( Y_plannd[I] )
+                        testRes["P(p|n_H)"][ X_halluc[I] ].append( Y_plannd[I] )
 
-                # print( len( testRes['resPlan'] ) )
-                pos = [ item for item in testRes['resPlan'] if (item == True)]
-                print( f"P(Plan) = {len( pos )/len( testRes['resPlan'] )}" )
-                # print( len( testRes['N_halluc'] ) )
-                N_h = sorted( list( testRes["P(p|n)"].keys() ) )
+                        if (X_halluc[I] == 0) and (Z_missng[I] == 0):
+                            testRes["3 Blocks"].append( Y_plannd[I] )
+
+                        if (Z_missng[I] > 0):
+                            testRes["P(p|mis)"].append( Y_plannd[I] )
+
+                ##### Probability Metrics #################################
+
+                pos = [ item for item in testRes['resPlan' ] if (item == True) ]
+                po3 = [ item for item in testRes['3 Blocks'] if (item == True) ]
+                mis = [ item for item in testRes['N_missng'] if (item > 0)     ]
+                print( f"P(Plan)    = {len( pos )/len( testRes['resPlan' ] )}" )
+                print( f"P(Missing) = {len( mis )/len( testRes['resPlan' ] )}" )
+                print( f"P(Plan|3)  = {len( po3 )/len( testRes['3 Blocks'] )}" )
+                
+                
+                N_h = sorted( list( testRes["P(p|n_H)"].keys() ) )
                 for k in N_h:
-                    pos_k = [ item for item in testRes["P(p|n)"][k] if (item == True)]
+                    pos_k = [ item for item in testRes["P(p|n_H)"][k] if (item == True)]
                     print()
-                    print( f"P(Plan | {k} Halluc) = {len( pos_k )/len( testRes['P(p|n)'][k] )}" )
-                    print( f"P({k} Halluc), [N={len( testRes['P(p|n)'][k] )}] = {len( testRes['P(p|n)'][k] )/len( testRes['resPlan'] )}" )
+                    print( f"P(Plan | {k} Halluc) = {len( pos_k )/len( testRes['P(p|n_H)'][k] )}" )
+                    print( f"P({k} Halluc), [N={len( testRes['P(p|n_H)'][k] )}] = {len( testRes['P(p|n_H)'][k] )/len( testRes['resPlan'] )}" )
         
 
-        ##### What influence does Position Variation have on action failure? #####
+                ##### What influence does Position Variation have on action failure? ###############
+
+                
 
     except KeyboardInterrupt:
         print( "\nSESSION ENDED BY USER!\n" )
