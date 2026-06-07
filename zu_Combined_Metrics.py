@@ -105,11 +105,16 @@ def crash_out( notify = True ):
     os.system( 'kill %d' % os.getpid() ) 
 
 
+def xy_plot_filled_under( X, Y ):
+    """  """
+    # FIXME: START HERE
+    pass
+
+
 ########## DATA EXTRACTION CLASS ###################################################################
 
 class EROM_Reader:
     """ Class to interpret the recordings I made """
-
 
     ##### Data Prep #######################################################
 
@@ -545,7 +550,19 @@ if _EP_EVENTS:
 
                 ##### What influence does Position Variation have on action failure? ###############
 
+                errAct = list( testRes["<Err,Act>"] )
+                errAct.sort( key = lambda x: x[0] )
+                N_fail = 0
+                for ea in errAct:
+                    if ea[1] == False:
+                        N_fail += 1
                 
+                totlFail = 0                        
+                failDens = deque()
+                for ea in errAct:
+                    if ea[1] == False:
+                        totlFail += 1
+                    failDens.append( (ea[0], totlFail/N_fail,) )
 
     except KeyboardInterrupt:
         print( "\nSESSION ENDED BY USER!\n" )
