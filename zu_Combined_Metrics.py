@@ -769,6 +769,7 @@ if _EP_EVENTS:
     except KeyboardInterrupt:
         print( "\nSESSION ENDED BY USER!\n" )
 
+
 """
 ['redBlock', 'grnBlock', 'bluBlock', 'NOTHING']
 
@@ -778,13 +779,12 @@ if _EP_EVENTS:
  [0.041032 0.069949  0.034388 0.85463]]
 
  
- ['redBlock', 'blkBlock', 'whtBlock', 'NOTHING']
+['redBlock', 'blkBlock', 'whtBlock', 'NOTHING']
 
 [[0.73793  0.046552 0.055172  0.16034]
  [0.045388 0.75988  0.0087848 0.18594]
  [0.027451 0.015686 0.72745   0.22941]
  [0.059389 0.034934 0.10175   0.80393]]
-
 """
 
 
