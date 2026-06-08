@@ -4,6 +4,7 @@ import pickle, os, gc, traceback, json
 from collections import deque
 from typing import Any, Deque
 from pprint import pprint
+from random import random
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -613,6 +614,75 @@ class EROM_Reader:
         return rtnDct
     
 
+########## PROBABILITY CLASSES #####################################################################
+
+class DiceHisto:
+    """ Turn a histogram into a probability curve """
+    def __init__( self, Nbins = 80 ):
+        """ Setup to build histo """
+        self.Ndat: int         = 0
+        self.Nbin: list[float] = Nbins
+        self.data: list[float] = deque()
+        self.bnds: list[float] = [0.0 for _ in range( self.Nbin )]
+        self.bins: list[int]   = [0   for _ in range( self.Nbin )]
+        self.curv: list[float] = [0.0 for _ in range( self.Nbin )]
+        self.prob: list[float] = [0.0 for _ in range( self.Nbin )]
+
+
+    def set_data( self, data : list[float] ):
+        """ Store, Sort, and Count """
+        self.data = list( data )
+        self.data.sort()
+        self.Ndat = len( self.data )
+        vMin = self.data[0]
+        vMax = self.data[-1]
+        span = vMax - vMin
+        wdth = span / self.Nbin
+        for i in range( 1, self.Nbin+1 ):
+            self.bnds[i-1] = vMin + i * wdth
+        j = 0
+        for datum in self.data:
+            while self.bnds[j] < datum:
+                j += 1
+            if datum <= self.bnds[j]:
+                self.bins[j] += 1
+            else:
+                raise ValueError( "`set_data()`: THIS SHOULD NOT HAVE HAPPENED!" )
+        self.curv = (np.array( self.bins ) / self.Ndat).tolist()
+        total = 0.0
+        for i, prob_i in enumerate( self.curv ):
+            total += prob_i
+            self.prob[i] = total
+
+
+    def sample( self ):
+        """ Sample from a discrete distribution """
+        uniform = random()
+        for i, bound in enumerate( self.prob ):
+            if uniform <= bound:
+                return self.bnds[i]
+        return self.bnds[-1]
+    
+
+    def save( self, path : str ):
+        """ Save enough data to restore the dice roll """
+        with open( path, 'w' ) as f:
+            json.dump( {
+                "bins"  : self.bins,
+                "bounds": self.bnds,
+                "prob"  : self.prob,
+            }, f, indent = 2 )
+
+
+    def load( self, path : str ):
+        """ Load enough data to restore the dice roll """
+        with open( path, 'r' ) as f:
+            data = json.load(f)
+            self.bins = data["bins"  ]
+            self.bnds = data["bounds"]
+            self.prob = data["prob"  ]
+                
+
 
 
 ########## MAIN ####################################################################################
@@ -763,8 +833,10 @@ if _EP_EVENTS:
         Yp = [item[1] for item in pErrDens]
 
         xy_plot_filled_under( Xe, Ya, plotTitle = f"ALL TESTS", xLabel = "Err", yLabel = "Cumul. Prob." )
+
+        Nx = len( Xe )
         make_histo( Xe, f"POS ERR" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
-        # xy_plot_filled_under( Xe, Yp, plotTitle = f"POS ERR"  , xLabel = "Err", yLabel = "Cumul. Prob." )
+        
 
     except KeyboardInterrupt:
         print( "\nSESSION ENDED BY USER!\n" )
