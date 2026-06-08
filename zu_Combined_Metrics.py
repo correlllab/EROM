@@ -2,14 +2,15 @@
 import pickle, os, gc, traceback, json
 
 from collections import deque
-from typing import Any
+from typing import Any, Deque
 from pprint import pprint
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from aspire.symbols import GraspObj, ObjPose, extract_position
+from aspire.symbols import GraspObj, ObjPose, extract_position, euclidean_distance_between_symbols
 from aspire.BlocksTask import set_blocks_env
+from aspire.env_config import env_var
 from TaskPlanner import set_experiment_env
 from draw_beliefs import set_render_env
 from magpie_control.realsense_wrapper import MPCD
@@ -62,6 +63,11 @@ blcNam = {
     "RBW": ['redBlock','blkBlock','whtBlock',],
 }
 
+eBlcNam = {
+    "RGB": ['redBlock', 'grnBlock', 'bluBlock', env_var("_NULL_NAME"),], 
+    "RBW": ['redBlock', 'blkBlock', 'whtBlock', env_var("_NULL_NAME"),],
+}
+
 plotExt = ".pdf"
 
 
@@ -110,7 +116,7 @@ def crash_out( notify = True ):
 
 def xy_plot_filled_under( X, Y, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
                           titleFontSize_pt = _TITLE_FONT_SIZE ):
-    """  """
+    """ Creat cumulative curve """
     # Plot line
     plt.plot( X, Y )
 
@@ -142,6 +148,114 @@ def make_histo( series, plotTitle, xLabel = 'Makespan', yLabel = 'Occurrences', 
     plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
     plt.tight_layout()
     plt.show()
+
+
+########## HELPER CLASSES ##########################################################################
+
+class ConfMatx:
+    """ Class for building a Confusion Matrix """
+    def __init__( self ):
+        self.N_tot : int  = 0
+        self.labels: list[str]  = list()
+        self.matx  : np.ndarray = None
+
+
+    def add_class( self, label ):
+        """ Add a new label to the list of classes, In order """
+        self.labels.append( label )
+
+
+    def add_classes( self, nuLabels ):
+        """ Add a list of new labels to the list of classes, In order """
+        if isinstance( nuLabels, (list, deque, tuple) ):
+            self.labels.extend( nuLabels )
+        else:
+            raise TypeError( f"Additional labels were NOT iterable!: {type(nuLabels)}, {nuLabels}" )
+
+
+    def get_index( self, label ):
+        """ Get the row index of the label, Throw when not found """
+        return self.labels.index( label )
+
+
+    def init_matx( self ):
+        """ Get ready to count! """
+        rowsN = len( self.labels )
+        self.matx  = np.zeros( (rowsN,rowsN,) )
+
+
+    def count_example( self, actual : str, predicted : str ):
+        """ Add an example to the `matx`, to be normalized later """
+        i = self.get_index( actual    )
+        j = self.get_index( predicted )
+        self.matx[i,j] += 1
+        self.N_tot     += 1
+
+
+    def match( self, actual : Deque[GraspObj], predicted : Deque[GraspObj], thresh = None ):
+        """ Get a matching of `predicted` items to `actual` items """
+        # ASSUMPTION: THE LAST LABEL IS THE "NULL LABEL"
+        if thresh is None:
+            thresh = env_var( "_BAYES_RAD_L2_M" )
+
+        noneLabel: str                   = self.labels[-1] 
+        matches  : Deque[tuple[str,str]] = deque()
+        matchSet : set[int]              = set([])
+
+        for i, pred_i in enumerate( predicted ):
+            dMin = 6e10
+            sMin = None
+            for actl_j in actual:
+                d_ij = euclidean_distance_between_symbols( pred_i, actl_j )
+                if (d_ij < dMin) and (d_ij <= thresh):
+                    if id(actl_j) not in matchSet:
+                        dMin = d_ij
+                        sMin = actl_j
+            if sMin is not None:
+                matchSet.add( id(sMin) )
+                matches.append( (sMin.label, pred_i.label,) )
+            else:
+                matches.append( (noneLabel, pred_i.label,) )
+
+        missing = 0
+        for actl_j in actual:
+            if id(actl_j) not in matchSet:
+                missing += 1
+                matches.append( (actl_j.label, noneLabel,) )
+
+        found = 3 - missing
+        if found > 0:
+            matches.extend( [ (noneLabel, noneLabel,) for _ in range( found ) ] )
+
+        return matches
+
+
+    def count_examples( self, actual : Deque[GraspObj], predicted : Deque[GraspObj] ):
+        """ Count examples from this state """
+        matches = self.match( actual, predicted )
+        for m in matches:
+            self.count_example( *m )
+    
+
+    def normalize( self ):
+        """ Normalize the confusion matrix """
+        # NOTE: Normalizing twice should (probably) NOT have any bad effects!
+        rowsN = len( self.labels )
+        nMtx  = np.zeros( (rowsN,rowsN,) )
+
+        for i, row in enumerate( self.matx ):
+            N_i = np.sum( row )
+            nMtx[i,:] = row / N_i
+
+        self.matx = nMtx.copy()
+
+
+    def get_matx( self, normalizeM = False ):
+        """ Return a copy of the matx """
+        if normalizeM:
+            self.normalize()
+        return self.matx.copy()
+
 
 
 ########## DATA EXTRACTION CLASS ###################################################################
@@ -302,7 +416,8 @@ class EROM_Reader:
                     if (dtmDat is not None) and len( dtmDat ):
                         if len( dtmDat["plan"] ):
                             if prntPlan:
-                                pprint( dtmDat["plan"] )
+                                pass
+                                # pprint( dtmDat["plan"] )
                             return True
                         else:
                             return False
@@ -313,6 +428,20 @@ class EROM_Reader:
             except TypeError:
                 return None
         return False
+    
+
+    def count_into_confusion_matrix( self, matx : ConfMatx ):
+        assocStates, _ = self.get_states_and_steps()
+
+        for i in range( len( assocStates ) ):
+            fState_i = assocStates[i]
+
+            with open( fState_i, 'rb' ) as f:
+                state_i = pickle.load(f)
+
+            actl_i = list( EROM_Reader.get_avg_objects( state_i["objects"] ).values() )
+            pred_i = state_i["sensed"]
+            matx.count_examples( actl_i, pred_i )
     
     
     def planning_failure_vs_hallucination( self ):
@@ -387,7 +516,7 @@ class EROM_Reader:
             
         print( f"\n\n{totalBad}/{totalSteps} BAD PLANNING ATTEMPTS\n\n" )
         return rtnDct
-
+    
 
     @staticmethod
     def action_result_from_thin_step( step : list[dict[str,Any]] ):
@@ -419,7 +548,7 @@ class EROM_Reader:
                 label = lbl,
                 pose  = homog_xform( posnVctr = avgPsn )
             )
-        pprint( rtnObj )
+        # pprint( rtnObj )
         return rtnObj
 
     
@@ -482,12 +611,16 @@ class EROM_Reader:
                 rtnDct["avgErr"].append( -1.0 ) # Negative means no symbol found
 
         return rtnDct
+    
+
+
 
 ########## MAIN ####################################################################################
 
 _THINIFY   = False
 _GET_STATS = False
 _EP_EVENTS = True
+_CONFUSION = True
 
 _MISC_DIR = "/media/james/STARGAZER/DATA_TANK/misc_data/" 
 _SIM_INFO_PATH = f"{_MISC_DIR}SimInfo.pkl" 
@@ -636,6 +769,75 @@ if _EP_EVENTS:
     except KeyboardInterrupt:
         print( "\nSESSION ENDED BY USER!\n" )
 
+"""
+['redBlock', 'grnBlock', 'bluBlock', 'NOTHING']
+
+[[0.81077  0.0087336 0.034934 0.14556]
+ [0.018576 0.74149   0.17028  0.069659]
+ [0.037179 0.12051   0.76282  0.079487]
+ [0.041032 0.069949  0.034388 0.85463]]
+
+ 
+ ['redBlock', 'blkBlock', 'whtBlock', 'NOTHING']
+
+[[0.73793  0.046552 0.055172  0.16034]
+ [0.045388 0.75988  0.0087848 0.18594]
+ [0.027451 0.015686 0.72745   0.22941]
+ [0.059389 0.034934 0.10175   0.80393]]
+
+"""
+
+
+if _CONFUSION:
+
+    try:
+
+        ### For every block set ###
+        for iii, paths in enumerate( datasets ):
+
+            confMatx = ConfMatx()
+
+            setNam = dataLabels[iii]
+            suffix = "_" + setNam
+            skip   = False
+
+            print( eBlcNam[ setNam ] )
+            confMatx.add_classes( eBlcNam[ setNam ] )
+            confMatx.init_matx()
+
+            totRes[ setNam ] = dict()
+
+            ### For every scenario ###
+            for ii, test in enumerate( tests ):
+                
+                totRes[ setNam ][ test ] = deque()
+
+                print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
+
+                ##### Init ####################################################
+                path     = paths[ii]
+                longTNam = longTestNames[ii]
+
+                testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}") and ("thin" not in f"{item}".lower()))]
+                trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}")     and ("thin" not in f"{item}".lower()))]
+
+                ### For every episode ###
+                for _i_, episodePath in enumerate( testRecord ):
+                    # print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
+                    try:
+                        reader = EROM_Reader( episodePath, suppressLoad = True )
+                    except RuntimeError:
+                        print( f"\nSKIPPED: {episodePath}\n" )
+                        continue
+
+                    reader.count_into_confusion_matrix( confMatx )
+
+            confMatx.normalize()
+
+            print( confMatx.get_matx() )
+
+    except KeyboardInterrupt:
+        print( "\nSESSION ENDED BY USER!\n" )
 if _GET_STATS:
 
     totalBad = 0
