@@ -5,6 +5,7 @@ from collections import deque
 from typing import Any
 from pprint import pprint
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from aspire.symbols import GraspObj, ObjPose, extract_position
@@ -28,6 +29,8 @@ _T_EXTRACT  = f"{_PLOT_DIR}outText.json"
 
 _MIN_STATE_SIZE_BYTES = 500.0
 
+_TITLE_FONT_SIZE = 13
+_TIGHT_MARGIN    =  0.05
 
 tests = [
     "KC-KP",
@@ -105,10 +108,40 @@ def crash_out( notify = True ):
     os.system( 'kill %d' % os.getpid() ) 
 
 
-def xy_plot_filled_under( X, Y ):
+def xy_plot_filled_under( X, Y, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
+                          titleFontSize_pt = _TITLE_FONT_SIZE ):
     """  """
-    # FIXME: START HERE
-    pass
+    # Plot line
+    plt.plot( X, Y )
+
+    # Shade the area under the curve
+    plt.fill_between( X, Y, 0, color = 'skyblue', alpha = 0.5 )
+
+    if plotTitle is not None:
+        plt.title( plotTitle, fontsize = titleFontSize_pt ) # Set the title && font size
+    if xLabel is not None:
+        plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
+    if yLabel is not None:
+        plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
+
+    plt.show()
+
+
+def make_histo( series, plotTitle, xLabel = 'Makespan', yLabel = 'Occurrences', savefig = True ):
+    """ Create Histogram """
+    if savefig:
+        plt.clf()
+    plt.margins( _TIGHT_MARGIN )
+    print( f"\n{plotTitle}" )
+    print( f"Mean: ___ {np.mean(series)}" )
+    print( f"Median: _ {np.median(series)}" )
+    print( f"Std.Dev.: {np.std(series)}" )
+    plt.hist( series, 80 )
+    plt.title( plotTitle, fontsize = _TITLE_FONT_SIZE ) # Set the title && font size
+    plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
+    plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
+    plt.tight_layout()
+    plt.show()
 
 
 ########## DATA EXTRACTION CLASS ###################################################################
@@ -407,8 +440,6 @@ class EROM_Reader:
         "symbols": dict(), #- Lookup of objects obtained from the readings
         """
 
-        
-
         rtnDct = {
             "avgErr" : deque(),
             "resActn": deque(),
@@ -465,8 +496,9 @@ _SIM_INFO_PATH = f"{_MISC_DIR}SimInfo.pkl"
 if _EP_EVENTS:
     try:
 
-        totRes = dict() # Input Data 
-        totPrb = dict() # Output Metrics
+        totRes    = dict() # Input Data 
+        totPrb    = dict() # Output Metrics
+        totErrAct = deque()
         
         with open( _SIM_INFO_PATH, 'rb' ) as f:
             totRes = pickle.load(f)
@@ -517,7 +549,10 @@ if _EP_EVENTS:
                         testRes["N_halluc" ].append( X_halluc[I] )
                         testRes["resPlan"  ].append( Y_plannd[I] )
                         testRes["N_missng" ].append( Z_missng[I] )
-                        testRes["<Err,Act>"].append( (D_posErr[I], A_result[I],) )
+                        
+                        if D_posErr[I] >= 0.0:
+                            testRes["<Err,Act>"].append( (D_posErr[I], A_result[I],) )
+                            totErrAct.append( (D_posErr[I], A_result[I],) )
 
                         if X_halluc[I] not in testRes["P(p|n_H)"]:
                             testRes["P(p|n_H)"][ X_halluc[I] ] = deque()
@@ -556,13 +591,47 @@ if _EP_EVENTS:
                 for ea in errAct:
                     if ea[1] == False:
                         N_fail += 1
-                
-                totlFail = 0                        
-                failDens = deque()
-                for ea in errAct:
-                    if ea[1] == False:
-                        totlFail += 1
-                    failDens.append( (ea[0], totlFail/N_fail,) )
+
+                # if N_fail > 0:
+
+                #     totlFail = 0                        
+                #     failDens = deque()
+                    
+                #     for ea in errAct:
+                #         if ea[1] == False:
+                #             totlFail += 1
+                #         failDens.append( (ea[0], totlFail/N_fail,) )
+
+                #     Xe = [item[0] for item in failDens]
+                #     Ya = [item[1] for item in failDens]
+
+                #     xy_plot_filled_under( Xe, Ya, plotTitle = f"TEST, {setNam}: {test}", xLabel = "Err", yLabel = "Cumul. Prob." )
+        
+        totErrAct = list( totErrAct )
+        totErrAct.sort( key = lambda x: x[0] )
+        N_fail = 0
+        N_all  = len(totErrAct)
+        for ea in totErrAct:
+            if ea[1] == False:
+                N_fail += 1
+
+        totlFail = 0                        
+        failDens = deque()
+        pErrDens = deque()
+        
+        for st, ea in enumerate( totErrAct ):
+            if ea[1] == False:
+                totlFail += 1
+            failDens.append( (ea[0], totlFail/N_fail,) )
+            pErrDens.append( (ea[0], st/N_all,) )
+
+        Xe = [item[0] for item in failDens]
+        Ya = [item[1] for item in failDens]
+        Yp = [item[1] for item in pErrDens]
+
+        xy_plot_filled_under( Xe, Ya, plotTitle = f"ALL TESTS", xLabel = "Err", yLabel = "Cumul. Prob." )
+        make_histo( Xe, f"POS ERR" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+        # xy_plot_filled_under( Xe, Yp, plotTitle = f"POS ERR"  , xLabel = "Err", yLabel = "Cumul. Prob." )
 
     except KeyboardInterrupt:
         print( "\nSESSION ENDED BY USER!\n" )
