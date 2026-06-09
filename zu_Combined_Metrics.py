@@ -34,6 +34,8 @@ _MIN_STATE_SIZE_BYTES = 500.0
 _TITLE_FONT_SIZE = 13
 _TIGHT_MARGIN    =  0.05
 
+_DEFAULT_DIV = 100 #80 #100 #200
+
 tests = [
     "KC-KP",
     "SC-KP",
@@ -143,7 +145,7 @@ def make_histo( series, plotTitle, xLabel = 'Makespan', yLabel = 'Occurrences', 
     print( f"Mean: ___ {np.mean(series)}" )
     print( f"Median: _ {np.median(series)}" )
     print( f"Std.Dev.: {np.std(series)}" )
-    plt.hist( series, 80 )
+    plt.hist( series, _DEFAULT_DIV )
     plt.title( plotTitle, fontsize = _TITLE_FONT_SIZE ) # Set the title && font size
     plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
     plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
@@ -616,12 +618,15 @@ class EROM_Reader:
 
 ########## PROBABILITY CLASSES #####################################################################
 
-class DiceHisto:
+##### Continuous Outcome PDF ##############################################
+
+class DiceContin_PDF:
     """ Turn a histogram into a probability curve """
-    def __init__( self, Nbins = 80 ):
+    def __init__( self, Nbins = _DEFAULT_DIV ):
         """ Setup to build histo """
         self.Ndat: int         = 0
-        self.Nbin: list[float] = Nbins
+        self.Nbin: int         = Nbins
+        self.wdth: float       = 0.0
         self.data: list[float] = deque()
         self.bnds: list[float] = [0.0 for _ in range( self.Nbin )]
         self.bins: list[int]   = [0   for _ in range( self.Nbin )]
@@ -637,9 +642,12 @@ class DiceHisto:
         vMin = self.data[0]
         vMax = self.data[-1]
         span = vMax - vMin
-        wdth = span / self.Nbin
+        self.wdth = span / self.Nbin
+        # wdth = span / (self.Nbin-1)
         for i in range( 1, self.Nbin+1 ):
-            self.bnds[i-1] = vMin + i * wdth
+            self.bnds[i-1] = vMin + i * self.wdth
+        # for i in range( self.Nbin+1 ):
+        #     self.bnds[i] = vMin + i * wdth            
         j = 0
         for datum in self.data:
             while self.bnds[j] < datum:
@@ -655,14 +663,15 @@ class DiceHisto:
             self.prob[i] = total
 
 
-    def sample( self ):
+    def sample_value( self ):
         """ Sample from a discrete distribution """
         uniform = random()
         for i, bound in enumerate( self.prob ):
             if uniform <= bound:
-                return self.bnds[i]
-        return self.bnds[-1]
-    
+                # return self.bnds[max(i-1,0)]
+                return self.bnds[i] - self.wdth/2.0
+        return self.bnds[-1] - self.wdth/2.0
+        
 
     def save( self, path : str ):
         """ Save enough data to restore the dice roll """
@@ -674,26 +683,72 @@ class DiceHisto:
             }, f, indent = 2 )
 
 
-    def load( self, path : str ):
+    @staticmethod
+    def load( path : str ):
         """ Load enough data to restore the dice roll """
+        rtnObj = DiceContin_PDF()
         with open( path, 'r' ) as f:
             data = json.load(f)
-            self.bins = data["bins"  ]
-            self.bnds = data["bounds"]
-            self.prob = data["prob"  ]
-                
+            rtnObj.bins = data["bins"  ]
+            rtnObj.bnds = data["bounds"]
+            rtnObj.prob = data["prob"  ]
+        return rtnObj
 
 
+##### Binary Outcome CDF ##################################################
+
+class DiceBinary_CDF:
+    """ Use a CDF to roll for a binary outcome """
+    def __init__( self, Xval : list[float], Yprb : list[float] ):
+        """ Store CDF """
+        self.valu = list( Xval )
+        self.prob = list( Yprb )
+
+
+    def sample_outcome( self, val : float ):
+        """ Sample from a discrete probability at the given `val`ue """
+        # ASSUMPTION: VALUES ARE CLOSE ENOUGH TOGETHER TO FAITHFULLY REPRESENT THE OUTCOME PROBABILITY 
+        pPos = 0.0
+        for i, v in self.valu:
+            pPos = self.prob[i]
+            if v >= val:
+                break
+        return (random <= pPos)
+    
+
+    def save( self, path : str ):
+        """ Save enough data to restore the dice roll """
+        with open( path, 'w' ) as f:
+            json.dump( {
+                "value": self.valu,
+                "prob" : self.prob,
+            }, f, indent = 2 )
+
+
+    @staticmethod
+    def load( path : str ):
+        """ Load enough data to restore the dice roll """
+        rtnObj = DiceBinary_CDF()
+        with open( path, 'r' ) as f:
+            data = json.load(f)
+            rtnObj.valu = data["value"]
+            rtnObj.prob = data["prob" ]
+        return rtnObj
+
+        
 
 ########## MAIN ####################################################################################
 
-_THINIFY   = False
 _GET_STATS = False
 _EP_EVENTS = True
-_CONFUSION = True
+_CONFUSION = False
 
 _MISC_DIR = "/media/james/STARGAZER/DATA_TANK/misc_data/" 
 _SIM_INFO_PATH = f"{_MISC_DIR}SimInfo.pkl" 
+
+_JSON_PATH = {
+    "Overall Posn Err" : "json/OverallPosnErr.json"
+}
 
 
 if _EP_EVENTS:
@@ -790,25 +845,25 @@ if _EP_EVENTS:
 
                 errAct = list( testRes["<Err,Act>"] )
                 errAct.sort( key = lambda x: x[0] )
+                
+                Xe_t = [item[0] for item in errAct]
+                Ya_t = [item[1] for item in errAct]
+
+                make_histo( Xe_t, f"POS ERR, {setNam}:{test}" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+                roll = DiceContin_PDF( Nbins = _DEFAULT_DIV )
+                roll.set_data( Xe_t )
+                roll.save( f"json/PsnErr.{setNam}.{test}.json" )
+
+                Xr = deque()
+                for _ in range( 1000000 ):
+                    Xr.append( roll.sample_value() )
+                make_histo( Xr, f"POS ERR, Simulated, {setNam}:{test}" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+                
                 N_fail = 0
                 for ea in errAct:
                     if ea[1] == False:
                         N_fail += 1
 
-                # if N_fail > 0:
-
-                #     totlFail = 0                        
-                #     failDens = deque()
-                    
-                #     for ea in errAct:
-                #         if ea[1] == False:
-                #             totlFail += 1
-                #         failDens.append( (ea[0], totlFail/N_fail,) )
-
-                #     Xe = [item[0] for item in failDens]
-                #     Ya = [item[1] for item in failDens]
-
-                #     xy_plot_filled_under( Xe, Ya, plotTitle = f"TEST, {setNam}: {test}", xLabel = "Err", yLabel = "Cumul. Prob." )
         
         totErrAct = list( totErrAct )
         totErrAct.sort( key = lambda x: x[0] )
@@ -835,7 +890,16 @@ if _EP_EVENTS:
         xy_plot_filled_under( Xe, Ya, plotTitle = f"ALL TESTS", xLabel = "Err", yLabel = "Cumul. Prob." )
 
         Nx = len( Xe )
-        make_histo( Xe, f"POS ERR" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+        make_histo( Xe, f"POS ERR, Actual" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+        roll = DiceContin_PDF( Nbins = _DEFAULT_DIV )
+        roll.set_data( Xe )
+        roll.save( _JSON_PATH["Overall Posn Err"] )
+
+        Xr = deque()
+        for _ in range( 1000000 ):
+            Xr.append( roll.sample_value() )
+        make_histo( Xr, f"POS ERR, Simulated" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+        
         
 
     except KeyboardInterrupt:
@@ -910,6 +974,7 @@ if _CONFUSION:
 
     except KeyboardInterrupt:
         print( "\nSESSION ENDED BY USER!\n" )
+
 if _GET_STATS:
 
     totalBad = 0
