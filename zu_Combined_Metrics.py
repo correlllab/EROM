@@ -753,7 +753,6 @@ _JSON_PATH = {
 
 if _EP_EVENTS:
     try:
-
         totRes    = dict() # Input Data 
         totPrb    = dict() # Output Metrics
         totErrAct = deque()
