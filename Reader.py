@@ -313,8 +313,21 @@ class EROM_Reader:
                         raise ValueError( "THIS SHOULD NOT HAPPEN!" )
             except TypeError:
                 return None
-        return False
+        if EROM_Reader.p_believe_success_at_thin_step( step ):
+            return True
+        else:
+            return False
     
+
+    @staticmethod
+    def p_believe_success_at_thin_step( step : list[dict[str,Any]] ):
+        """ Did the system think it succeeded this step? """
+        for datum in step:
+            dMsg = datum["msg"]
+            if "Believe Success" in dMsg:
+                return True
+        return False
+
 
     def count_into_confusion_matrix( self, matx : ConfMatx ):
         assocStates, _ = self.get_states_and_steps()
@@ -356,11 +369,15 @@ class EROM_Reader:
             fState_i = assocStates[i]
             fStep_i  = assocSteps[i]
 
+
             with open( fState_i, 'rb' ) as f:
                 state_i = pickle.load(f)
             with open( fStep_i, 'rb' ) as f:
                 step_i = pickle.load(f)
 
+            if EROM_Reader.p_believe_success_at_thin_step( step_i ):
+                break
+            
             # Count hallucinations for this step
             if len( state_i["sensed"] ) > 3:
                 rtnDct["N_halluc"].append( len( state_i["sensed"] )-3 )
@@ -473,6 +490,8 @@ class EROM_Reader:
             with open( fStep_i, 'rb' ) as f:
                 step_i = pickle.load(f)
 
+            if EROM_Reader.p_believe_success_at_thin_step( step_i ):
+                break
 
             stepRes = EROM_Reader.action_result_from_thin_step( step_i )
             rtnDct["resActn"].append( stepRes )
