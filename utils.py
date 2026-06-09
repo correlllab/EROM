@@ -172,3 +172,201 @@ class JupyterPlotServer:
             plt.axis('off')
         plt.imshow( arr )
         self.plt_show()
+
+
+
+########## ANALYSIS FUNCTIONS ######################################################################
+
+def print_header( text : str, preWidth : int, totWidth : int, capitalize = True, _HDR_CHR : str = '#' ):
+    """ Print a pleasant header """
+    if capitalize:
+        text = f"{text}".upper()
+    totStr = '\n'*int(totWidth/25) + f"{preWidth*_HDR_CHR[0]} {text} "
+    pstStr = max( totWidth-len(totStr)+1, 0 )*_HDR_CHR[0]
+    if not len( pstStr ):
+        pstStr = f"{preWidth*_HDR_CHR[0]}"
+    totStr += pstStr
+    print( totStr )
+
+
+def dex_key( x, offset = -1 ):
+    dex = f"{x}".split('_')[ offset ].replace( ".pkl", "" )
+    if len( dex ) >= 2:
+        return dex
+    elif len( dex ) < 2:
+        return '0'*(2-len( dex )) + dex
+    else:
+        raise ValueError( "`dex_key`: This should NOT have happened!" )
+
+
+def play_tone( duration_s = 5, freq_Hz = 650 ):
+    """ Play a notification tone """
+    os.system( f'play -nq -t alsa synth {duration_s} sine {freq_Hz}' )
+
+
+def crash_out( notify = True ):
+    """ End the program with Brutal Finality """
+    if notify:
+        play_tone()
+    print( "\n\n" )
+    os.system( 'kill %d' % os.getpid() ) 
+
+
+
+########## PLOTTING FUNCTIONS ######################################################################
+_TITLE_FONT_SIZE =  13
+_TIGHT_MARGIN    =   0.05
+_DEFAULT_DIV     = 100 #80 #100 #200
+
+
+def xy_plot_filled_under( X, Y, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
+                          titleFontSize_pt = _TITLE_FONT_SIZE ):
+    """ Creat cumulative curve """
+    # Plot line
+    plt.plot( X, Y )
+
+    # Shade the area under the curve
+    plt.fill_between( X, Y, 0, color = 'skyblue', alpha = 0.5 )
+
+    if plotTitle is not None:
+        plt.title( plotTitle, fontsize = titleFontSize_pt ) # Set the title && font size
+    if xLabel is not None:
+        plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
+    if yLabel is not None:
+        plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
+
+    plt.show()
+
+
+def make_histo( series, plotTitle, xLabel = 'Makespan', yLabel = 'Occurrences', savefig = True ):
+    """ Create Histogram """
+    if savefig:
+        plt.clf()
+    plt.margins( _TIGHT_MARGIN )
+    print( f"\n{plotTitle}" )
+    print( f"Mean: ___ {np.mean(series)}" )
+    print( f"Median: _ {np.median(series)}" )
+    print( f"Std.Dev.: {np.std(series)}" )
+    plt.hist( series, _DEFAULT_DIV )
+    plt.title( plotTitle, fontsize = _TITLE_FONT_SIZE ) # Set the title && font size
+    plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
+    plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
+    plt.tight_layout()
+    plt.show()
+
+
+
+########## PARSING #################################################################################
+
+def tokenize( expr : str ):
+    """ Break a text `expr` into parts """
+    _reserved = ['[', ']', ',',]
+    expr += ' ' # Terminator hack
+    token  = ""
+    tokens = deque()
+
+    def p_reserved( char ):
+        return (char in _reserved)
+
+    def store_token():
+        nonlocal token, tokens
+        if len( token ):
+            try:
+                tokens.append( float( token ) )
+            except ValueError:
+                tokens.append( token )
+        token  = ""
+
+    def store_char( char ):
+        nonlocal tokens
+        store_token()
+        tokens.append( char )
+
+    for char in expr:
+        if char.isspace():
+            store_token()
+        elif p_reserved( char ):
+            store_char( char )
+        else:
+            token += char
+
+    return tokens
+
+
+def extract_pose_from_tokens( tokens : list[str] ):
+    """ Tokenize and parse a pose string """
+    depth = 0
+    matrx = deque()
+    array = deque()
+    for token in tokens:
+        if token =='[':
+            depth += 1
+        if token ==']':
+            depth -= 1
+        if (depth == 2) and (not isinstance( token, str )):
+            array.append( token )
+        elif depth == 1:
+            if len( array ):
+                matrx.append( list( array ) )
+                array = deque()
+    if depth == 0:
+        return np.array( list( matrx ) )
+    else:
+        return None
+    
+
+def extract_name_from_tokens( tokens : list[str] ):
+    """ Get a block name from a list of tokens """
+    for token in tokens:
+        if 'Block' in token:
+            return token
+    return None
+
+
+def get_name_and_origin( lines : list[str] ) -> np.ndarray:
+    """ Get the origin and name of the block """
+    accum  = False
+    tokens = deque()
+    name   = None
+    pose   = None
+    for line in lines:
+        if ('Pick' in line) or ('Unstack' in line):
+            accum = True
+        if accum:
+            linTkn = tokenize( line )
+            tokens.extend( linTkn )
+            name = extract_name_from_tokens( tokens )
+            pose = extract_pose_from_tokens( tokens )
+            if (name is not None) and (pose is not None):
+                return name, pose
+    return None, None
+
+
+def get_desination( lines : list[str] ) -> np.ndarray:
+    """ Get the origin and name of the block """
+    accum  = False
+    tokens = deque()
+    pose   = None
+    for line in lines:
+        if ('Place' in line) or ('Stack' in line):
+            accum = True
+        if accum:
+            linTkn = tokenize( line )
+            tokens.extend( linTkn )
+            pose = extract_pose_from_tokens( tokens )
+            if (pose is not None):
+                return pose
+    return None
+
+
+def parse_action( action : dict[str,list[str]] = None ):
+    """ Get the intended class, origin, destination of the block """
+    if action is not None:
+        Lines    = action['next']
+        dst      = get_desination( Lines )
+        nam, src = get_name_and_origin( Lines )
+    return {
+        'name'   : nam,
+        'bgnPose': src,
+        'endPose': dst,
+    }
