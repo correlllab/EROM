@@ -18,7 +18,7 @@ from magpie_control.realsense_wrapper import MPCD
 
 from homog_utils import homog_xform, diff_mag
 
-from .utils import dex_key
+from utils import dex_key, parse_action
 
 
 
@@ -279,6 +279,19 @@ class EROM_Reader:
 
 
     @staticmethod
+    def step_plan_from_thin_step( step : list[dict[str,Any]] ):
+        """ Return the result of planning """
+        for datum in step:
+            if "END: Phase 3" in datum["msg"]:
+                dtmDat = datum["data"]
+                if (dtmDat is not None) and len( dtmDat ):
+                    if len( dtmDat["plan"] ):
+                        # pprint( dtmDat )
+                        return parse_action( dtmDat )
+        return None
+
+
+    @staticmethod
     def planning_result_from_thin_step( step : list[dict[str,Any]], prntPlan : bool = False ):
         """ Return the result of planning """
         for datum in step:
@@ -288,7 +301,6 @@ class EROM_Reader:
                     if (dtmDat is not None) and len( dtmDat ):
                         if len( dtmDat["plan"] ):
                             if prntPlan:
-                                pprint( dtmDat["plan"] )
                                 print()
                                 pprint( dtmDat["next"] )
                                 print()

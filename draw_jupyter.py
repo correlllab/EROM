@@ -1,4 +1,6 @@
 ########## INIT ####################################################################################
+from collections import deque
+
 import pythreejs as p3js
 from IPython.display import display
 import numpy as np
@@ -9,8 +11,9 @@ from aspire.homog_utils import homog_xform
 from aspire.symbols import extract_pose_as_homog, GraspObj, CPCD
 
 ### Local ###
-from utils import zip_dict_sorted_by_decreasing_value, get_pose_attr
+from utils import zip_dict_sorted_by_decreasing_value, get_pose_attr, parse_action
 from homog_utils import posn_from_xform
+from Reader import EROM_Reader
 
 _GOLDEN     = 1.618
 _TABLE_THIC = 0.015
@@ -320,6 +323,30 @@ def line_segments_geo( segCoordsList : list[list[list[float]]] | np.ndarray, col
 
 
 
+########## RENDER PLANS ############################################################################
+
+def plan_step_geo( plan : dict, Zsafe : float = 0.250 ):
+    """ Parse the plan and display it """
+    # plan   = parse_action( planText )
+    bgnPsn = posn_from_xform( plan["bgnPose"] )
+    endPsn = posn_from_xform( plan["endPose"] )
+    bgnUpP = bgnPsn.copy()
+    bgnUpP[2] = Zsafe
+    endUpP = endPsn.copy()
+    endUpP[2] = Zsafe
+
+    geo = line_segments_geo( 
+        [ [bgnPsn, bgnUpP,],
+          [bgnUpP, endUpP,],
+          [endUpP, endPsn,],], 
+        color  = env_var("_CLR_TABLE")[ plan["name"][:3] ], 
+        weight = 10 
+    )
+
+    return [geo,]
+
+
+
 ########## RENDER MEMORY ###########################################################################
 
 def reading_list_geo( objs : list[GraspObj], alpha = None ):
@@ -388,7 +415,17 @@ def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = Non
     if removed is not None:
         objLst.extend( target_list_geo( removed ) )
     return p3js_geo_list_window( objLst, robotPose, xtra )
-    
+
+
+def render_state_and_plan_step( syms : list[GraspObj] = None, planStr : str = None ):
+    """ Render the symbols and the next step """
+    objLst = deque()
+    if syms is not None:
+        objLst.extend( symbol_list_geo( syms, noTable = False ) )
+    if planStr is not None:
+        objLst.extend( plan_step_geo( planStr ) )
+    return p3js_geo_list_window( list( objLst ) )
+
 
 
 ########## TEST ####################################################################################
