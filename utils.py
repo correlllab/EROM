@@ -358,9 +358,11 @@ def get_desination( lines : list[str] ) -> np.ndarray:
                 return pose
     return None
 
+from pprint import pprint
 
 def parse_action( action : dict[str,list[str]] = None ):
     """ Get the intended class, origin, destination of the block """
+    # pprint( action )
     if action is not None:
         Lines    = action['next']
         dst      = get_desination( Lines )
