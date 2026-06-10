@@ -496,6 +496,16 @@ def extract_pose_from_str( poseStr : str ):
         print( f"BAD: {e}" )
         crash_out()
 
+
+def copy_GraspObj_thin( objLst : list[GraspObj] ) -> list[GraspObj]:
+    """ Copy a MUCH SMALLER version of the symbol! """
+    rtnLst = deque()
+    for obj in objLst:
+        rtnLst.append( obj.copy( thin = True ) )
+    return list( rtnLst )
+
+
+
 ##### Block Masks ######################################################### 
 
 def red_block_mask( img : np.ndarray ) -> np.ndarray:
@@ -1061,21 +1071,27 @@ class OCV_State_Tracker:
         if len( self.current ):
             self.scenes.append( deepcopy( self.current ) )
         self.current = {
-            "labels" : list(), #- List of objects in this scene
-            "image"  : dict(), #- Lookup of color images used
-            "depth"  : dict(), #- Lookup of depth images used
-            "clouds" : deque(), # Collection of clouds obtained from the masked images
-            "objects": deque(), # Collection of readings obtained from the masked images
-            "sensed" : list(), # Collection of symbols obtained from the robot
-            "symbols": dict(), #- Lookup of objects obtained from the readings
+            "labels"      : list(), #- List of objects in this scene
+            "image"       : dict(), #- Lookup of color images used
+            "depth"       : dict(), #- Lookup of depth images used
+            "clouds"      : deque(), # Collection of clouds obtained from the masked images
+            "sensBeliefs" : deque(), # Collection of readings obtained from the observation(s)
+            "trueReadings": deque(), # Collection of readings obtained from the masked images
+            "sensSymbols" : list(), # Collection of symbols obtained from the robot
+            "trueSymbols" : dict(), #- Lookup of objects obtained from the readings
         }
         if len( self.scenes ) > self._N_RETAIN:
             self.dump_scene()
 
 
+    def log_beliefs( self, beliefs ):
+        """ Log what the robot saw """
+        self.current["sensBeliefs"] = copy_GraspObj_thin( beliefs )
+
+
     def log_sensed( self, sensed ):
         """ Log what the robot saw """
-        self.current['sensed'] = sensed
+        self.current["sensSymbols"] = sensed
 
 
     def get_last_scene( self, backDex : int = 1 ) -> list[GraspObj]:
@@ -1130,7 +1146,7 @@ class OCV_State_Tracker:
                 ) and (len( pcd_i ) >= self._PCD_MIN): # Sometimes extraneous shit gets picked up!
                     if not _RAM_SAVER:
                         self.jps.arr_show( res )
-                    self.current['objects'].append( obj_i )
+                    self.current["trueReadings"].append( obj_i )
                     Nadd += 1
                     print( f"{label} can be found at {obj_i}" )
                 else:
@@ -1247,10 +1263,10 @@ class OCV_State_Tracker:
                     return True
             return False
 
-        for obj_i in self.current['objects']:
+        for obj_i in self.current["trueReadings"]:
             if not p_symbol_inside_workspace_bounds( obj_i, noPad = True, addMargin = 0.120 ):
                 continue
-            if p_collides( obj_i, self.current['symbols'] ):
+            if p_collides( obj_i, self.current["trueSymbols"] ):
                 continue
             # if len( obj_i.cpcd ):
             #     aabb = obj_i.cpcd.calc_aabb()
@@ -1261,8 +1277,8 @@ class OCV_State_Tracker:
             lbl_i = extract_label( obj_i )            
             
             # WARNING: THE FOLLOWING ASSUMES ONE OF EACH LABEL!
-            if lbl_i in self.current['symbols']:
-                obj_j  = self.current['symbols'][ lbl_i ]
+            if lbl_i in self.current["trueSymbols"]:
+                obj_j  = self.current["trueSymbols"][ lbl_i ]
                 posn_i = extract_position( obj_i )
                 posn_j = extract_position( obj_j )
                 # dst_ij = np.linalg.norm( np.subtract( posn_i, posn_j ) )
@@ -1273,19 +1289,19 @@ class OCV_State_Tracker:
                 pose_r[:3,3] = posn_r
                 obj_j.pose = ObjPose( pose_r )
             else:
-                # self.current['symbols'][ lbl_i ] = obj_i.copy()
-                self.current['symbols'][ lbl_i ] = obj_i
-        print( f"Processed {len(self.current['objects'])} readings!" )
+                # self.current["trueSymbols"][ lbl_i ] = obj_i.copy()
+                self.current["trueSymbols"][ lbl_i ] = obj_i
+        print( f"Processed {len(self.current["trueReadings"])} readings!" )
 
         lstScn = self.get_last_scene()
-        lstSet = set( lstScn['symbols'].keys() ) 
-        curSet = set( self.current['symbols'].keys() )
+        lstSet = set( lstScn["trueSymbols"].keys() ) 
+        curSet = set( self.current["trueSymbols"].keys() )
         difSet = lstSet - curSet 
         for dLabel in difSet:
-            # self.current['symbols'][ dLabel ] = deepcopy( lstScn['symbols'][ dLabel ] )
-            self.current['symbols'][ dLabel ] = lstScn['symbols'][ dLabel ]
+            # self.current["trueSymbols"][ dLabel ] = deepcopy( lstScn["trueSymbols"][ dLabel ] )
+            self.current["trueSymbols"][ dLabel ] = lstScn["trueSymbols"][ dLabel ]
 
-        rtnSym = list( self.current['symbols'].values() )
+        rtnSym = list( self.current["trueSymbols"].values() )
         
         self.logical_Z_snap( rtnSym )
         return rtnSym
@@ -1298,7 +1314,7 @@ class OCV_State_Tracker:
 
     def current_scene_confusion( self, sensedObjects : list[GraspObj] ):
         """ Return the number of `sensedObjects` that *contradict* the current scene """
-        lastScen = list( self.current['symbols'].values() )
+        lastScen = list( self.current["trueSymbols"].values() )
         matches  = dict()
         
         if (sensedObjects is None) or (not len( sensedObjects )):
@@ -1316,14 +1332,14 @@ class OCV_State_Tracker:
 
         # Store Sensed Objects #
         for obj_i in sensedObjects:
-            matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
+            matches[ id( obj_i ) ] = { "sensSymbols" : obj_i, "known" : None, "d" : 6e10 }
         
         # Match OpenCV Objects to Sensed Objects #
         for obj_j in lastScen:
             dMin   = 6e10
             kMin_i = None
             for k_i, v_i in matches.items():
-                d_ij = euclidean_distance_between_symbols( v_i["sensed"], obj_j )
+                d_ij = euclidean_distance_between_symbols( v_i["sensSymbols"], obj_j )
                 if d_ij is None:
                     continue
                 if d_ij <= env_var("_ACCEPT_POSN_ERR") and d_ij < dMin:
@@ -1340,7 +1356,7 @@ class OCV_State_Tracker:
         for k_i, v_i in matches.items():
             # If the sensed block was real, Then check for confusion
             if v_i["known"] is not None:
-                if extract_label( v_i["known"] ) != extract_label( v_i["sensed"] ):
+                if extract_label( v_i["known"] ) != extract_label( v_i["sensSymbols"] ):
                     Ncnf += 1
             # Else block was NOT real, The system hallucinated it! 
             else:

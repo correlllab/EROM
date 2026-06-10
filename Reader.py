@@ -363,7 +363,7 @@ class EROM_Reader:
                 state_i = pickle.load(f)
 
             actl_i = list( EROM_Reader.get_avg_objects( state_i["objects"] ).values() )
-            pred_i = state_i["sensed"]
+            pred_i = state_i["sensSymbols"]
             matx.count_examples( actl_i, pred_i )
     
     
@@ -377,7 +377,7 @@ class EROM_Reader:
         "depth"  : dict(), #- Lookup of depth images used
         "clouds" : deque(), # Collection of clouds obtained from the masked images
         "objects": deque(), # Collection of readings obtained from the masked images
-        "sensed" : list(), # Collection of symbols obtained from the robot
+        "sensSymbols" : list(), # Collection of symbols obtained from the robot
         "symbols": dict(), #- Lookup of objects obtained from the readings
         """
 
@@ -403,30 +403,30 @@ class EROM_Reader:
                 break
             
             # Count hallucinations for this step
-            if len( state_i["sensed"] ) > 3:
-                rtnDct["N_halluc"].append( len( state_i["sensed"] )-3 )
+            if len( state_i["sensSymbols"] ) > 3:
+                rtnDct["N_halluc"].append( len( state_i["sensSymbols"] )-3 )
             else:
                 rtnDct["N_halluc"].append( 0 )
             
             # Count missing blocks for this step
-            if len( state_i["sensed"] ) < 3:
-                rtnDct["N_missng"].append( 3-len( state_i["sensed"] ) )
+            if len( state_i["sensSymbols"] ) < 3:
+                rtnDct["N_missng"].append( 3-len( state_i["sensSymbols"] ) )
             else:
                 rtnDct["N_missng"].append( 0 )
 
             rtnDct["resPlan"].append( EROM_Reader.planning_result_from_thin_step( step_i ) )
 
-            if len( state_i["sensed"] ) != 3:
+            if len( state_i["sensSymbols"] ) != 3:
                 print()
-                if len( state_i["sensed"] ) > 3:
+                if len( state_i["sensSymbols"] ) > 3:
                     print( "HALLUCINATION" )
-                elif len( state_i["sensed"] ) < 3:
+                elif len( state_i["sensSymbols"] ) < 3:
                     print( "MISSING BLOCK" )
                     if EROM_Reader.planning_result_from_thin_step( step_i ):
                         totalBad += 1
 
-                print( "Sensed" )
-                for object_j in state_i["sensed"]:
+                print( "sensSymbols" )
+                for object_j in state_i["sensSymbols"]:
                     print( object_j )
 
                 print( "Symbols" )
@@ -522,7 +522,7 @@ class EROM_Reader:
 
         "objects": deque(), # Collection of readings obtained from the masked images
         
-        "sensed" : list(), # Collection of symbols obtained from the robot
+        "sensSymbols" : list(), # Collection of symbols obtained from the robot
         "symbols": dict(), #- Lookup of objects obtained from the readings
         """
 

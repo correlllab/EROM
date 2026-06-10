@@ -5,6 +5,7 @@ from collections import deque
 from typing import Any, Deque
 from pprint import pprint
 from random import random
+from enum import Enum
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -79,6 +80,16 @@ plotExt = ".pdf"
 set_blocks_env()
 set_experiment_env()
 set_render_env()
+
+
+########## TYPES ###################################################################################
+
+class PlanStat( Enum ):
+    OKAY        = 0
+    FAIL        = 1
+    COLLIDE     = 2
+    BLC_MISSING = 3
+
 
 
 ########## HELPER FUNCTIONS ########################################################################
