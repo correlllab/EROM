@@ -125,10 +125,10 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
     # Store Sensed Objects #
     if isinstance( sensedObjects, dict ):
         for lbl_i, obj_i in sensedObjects.items():
-            matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
+            matches[ id( obj_i ) ] = { "sensSymbols" : obj_i, "known" : None, "d" : 6e10 }
     elif isinstance( sensedObjects, (list,deque,) ):
         for obj_i in sensedObjects:
-            matches[ id( obj_i ) ] = { "sensed" : obj_i, "known" : None, "d" : 6e10 }
+            matches[ id( obj_i ) ] = { "sensSymbols" : obj_i, "known" : None, "d" : 6e10 }
     else:
         raise ValueError( f"Could not parse a list of objects of type {type(sensedObjects)}" )
     
@@ -138,7 +138,7 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
         dMin   = 6e10
         kMin_i = None
         for k_i, v_i in matches.items():
-            d_ij = euclidean_distance_between_symbols( v_i["sensed"], obj_j )
+            d_ij = euclidean_distance_between_symbols( v_i["sensSymbols"], obj_j )
             if d_ij is None:
                 raise ValueError( f"Cannot compute a distance between {type(v_i['sensed'])} and {type(obj_j)}" )
             if d_ij <= env_var("_ACCEPT_POSN_ERR") and d_ij < dMin:
@@ -156,8 +156,8 @@ def current_scene_confusion( sensedObjects : list[GraspObj], actualObjects : lis
     for k_i, v_i in matches.items():
         # If the sensed block was real, Then check for confusion
         if v_i["known"] is not None:
-            # print(v_i["known"].label, v_i["sensed"].label)
-            if extract_label( v_i["known"] ) != extract_label( v_i["sensed"] ):
+            # print(v_i["known"].label, v_i["sensSymbols"].label)
+            if extract_label( v_i["known"] ) != extract_label( v_i["sensSymbols"] ):
                 Ncnf += 1
         # Else block was NOT real, The system hallucinated it! 
         else:
