@@ -16,9 +16,33 @@ from TaskPlanner import set_experiment_env
 from draw_beliefs import set_render_env
 from magpie_control.realsense_wrapper import MPCD
 
-from homog_utils import homog_xform, diff_mag
+from homog_utils import homog_xform, diff_mag, posn_from_xform
+
 
 from utils import dex_key, parse_action
+
+set_blocks_env()
+
+# _BLOCK_DIAG = np.nan
+# _HALF_SCALE = np.nan
+
+# _BLOCK_DIAG = np.sqrt( 3 * env_var("_BLOCK_SCALE")**2 )
+# _HALF_SCALE = env_var("_BLOCK_SCALE") / 2.0
+
+
+########## HELPER FUNCTIONS ########################################################################
+
+def pnt_distance_from_line_3D( qX0 : np.ndarray, linX1 : np.ndarray, linX2 : np.ndarray ):
+    """ Get the distance of a 3D point `qX0` from an infinite line defined by `linX1` --to-> `linX2` """
+    num = np.linalg.norm( np.cross(
+        np.subtract( qX0, linX1 ),
+        np.subtract( qX0, linX2 )
+    ) )
+    den = np.linalg.norm( np.subtract( linX2, linX1 ) )
+    if den > 0.0:
+        return num / den
+    else:
+        return np.nan
 
 
 
@@ -279,7 +303,7 @@ class EROM_Reader:
 
 
     @staticmethod
-    def step_plan_from_thin_step( step : list[dict[str,Any]] ):
+    def parse_plan_from_thin_step( step : list[dict[str,Any]] ):
         """ Return the result of planning """
         for datum in step:
             if "END: Phase 3" in datum["msg"]:
@@ -453,6 +477,36 @@ class EROM_Reader:
             )
         # pprint( rtnObj )
         return rtnObj
+    
+
+    @staticmethod
+    def p_action_passes_through_known_blocks( state_i : dict[str,list|dict], step_i : list, Zsafe : float = 0.250 ):
+        """ Did the planner not correctly ground condtions? """
+        # Scale
+        _FACTOR     = 0.7 # 0.8
+        _HALF_DIAG  = np.sqrt( 3 * env_var("_BLOCK_SCALE")**2 ) / 2.0
+        # _HALF_SCALE = env_var("_BLOCK_SCALE") / 2.0
+        _D_FUNKY    = _HALF_DIAG * _FACTOR
+        # Fetch needed info
+        action  = EROM_Reader.parse_plan_from_thin_step( step_i )
+        symbols = list( state_i["symbols"].values() )
+
+        if action is None:
+            return None
+
+        endPsn = posn_from_xform( action["endPose"] )
+        endUpP = endPsn.copy()
+        endUpP[2] = Zsafe
+
+        for sym in symbols:
+            sPosn = extract_position( sym )
+            dStep = pnt_distance_from_line_3D( sPosn, endUpP, endPsn )
+            dEndA = np.linalg.norm( sPosn - endPsn )
+            # if (dStep < _HALF_SCALE) and (dEndA < _HALF_DIAG):
+            if (dStep < _D_FUNKY) and (dEndA < _D_FUNKY):
+                return True
+        return False
+
 
     
     def action_failure_vs_position_variation( self ):

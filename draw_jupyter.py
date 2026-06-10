@@ -417,13 +417,13 @@ def render_memory_list( objs : list[GraspObj] = None, syms = None, removed = Non
     return p3js_geo_list_window( objLst, robotPose, xtra )
 
 
-def render_state_and_plan_step( syms : list[GraspObj] = None, planStr : str = None ):
+def render_state_and_plan_step( syms : list[GraspObj] = None, planDct : str = None ):
     """ Render the symbols and the next step """
     objLst = deque()
     if syms is not None:
         objLst.extend( symbol_list_geo( syms, noTable = False ) )
-    if planStr is not None:
-        objLst.extend( plan_step_geo( planStr ) )
+    if planDct is not None:
+        objLst.extend( plan_step_geo( planDct ) )
     return p3js_geo_list_window( list( objLst ) )
 
 
