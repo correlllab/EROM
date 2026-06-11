@@ -1,0 +1,38 @@
+from __future__ import annotations
+from enum import Enum
+
+from dataclasses import dataclass, field
+
+class PlanStatus( Enum ):
+    INVALID     = 0
+    NOT_PLANNED = 1
+    PLANNED_OK  = 2
+    PLANNED_BAD = 3
+
+
+class ActionStatus( Enum ):
+    INVALID     = 0
+    NO_ACTION   = 1
+    SUCCESS     = 2
+    FAULIRE     = 3
+
+
+@dataclass
+class Example:
+    
+    ## Perception ##
+    p_AllBlocks : bool            = False
+    missingBlock: list[str]       = field( default_factory = list )
+    p_AllCorrect: bool            = False
+    p_Confused  : bool            = False
+    confusedBloc: dict            = field( default_factory = dict )
+    positionErrs: dict[str,float] = field( default_factory = dict )
+    
+    ## Planning ##
+    planned : PlanStatus = PlanStatus.INVALID
+
+    ## Action ##
+    action : ActionStatus = ActionStatus.INVALID
+
+    ## Next State ##
+    nextState : Example = None
