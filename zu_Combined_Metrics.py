@@ -678,7 +678,7 @@ if _GET_STATS:
 
 if _THINIFY:
 
-     ### For every block set ###
+    ### For every block set ###
     for iii, paths in enumerate( datasets ):
 
         setNam = dataLabels[iii]
