@@ -20,6 +20,12 @@ class ActionStatus( Enum ):
 @dataclass
 class Example:
     
+    ## Address ##
+    dataset: str = ""
+    test   : str = ""
+    episode: int = -1
+    step   : int = -1
+
     ## Perception ##
     p_AllBlocks : bool            = False
     missingBlock: list[str]       = field( default_factory = list )
