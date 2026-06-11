@@ -29,10 +29,10 @@ class Example:
     ## Perception ##
     p_AllBlocks : bool            = False
     missingBlock: list[str]       = field( default_factory = list )
-    p_AllCorrect: bool            = False
     p_Confused  : bool            = False
-    confusedBloc: dict            = field( default_factory = dict )
+    confusedBloc: list            = field( default_factory = list )
     positionErrs: dict[str,float] = field( default_factory = dict )
+    N_halluc    : int             = 0
     
     ## Planning ##
     planned : PlanStatus = PlanStatus.INVALID
