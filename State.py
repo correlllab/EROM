@@ -1291,7 +1291,7 @@ class OCV_State_Tracker:
             else:
                 # self.current["trueSymbols"][ lbl_i ] = obj_i.copy()
                 self.current["trueSymbols"][ lbl_i ] = obj_i
-        print( f"Processed {len(self.current["trueReadings"])} readings!" )
+        print( f"Processed {len(self.current['trueReadings'])} readings!" )
 
         lstScn = self.get_last_scene()
         lstSet = set( lstScn["trueSymbols"].keys() ) 
