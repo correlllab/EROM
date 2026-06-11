@@ -20,7 +20,10 @@ from Reader import EROM_Reader
 
 from homog_utils import homog_xform, diff_mag
 
-
+##### Environment && Constants ############################################
+set_blocks_env()
+set_experiment_env()
+set_render_env()
 
 ########## CONSTANTS ###############################################################################
 
@@ -74,21 +77,6 @@ eBlcNam = {
 }
 
 plotExt = ".pdf"
-
-
-##### Environment && Constants ############################################
-set_blocks_env()
-set_experiment_env()
-set_render_env()
-
-
-########## TYPES ###################################################################################
-
-class PlanStat( Enum ):
-    OKAY        = 0
-    FAIL        = 1
-    COLLIDE     = 2
-    BLC_MISSING = 3
 
 
 
