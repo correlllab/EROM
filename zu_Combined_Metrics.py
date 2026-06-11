@@ -689,18 +689,47 @@ if _GET_STATS:
                 
 
 if _THINIFY:
-    reader.thinify_recordings_as_files()
-    reader.erase() # Flush main recording from memory
 
-    epPrefix = f"{episodePath}".replace( ".pkl", "" )
+     ### For every block set ###
+    for iii, paths in enumerate( datasets ):
 
-    statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE_BYTES))    ]
-    statePaths.sort( key = lambda x: dex_key( x ) )
+        setNam = dataLabels[iii]
+        suffix = "_" + setNam
+        skip   = False
 
-    for _j_, sPath in enumerate( statePaths ):
-        print_header( f"STATE {_j_ + 1}, {sPath}", preWidth = 5, totWidth = 75, capitalize = False )
+        ### For every scenario ###
+        for ii, test in enumerate( tests ):
 
-        reader.thinify_state_file( sPath )
+            print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
+
+            ##### Init ####################################################
+            path     = paths[ii]
+            longTNam = longTestNames[ii]
+
+            testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}") and ("thin" not in f"{item}".lower()))]
+            trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}")     and ("thin" not in f"{item}".lower()))]
+
+            ### For every episode ###
+            for _i_, episodePath in enumerate( testRecord ):
+                print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
+                try:
+                    reader = EROM_Reader( episodePath, suppressLoad = False )
+                except RuntimeError:
+                    print( f"\nSKIPPED: {episodePath}\n" )
+                    continue
+
+                reader.thinify_recordings_as_files()
+                reader.erase() # Flush main recording from memory
+
+                epPrefix = f"{episodePath}".replace( ".pkl", "" )
+
+                statePaths = [item for item in trueRecord if ((epPrefix in f"{item}") and ("_OCV-State" in f"{item}") and ("THIN" not in f"{item}") and (os.path.getsize(item) >= _MIN_STATE_SIZE_BYTES))    ]
+                statePaths.sort( key = lambda x: dex_key( x ) )
+
+                for _j_, sPath in enumerate( statePaths ):
+                    print_header( f"STATE {_j_ + 1}, {sPath}", preWidth = 5, totWidth = 75, capitalize = False )
+
+                    reader.thinify_state_file( sPath )
 
 
 
