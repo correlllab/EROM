@@ -17,9 +17,8 @@ from draw_beliefs import set_render_env
 from magpie_control.realsense_wrapper import MPCD
 
 from homog_utils import homog_xform, diff_mag, posn_from_xform
-
-
 from utils import dex_key, parse_action
+from Example import PlanStatus, ActionStatus
 
 set_blocks_env()
 
@@ -316,9 +315,38 @@ class EROM_Reader:
 
 
     @staticmethod
-    def planning_result_from_thin_step( step : list[dict[str,Any]], prntPlan : bool = False ):
+    def p_action_passes_through_known_blocks( state_i : dict[str,list|dict], step_i : list, Zsafe : float = 0.250 ):
+        """ Did the planner not correctly ground condtions? """
+        # Scale
+        _FACTOR     = 0.7 # 0.8
+        _HALF_DIAG  = np.sqrt( 3 * env_var("_BLOCK_SCALE")**2 ) / 2.0
+        # _HALF_SCALE = env_var("_BLOCK_SCALE") / 2.0
+        _D_FUNKY    = _HALF_DIAG * _FACTOR
+        # Fetch needed info
+        action  = EROM_Reader.parse_plan_from_thin_step( step_i )
+        symbols = list( state_i["trueSymbols"].values() )
+
+        if action is None:
+            return None
+
+        endPsn = posn_from_xform( action["endPose"] )
+        endUpP = endPsn.copy()
+        endUpP[2] = Zsafe
+
+        for sym in symbols:
+            sPosn = extract_position( sym )
+            dStep = pnt_distance_from_line_3D( sPosn, endUpP, endPsn )
+            dEndA = np.linalg.norm( sPosn - endPsn )
+            # if (dStep < _HALF_SCALE) and (dEndA < _HALF_DIAG):
+            if (dStep < _D_FUNKY) and (dEndA < _D_FUNKY):
+                return True
+        return False
+    
+
+    @staticmethod
+    def planning_result_from_thin_step( step_i : list[dict[str,Any]], state_i : dict[str,list|dict], prntPlan : bool = False ) -> PlanStatus:
         """ Return the result of planning """
-        for datum in step:
+        for datum in step_i:
             try:
                 if "END: Phase 3" in datum["msg"]:
                     dtmDat = datum["data"]
@@ -328,19 +356,22 @@ class EROM_Reader:
                                 print()
                                 pprint( dtmDat["next"] )
                                 print()
-                            return True
+                            if EROM_Reader.p_action_passes_through_known_blocks( state_i, step_i, Zsafe = 0.250 ):
+                                return PlanStatus.PLANNED_BAD
+                            else:
+                                return PlanStatus.PLANNED_OK
                         else:
-                            return False
+                            return PlanStatus.NOT_PLANNED
                     elif (dtmDat is None) or (not len( dtmDat )):
-                        return None
+                        return PlanStatus.NOT_PLANNED
                     else:
                         raise ValueError( "THIS SHOULD NOT HAPPEN!" )
             except TypeError:
-                return None
-        if EROM_Reader.p_believe_success_at_thin_step( step ):
-            return True
+                return PlanStatus.NOT_PLANNED
+        if EROM_Reader.p_believe_success_at_thin_step( step_i ):
+            return PlanStatus.TASK_DONE
         else:
-            return False
+            return PlanStatus.NOT_PLANNED
     
 
     @staticmethod
@@ -439,21 +470,20 @@ class EROM_Reader:
                 print( "\nSymbols" )
                 for name, object_j in state_i["symbols"].items():
                     print( name, object_j )
-                    
             
         print( f"\n\n{totalBad}/{totalSteps} BAD PLANNING ATTEMPTS\n\n" )
         return rtnDct
     
 
     @staticmethod
-    def action_result_from_thin_step( step : list[dict[str,Any]] ):
+    def action_result_from_thin_step( step : list[dict[str,Any]] ) -> ActionStatus:
         """ Return the result of the action """
         for datum in step:
             if "BT END: Status.SUCCESS" in datum["msg"]:
-                return True
+                return ActionStatus.SUCCESS
             if "BT END: Status.FAILURE" in datum["msg"]:
-                return False
-        return None
+                return ActionStatus.FAILURE
+        return ActionStatus.NO_ACTION
     
 
     @staticmethod
@@ -480,35 +510,24 @@ class EROM_Reader:
     
 
     @staticmethod
-    def p_action_passes_through_known_blocks( state_i : dict[str,list|dict], step_i : list, Zsafe : float = 0.250 ):
-        """ Did the planner not correctly ground condtions? """
-        # Scale
-        _FACTOR     = 0.7 # 0.8
-        _HALF_DIAG  = np.sqrt( 3 * env_var("_BLOCK_SCALE")**2 ) / 2.0
-        # _HALF_SCALE = env_var("_BLOCK_SCALE") / 2.0
-        _D_FUNKY    = _HALF_DIAG * _FACTOR
-        # Fetch needed info
-        action  = EROM_Reader.parse_plan_from_thin_step( step_i )
-        symbols = list( state_i["symbols"].values() )
-
-        if action is None:
-            return None
-
-        endPsn = posn_from_xform( action["endPose"] )
-        endUpP = endPsn.copy()
-        endUpP[2] = Zsafe
-
-        for sym in symbols:
-            sPosn = extract_position( sym )
-            dStep = pnt_distance_from_line_3D( sPosn, endUpP, endPsn )
-            dEndA = np.linalg.norm( sPosn - endPsn )
-            # if (dStep < _HALF_SCALE) and (dEndA < _HALF_DIAG):
-            if (dStep < _D_FUNKY) and (dEndA < _D_FUNKY):
-                return True
-        return False
+    def position_error_from_state( state_i : dict  ) -> dict:
+        """ Get position error for this state """
+        truthDict = EROM_Reader.get_avg_objects( state_i["trueReadings"] )
+        retrnDict = dict()
+        for obj_j in state_i["sensSymbols"]:
+            if obj_j.label in truthDict:
+                d  = diff_mag(
+                    extract_position( obj_j ),
+                    extract_position( truthDict[ obj_j.label ] )
+                )
+                if obj_j.label in retrnDict:
+                    if d < retrnDict[ obj_j.label ]:
+                        retrnDict[ obj_j.label ] = d
+                else: 
+                    retrnDict[ obj_j.label ] = d
+        return retrnDict
 
 
-    
     def action_failure_vs_position_variation( self ):
         """ What influence does Position Variation have on action failure? """
         
@@ -550,12 +569,12 @@ class EROM_Reader:
             stepRes = EROM_Reader.action_result_from_thin_step( step_i )
             rtnDct["resActn"].append( stepRes )
             
-            truthDict = EROM_Reader.get_avg_objects( state_i["objects"] )
+            truthDict = EROM_Reader.get_avg_objects( state_i["trueReadings"] )
             
-            if len( state_i["symbols"] ):
+            if len( state_i["sensSymbols"] ):
                 N = 0
                 d = 0.0
-                for lbl, obj_j in state_i["symbols"].items():
+                for lbl, obj_j in state_i["sensSymbols"].items():
                     if lbl in truthDict:
                         N += 1
                         d += diff_mag(

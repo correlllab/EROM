@@ -8,13 +8,14 @@ class PlanStatus( Enum ):
     NOT_PLANNED = 1
     PLANNED_OK  = 2
     PLANNED_BAD = 3
+    TASK_DONE   = 4
 
 
 class ActionStatus( Enum ):
     INVALID     = 0
     NO_ACTION   = 1
     SUCCESS     = 2
-    FAULIRE     = 3
+    FAILURE     = 3
 
 
 @dataclass
