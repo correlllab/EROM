@@ -98,10 +98,11 @@ _DATA_DRIVE = "STARGAZER/DATA_TANK"
 class Loc:
     """ Static Container Class """    
 
-    _PLOT_DIR   = "/media/james/FILEPILE/EROM/data/plots/"
-    _GC_CYCLE   = False 
-    _F_EXTRACT  = f"{_PLOT_DIR}outData.pkl"
-    _T_EXTRACT  = f"{_PLOT_DIR}outText.json"
+    _MISC_DIR  = "/media/james/STARGAZER/DATA_TANK/misc_data/" 
+    _PLOT_DIR  = "/media/james/FILEPILE/EROM/data/plots/"
+    _GC_CYCLE  = False 
+    _F_EXTRACT = f"{_PLOT_DIR}outData.pkl"
+    _T_EXTRACT = f"{_PLOT_DIR}outText.json"
 
     _MIN_STATE_SIZE_BYTES = 500.0
 

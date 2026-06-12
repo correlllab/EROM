@@ -44,6 +44,7 @@ def get_confusion( matches ):
 try:
 
     examples : Deque[Example] = deque()
+    _EXAMPL_PATH = f"{Loc._MISC_DIR}AllExamples.pkl" 
 
     ### For every block set ###
     for iii, paths in enumerate( Loc.datasets ):
@@ -72,7 +73,7 @@ try:
                 print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
                 reader : EROM_Reader = None
                 try:
-                    reader = EROM_Reader( episodePath, suppressLoad = False )
+                    reader = EROM_Reader( episodePath, suppressLoad = True )
                 except RuntimeError:
                     print( f"\nSKIPPED: {episodePath}\n" )
                     continue
@@ -117,18 +118,30 @@ try:
                     ex_ij.p_Confused   = (len( confusn ) > 0)
                     ex_ij.confusedBloc = confusn
 
-                    ##### Planning ###############
-                    ##### Action #################
-                    ##### Next State #############
+                    ex_ij.positionErrs = EROM_Reader.position_error_from_state( state_j )
 
-                    pprint( ex_ij )
+                    ex_ij.N_halluc = max( 0, len( state_j["sensSymbols"] )-3 )
+
+                    ##### Planning ###############
+                    ex_ij.planned = reader.planning_result_from_thin_step( step_j, state_j )
+
+                    ##### Action #################
+                    ex_ij.action = reader.action_result_from_thin_step( step_j )
+
+                    ##### Next State #############
+                    if _j_ > 0:
+                        examples[-1].nextState = ex_ij
+
+                    # pprint( ex_ij )
                     examples.append( ex_ij )
 
-                    break
-                break
-            break
-        break
-
+        #             break
+        #         break
+        #     break
+        # break
+    
+    with open( _EXAMPL_PATH, 'wb' ) as f:
+        pickle.dump( examples, f )
 
 
                     
