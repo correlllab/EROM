@@ -89,7 +89,6 @@ try:
                     fState_j = assocStates[_j_]
                     fStep_j  = assocSteps[_j_]
 
-
                     with open( fState_j, 'rb' ) as f:
                         state_j = pickle.load(f)
                     with open( fStep_j, 'rb' ) as f:
