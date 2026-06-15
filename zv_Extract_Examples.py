@@ -12,6 +12,7 @@ import numpy as np
 
 from aspire.BlocksTask import set_blocks_env
 from aspire.env_config import env_var
+from aspire.symbols import GraspObj, extract_position
 from TaskPlanner import set_experiment_env
 from draw_beliefs import set_render_env
 from magpie_control.realsense_wrapper import MPCD
@@ -63,24 +64,50 @@ class Example_Reader:
                         self.slct.append( datum )
         return self.slct
 
+
+    @staticmethod
+    def num_blocks_in_column( blocks : dict[str,GraspObj] ):
+        xyTrgt = np.array( [ -0.200, -0.300,] )
+        zUnit  = env_var("_BLOCK_SCALE")
+        zHalf  = zUnit / 2.0
+        blcOK  = 0
+        factor = 0.80
+        for i in range(3):
+            found = False
+            for val in blocks.values():
+                posn_j = extract_position( val )
+                xyOK   = np.linalg.norm( xyTrgt - posn_j[:2] ) <= env_var("_PLACE_XY_ACCEPT")
+                zOK    = np.abs( (zHalf + i * zUnit) - posn_j[2] ) <= zHalf * factor
+                if xyOK and zOK:
+                    found = True
+                    break
+            if found:
+                blcOK += 1
+        return blcOK
+
         
     def quantify_steps_lost_on_action_failure( self ):
         """ Get metric for the selection """
+        lostDque = deque()
         ## For each example in the selection ##
         for datum in self.slct:
+            if datum.nextState is None:
+                continue
             ## If an action failure occurred this step ##
             if datum.action == ActionStatus.FAILURE:
                 ## Determine how many steps were lost ##
-                pass # FIXME: START HERE
-
-
-
-
+                nBefor = Example_Reader.num_blocks_in_column( datum.trueSymbols )
+                nAfter = Example_Reader.num_blocks_in_column( datum.nextState.trueSymbols )
+                lostDque.append( nBefor - nAfter )
+        return list( lostDque )
+                
 
 
 
 ########## MAIN ####################################################################################
-_AGGREGATE = False
+_EXAMPL_PATH = f"{Loc._MISC_DIR}AllExamples.pkl" 
+_AGGREGATE   = False
+_GET_METRICS = True
 
 def get_confusion( matches ):
     rtnLst = deque()
@@ -89,11 +116,51 @@ def get_confusion( matches ):
             rtnLst.append( match )
     return list( rtnLst )
 
+
+if _GET_METRICS:
+    try:
+
+        exReader = Example_Reader( _EXAMPL_PATH )
+
+        ### For every block set ###
+        for iii, paths in enumerate( Loc.datasets ):
+
+            setNam   = Loc.dataLabels[iii]
+            classes  = Loc.blcNam[setNam]
+            eClasses = Loc.eBlcNam[setNam]
+
+            ### For every scenario ###
+            for ii, test in enumerate( Loc.tests ):
+
+                print_header( f"TEST, {setNam}: {test}", preWidth = 10, totWidth = 100, capitalize = True )
+                
+                exReader.select( setNam, test )
+                lostStep = exReader.quantify_steps_lost_on_action_failure()
+                keys     = set( lostStep )
+                N        = len( lostStep )
+                dist     = dict()
+
+                for k in keys:
+                    dist[k] = 0
+
+                for loss_i in lostStep:
+                    dist[ loss_i ] += 1
+
+                for k in keys:
+                    dist[k] /= N
+
+                pprint( dist )
+                print()
+
+
+    except KeyboardInterrupt:
+        print( "\nPROCESSING ENDED BY USER\n\n" )
+
+
 if _AGGREGATE:
     try:
 
         examples : Deque[Example] = deque()
-        _EXAMPL_PATH = f"{Loc._MISC_DIR}AllExamples.pkl" 
 
         ### For every block set ###
         for iii, paths in enumerate( Loc.datasets ):
