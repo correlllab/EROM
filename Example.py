@@ -1,7 +1,11 @@
 from __future__ import annotations
 from enum import Enum
-
 from dataclasses import dataclass, field
+from typing import Deque
+from collections import deque
+
+from aspire.symbols import GraspObj, ObjPose, extract_position, euclidean_distance_between_symbols
+
 
 class PlanStatus( Enum ):
     INVALID     = 0
@@ -21,6 +25,12 @@ class ActionStatus( Enum ):
 @dataclass
 class Example:
     
+    ## State ##
+    sensBeliefs : Deque[GraspObj]    = field( default_factory = deque )
+    trueReadings: Deque[GraspObj]    = field( default_factory = deque )
+    sensSymbols : Deque[GraspObj]    = field( default_factory = deque )
+    trueSymbols : dict[str,GraspObj] = field( default_factory = dict  )
+
     ## Address ##
     dataset: str = ""
     test   : str = ""
