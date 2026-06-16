@@ -21,12 +21,14 @@ from draw_beliefs import set_render_env
 from magpie_control.realsense_wrapper import MPCD
 from Reader import EROM_Reader
 
-from homog_utils import homog_xform, diff_mag
+from analysis_Utils import DiceContin_PDF, DiceBinary_CDF
+
 
 ##### Environment && Constants ############################################
 set_blocks_env()
 set_experiment_env()
 set_render_env()
+
 
 ########## CONSTANTS ###############################################################################
 
@@ -263,180 +265,6 @@ class ConfMatx:
         return self.matx.copy()
     
 
-########## PROBABILITY CLASSES #####################################################################
-
-##### Continuous Outcome PDF ##############################################
-
-class DiceContin_PDF:
-    """ Turn a histogram into a probability curve """
-    def __init__( self, Nbins = _DEFAULT_DIV ):
-        """ Setup to build histo """
-        self.Ndat: int         = 0
-        self.Nbin: int         = Nbins
-        self.wdth: float       = 0.0
-        self.data: list[float] = deque()
-        self.bnds: list[float] = [0.0 for _ in range( self.Nbin )]
-        self.bins: list[int]   = [0   for _ in range( self.Nbin )]
-        self.curv: list[float] = [0.0 for _ in range( self.Nbin )]
-        self.prob: list[float] = [0.0 for _ in range( self.Nbin )]
-
-
-    def set_data( self, data : list[float] ):
-        """ Store, Sort, and Count """
-        self.data = list( data )
-        self.data.sort()
-        self.Ndat = len( self.data )
-        vMin = self.data[0]
-        vMax = self.data[-1]
-        span = vMax - vMin
-        self.wdth = span / self.Nbin
-        # wdth = span / (self.Nbin-1)
-        for i in range( 1, self.Nbin+1 ):
-            self.bnds[i-1] = vMin + i * self.wdth
-        # for i in range( self.Nbin+1 ):
-        #     self.bnds[i] = vMin + i * wdth            
-        j = 0
-        for datum in self.data:
-            while self.bnds[j] < datum:
-                j += 1
-            if datum <= self.bnds[j]:
-                self.bins[j] += 1
-            else:
-                raise ValueError( "`set_data()`: THIS SHOULD NOT HAVE HAPPENED!" )
-        self.curv = (np.array( self.bins ) / self.Ndat).tolist()
-        total = 0.0
-        for i, prob_i in enumerate( self.curv ):
-            total += prob_i
-            self.prob[i] = total
-
-
-    @staticmethod
-    def chop_tail( binPopLst : list[int] ) -> list[int]:
-        """ Return a version of `binPopLst` without the long tail """
-        binPopLst = deque( binPopLst )
-        # binPopLst.pop()
-        limit = 2
-        Nzero = 0
-        while (binPopLst[-1] == 0) or (Nzero < limit):
-            if binPopLst[-1] > 0:
-                Nzero += 1
-            binPopLst.pop()
-        return list( binPopLst )
-    
-
-    @staticmethod
-    def chop_sigmas( binPopLst : list[int], sigmas = 3.0 ) -> list[int]:
-        """ Return a version of `binPopLst` without the most distant outliers """
-        rtnL = deque()
-        # mean = np.mean( binPopLst )
-        mean = np.median( binPopLst )
-        stdv = np.std(  binPopLst )
-        lo   = max( mean - sigmas * stdv, 0.0 )
-        hi   = mean + sigmas * stdv
-        for val in binPopLst:
-            if lo <  val <= hi:
-                rtnL.append( val )
-        return list( rtnL )
-
-
-
-    def fit_lognorm_to_data( self ):
-        shape, loc, scale = lognorm.fit( self.chop_sigmas( self.data, 3.0 ), floc = 0 )
-        print( f"Log-Normal Fit - Shape: {shape}, Location: {loc}, Scale: {scale}" )
-
-
-    def fit_poisson_to_curv( self ):
-
-        def fit_function( k, lamb ):
-            '''poisson function, parameter lamb is the fit parameter'''
-            return poisson.pmf( k, lamb )
-        
-        entries     = self.chop_tail( self.bins )
-        bin_centers = [float(self.bnds[i]-self.wdth/2.0) for i in range( len( entries ) )]
-        # bin_centers = self.bnds
-        # print( bin_centers )
-        print( entries )
-
-        # fit with curve_fit
-        parameters, cov_matrix = curve_fit( fit_function, bin_centers, entries )
-        
-        print( "##### Poisson Fit #####" )
-        print( parameters )
-        print( cov_matrix )
-
-
-
-    def sample_value( self ):
-        """ Sample from a discrete distribution """
-        uniform = random()
-        for i, bound in enumerate( self.prob ):
-            if uniform <= bound:
-                # return self.bnds[max(i-1,0)]
-                return self.bnds[i] - self.wdth/2.0
-        return self.bnds[-1] - self.wdth/2.0
-        
-
-    def save( self, path : str ):
-        """ Save enough data to restore the dice roll """
-        with open( path, 'w' ) as f:
-            json.dump( {
-                "bins"  : self.bins,
-                "bounds": self.bnds,
-                "prob"  : self.prob,
-            }, f, indent = 2 )
-
-
-    @staticmethod
-    def load( path : str ):
-        """ Load enough data to restore the dice roll """
-        rtnObj = DiceContin_PDF()
-        with open( path, 'r' ) as f:
-            data = json.load(f)
-            rtnObj.bins = data["bins"  ]
-            rtnObj.bnds = data["bounds"]
-            rtnObj.prob = data["prob"  ]
-        return rtnObj
-
-
-##### Binary Outcome CDF ##################################################
-
-class DiceBinary_CDF:
-    """ Use a CDF to roll for a binary outcome """
-    def __init__( self, Xval : list[float], Yprb : list[float] ):
-        """ Store CDF """
-        self.valu = list( Xval )
-        self.prob = list( Yprb )
-
-
-    def sample_outcome( self, val : float ):
-        """ Sample from a discrete probability at the given `val`ue """
-        # ASSUMPTION: VALUES ARE CLOSE ENOUGH TOGETHER TO FAITHFULLY REPRESENT THE OUTCOME PROBABILITY 
-        pPos = 0.0
-        for i, v in self.valu:
-            pPos = self.prob[i]
-            if v >= val:
-                break
-        return (random <= pPos)
-    
-
-    def save( self, path : str ):
-        """ Save enough data to restore the dice roll """
-        with open( path, 'w' ) as f:
-            json.dump( {
-                "value": self.valu,
-                "prob" : self.prob,
-            }, f, indent = 2 )
-
-
-    @staticmethod
-    def load( path : str ):
-        """ Load enough data to restore the dice roll """
-        rtnObj = DiceBinary_CDF()
-        with open( path, 'r' ) as f:
-            data = json.load(f)
-            rtnObj.valu = data["value"]
-            rtnObj.prob = data["prob" ]
-        return rtnObj
 
 
 """

@@ -29,8 +29,8 @@ set_render_env()
 _CONFUSION = False
 _SAVE_THIN = False
 _SAVE_DATA = False
-_PLOT_DATA = False
-_SPLT_JSON = True
+_PLOT_DATA = True
+_SPLT_JSON = False
 
 
 # _DATA_DRIVE = "DATA_TANK"
