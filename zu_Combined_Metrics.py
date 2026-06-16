@@ -9,6 +9,9 @@ from enum import Enum
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.optimize import curve_fit
+from scipy.special import factorial
+from scipy.stats import poisson, lognorm
 
 from aspire.symbols import GraspObj, ObjPose, extract_position, euclidean_distance_between_symbols
 from aspire.BlocksTask import set_blocks_env
@@ -307,6 +310,62 @@ class DiceContin_PDF:
             self.prob[i] = total
 
 
+    @staticmethod
+    def chop_tail( binPopLst : list[int] ) -> list[int]:
+        """ Return a version of `binPopLst` without the long tail """
+        binPopLst = deque( binPopLst )
+        # binPopLst.pop()
+        limit = 2
+        Nzero = 0
+        while (binPopLst[-1] == 0) or (Nzero < limit):
+            if binPopLst[-1] > 0:
+                Nzero += 1
+            binPopLst.pop()
+        return list( binPopLst )
+    
+
+    @staticmethod
+    def chop_sigmas( binPopLst : list[int], sigmas = 3.0 ) -> list[int]:
+        """ Return a version of `binPopLst` without the most distant outliers """
+        rtnL = deque()
+        # mean = np.mean( binPopLst )
+        mean = np.median( binPopLst )
+        stdv = np.std(  binPopLst )
+        lo   = max( mean - sigmas * stdv, 0.0 )
+        hi   = mean + sigmas * stdv
+        for val in binPopLst:
+            if lo <  val <= hi:
+                rtnL.append( val )
+        return list( rtnL )
+
+
+
+    def fit_lognorm_to_data( self ):
+        shape, loc, scale = lognorm.fit( self.chop_sigmas( self.data, 3.0 ), floc = 0 )
+        print( f"Log-Normal Fit - Shape: {shape}, Location: {loc}, Scale: {scale}" )
+
+
+    def fit_poisson_to_curv( self ):
+
+        def fit_function( k, lamb ):
+            '''poisson function, parameter lamb is the fit parameter'''
+            return poisson.pmf( k, lamb )
+        
+        entries     = self.chop_tail( self.bins )
+        bin_centers = [float(self.bnds[i]-self.wdth/2.0) for i in range( len( entries ) )]
+        # bin_centers = self.bnds
+        # print( bin_centers )
+        print( entries )
+
+        # fit with curve_fit
+        parameters, cov_matrix = curve_fit( fit_function, bin_centers, entries )
+        
+        print( "##### Poisson Fit #####" )
+        print( parameters )
+        print( cov_matrix )
+
+
+
     def sample_value( self ):
         """ Sample from a discrete distribution """
         uniform = random()
@@ -379,6 +438,7 @@ class DiceBinary_CDF:
             rtnObj.prob = data["prob" ]
         return rtnObj
 
+
 """
 ########## TEST, RGB: KC-KP, N_EP: 20 ###########################################################
 P(Plan)    = 0.75
@@ -392,11 +452,12 @@ POS ERR, RGB:KC-KP
 Mean: ___ 0.007634486667450442
 Median: _ 0.0067866851143173704
 Std.Dev.: 0.005232707102501245
+Log-Normal Fit - Shape: 0.3328237189743045, Location: 0, Scale: 0.006732495552602966
 
 POS ERR, Simulated, RGB:KC-KP
-Mean: ___ 0.007624527099193271
-Median: _ 0.00697931209674769
-Std.Dev.: 0.0051998963854994655
+Mean: ___ 0.007621337477333922
+Median: _ 0.006515029438909591
+Std.Dev.: 0.005190748716177473
 
 
 
@@ -418,11 +479,12 @@ POS ERR, RGB:SC-KP
 Mean: ___ 0.008045120557593075
 Median: _ 0.006633071491109657
 Std.Dev.: 0.008776425214217252
+Log-Normal Fit - Shape: 0.4110499978073131, Location: 0, Scale: 0.006529559805858347
 
 POS ERR, Simulated, RGB:SC-KP
-Mean: ___ 0.008043437303594227
+Mean: ___ 0.008039988740516377
 Median: _ 0.006794683239167132
-Std.Dev.: 0.008709955770828686
+Std.Dev.: 0.00872126730821331
 
 
 
@@ -447,11 +509,12 @@ POS ERR, RGB:KC-SP
 Mean: ___ 0.008981807078503047
 Median: _ 0.007251370777023036
 Std.Dev.: 0.010867777864416558
+Log-Normal Fit - Shape: 0.509699407852857, Location: 0, Scale: 0.00684499430538845
 
 POS ERR, Simulated, RGB:KC-SP
-Mean: ___ 0.008984218852887315
+Mean: ___ 0.008986072361462583
 Median: _ 0.007493969980881261
-Std.Dev.: 0.010885049447934165
+Std.Dev.: 0.010894788308353673
 
 
 
@@ -473,11 +536,12 @@ POS ERR, RGB:SC-SP
 Mean: ___ 0.007336683198845072
 Median: _ 0.006805519897754429
 Std.Dev.: 0.004801049504029809
+Log-Normal Fit - Shape: 0.4368183980151973, Location: 0, Scale: 0.006472601041195895
 
 POS ERR, Simulated, RGB:SC-SP
-Mean: ___ 0.007329260331740837
+Mean: ___ 0.007326292964594586
 Median: _ 0.006954766749022283
-Std.Dev.: 0.00477703148917845
+Std.Dev.: 0.004794691643030675
 
 
 
@@ -493,11 +557,12 @@ POS ERR, RBW:KC-KP
 Mean: ___ 0.00799256563731155
 Median: _ 0.007270492815854862
 Std.Dev.: 0.006397293696278098
+Log-Normal Fit - Shape: 0.3325287013874546, Location: 0, Scale: 0.00698380733354094
 
 POS ERR, Simulated, RBW:KC-KP
-Mean: ___ 0.007981699524404473
+Mean: ___ 0.00798397401195767
 Median: _ 0.007482474242611344
-Std.Dev.: 0.006370573088891683
+Std.Dev.: 0.0063783635277502755
 
 
 
@@ -516,11 +581,12 @@ POS ERR, RBW:SC-KP
 Mean: ___ 0.00681935023923729
 Median: _ 0.0068557182386246715
 Std.Dev.: 0.0024817344186230388
+Log-Normal Fit - Shape: 0.359772179839813, Location: 0, Scale: 0.006597263556057573
 
 POS ERR, Simulated, RBW:SC-KP
-Mean: ___ 0.006822291803190018
-Median: _ 0.006942624083597813
-Std.Dev.: 0.0024758556334885775
+Mean: ___ 0.006815313249237454
+Median: _ 0.006799477195276209
+Std.Dev.: 0.0024782892388474057
 
 
 
@@ -542,11 +608,12 @@ POS ERR, RBW:KC-SP
 Mean: ___ 0.006187498432133404
 Median: _ 0.006343940866243577
 Std.Dev.: 0.0023940557029869217
+Log-Normal Fit - Shape: 0.429565789953105, Location: 0, Scale: 0.005964496613862417
 
 POS ERR, Simulated, RBW:KC-SP
-Mean: ___ 0.00618976061282768
+Mean: ___ 0.006188034037267077
 Median: _ 0.006326835102204234
-Std.Dev.: 0.0023934092364493184
+Std.Dev.: 0.002393088170384638
 
 
 
@@ -565,11 +632,12 @@ POS ERR, RBW:SC-SP
 Mean: ___ 0.007175135036980465
 Median: _ 0.007461389319378849
 Std.Dev.: 0.002491628136670465
+Log-Normal Fit - Shape: 0.4262289767155447, Location: 0, Scale: 0.006856369497348779
 
 POS ERR, Simulated, RBW:SC-SP
-Mean: ___ 0.007179591380144605
+Mean: ___ 0.007177594934024564
 Median: _ 0.0075202090173931814
-Std.Dev.: 0.002485561446009058
+Std.Dev.: 0.002483770662137547
 
 POS ERR, Actual
 Mean: ___ 0.0075287555387563675
@@ -577,9 +645,10 @@ Median: _ 0.006884854778681009
 Std.Dev.: 0.0064114227005904936
 
 POS ERR, Simulated
-Mean: ___ 0.007533643718854229
+Mean: ___ 0.0075483819094679236
 Median: _ 0.006794683239167132
-Std.Dev.: 0.0064107613804246484
+Std.Dev.: 0.006483282207430517
+
 
 
 """
@@ -592,11 +661,14 @@ _EP_EVENTS = True
 _CONFUSION = False
 _THINIFY   = False
 
+_SHOW_PLOT = False
+
 _MISC_DIR = "/media/james/STARGAZER/DATA_TANK/misc_data/" 
 _SIM_INFO_PATH = f"{_MISC_DIR}SimInfo.pkl" 
 
 _JSON_PATH = {
-    "Overall Posn Err" : "json/OverallPosnErr.json"
+    "Overall Posn Err" : "json/OverallPosnErr.json",
+    "Failure-v-Err_CDF": "json/FailVErr_CDF.json",
 }
 
 
@@ -697,15 +769,20 @@ if _EP_EVENTS:
                 Xe_t = [item[0] for item in errAct]
                 Ya_t = [item[1] for item in errAct]
 
-                make_histo( Xe_t, f"POS ERR, {setNam}:{test}" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+                if _SHOW_PLOT:
+                    make_histo( Xe_t, f"POS ERR, {setNam}:{test}" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
                 roll = DiceContin_PDF( Nbins = _DEFAULT_DIV )
                 roll.set_data( Xe_t )
+
+                roll.fit_lognorm_to_data()
+                
                 roll.save( f"json/PsnErr.{setNam}.{test}.json" )
 
                 Xr = deque()
                 for _ in range( 1000000 ):
                     Xr.append( roll.sample_value() )
-                make_histo( Xr, f"POS ERR, Simulated, {setNam}:{test}" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+                if _SHOW_PLOT:
+                    make_histo( Xr, f"POS ERR, Simulated, {setNam}:{test}" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
                 
                 N_fail = 0
                 for ea in errAct:
@@ -735,18 +812,24 @@ if _EP_EVENTS:
         Ya = [item[1] for item in failDens]
         Yp = [item[1] for item in pErrDens]
 
-        xy_plot_filled_under( Xe, Ya, plotTitle = f"ALL TESTS", xLabel = "Err", yLabel = "Cumul. Prob." )
+        if _SHOW_PLOT:
+            xy_plot_filled_under( Xe, Ya, plotTitle = f"ALL TESTS", xLabel = "Err", yLabel = "Cumul. Prob." )
 
         Nx = len( Xe )
-        make_histo( Xe, f"POS ERR, Actual" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+        if _SHOW_PLOT:
+            make_histo( Xe, f"POS ERR, Actual" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
         roll = DiceContin_PDF( Nbins = _DEFAULT_DIV )
         roll.set_data( Xe )
         roll.save( _JSON_PATH["Overall Posn Err"] )
 
+        cdf = DiceBinary_CDF( Xe, Ya )
+        cdf.save( _JSON_PATH["Failure-v-Err_CDF"] )
+
         Xr = deque()
         for _ in range( 1000000 ):
             Xr.append( roll.sample_value() )
-        make_histo( Xr, f"POS ERR, Simulated" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
+        if _SHOW_PLOT:
+            make_histo( Xr, f"POS ERR, Simulated" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
         
         
 
