@@ -15,17 +15,15 @@ confMatrices = {
                       [0.045388, 0.75988 , 0.0087848, 0.18594,],
                       [0.027451, 0.015686, 0.72745  , 0.22941,],
                       [0.059389, 0.034934, 0.10175  , 0.80393,],] ),
-                      
+
 }
 
 names = {
     "RGB": {
-        "labels" : ["RED", "GRN", "BLU",],
-        "classes": ["RED", "GRN", "BLU", "NOTHING",],
+        
     },
     "RBW": {
-        "labels" : ["RED", "BLK", "WHT",],
-        "classes": ["RED", "BLK", "WHT", "NOTHING",],
+        
     },
 }
 
