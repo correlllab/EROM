@@ -335,17 +335,71 @@ class EROM_Reader:
     @staticmethod
     def search_time_from_thin_step( step_i ):
         """ How long did the robot spend searching? """
+        bgn = 0.0
+        end = 0.0
+        for datum in step_i:
+            dMsg = datum['msg']
+            dT   = datum['t']
+            if "BGN: Phase 1" in dMsg:
+                bgn = dT
+            elif "END: Phase 1" in dMsg:
+                end = dT
+                break
+        if end > bgn:
+            return end - bgn
+        return None
+    
+
+    @staticmethod
+    def action_time_from_thin_step( step_i ):
+        """ How long did the robot spend searching? """
+        bgn = 0.0
+        end = 0.0
+        for datum in step_i:
+            dMsg = datum['msg']
+            dT   = datum['t']
+            if "BGN: Phase 4" in dMsg:
+                bgn = dT
+            elif "END: Phase 4" in dMsg:
+                end = dT
+                break
+        if end > bgn:
+            return end - bgn
+        return None
 
 
     def aggregate_search_times( self ):
         """ Just print them all for TS + dev """
         _, assocSteps = self.get_states_and_steps()
+        tSearch = deque()
 
         for i in range( len( assocSteps ) ):
-            fState_i = assocSteps[i]
+            fStep_i = assocSteps[i]
 
-            with open( fState_i, 'rb' ) as f:
+            with open( fStep_i, 'rb' ) as f:
                 step_i = pickle.load(f)
+
+            t_i = EROM_Reader.search_time_from_thin_step( step_i )
+            if t_i is not None:
+                tSearch.append( t_i )
+        return list( tSearch )
+    
+
+    def aggregate_action_times( self ):
+        """ Just print them all for TS + dev """
+        _, assocSteps = self.get_states_and_steps()
+        tAction = deque()
+
+        for i in range( len( assocSteps ) ):
+            fStep_i = assocSteps[i]
+
+            with open( fStep_i, 'rb' ) as f:
+                step_i = pickle.load(f)
+
+            t_i = EROM_Reader.action_time_from_thin_step( step_i )
+            if t_i is not None:
+                tAction.append( t_i )
+        return list( tAction )
 
 
     @staticmethod
@@ -434,6 +488,7 @@ class EROM_Reader:
     
     def planning_failure_vs_hallucination( self ):
         """ What influence do hallucinated blocks have on planning failure? """
+        _VERBOSE = False
         assocStates, assocSteps = self.get_states_and_steps()
 
         """
@@ -482,30 +537,36 @@ class EROM_Reader:
             rtnDct["resPlan"].append( EROM_Reader.planning_result_from_thin_step( step_i, state_i ) )
 
             if len( state_i["sensSymbols"] ) != 3:
-                print()
+                if _VERBOSE:
+                    print()
                 if len( state_i["sensSymbols"] ) > 3:
-                    print( "HALLUCINATION" )
+                    if _VERBOSE:
+                        print( "HALLUCINATION" )
                 elif len( state_i["sensSymbols"] ) < 3:
-                    print( "MISSING BLOCK" )
+                    if _VERBOSE:
+                        print( "MISSING BLOCK" )
                     if EROM_Reader.planning_result_from_thin_step( step_i, state_i ):
                         totalBad += 1
+                
+                if _VERBOSE:
+                    print( "sensSymbols" )
+                    for object_j in state_i["sensSymbols"]:
+                        print( object_j )
 
-                print( "sensSymbols" )
-                for object_j in state_i["sensSymbols"]:
-                    print( object_j )
+                    print( "Symbols" )
+                    for name, object_j in state_i["trueSymbols"].items():
+                        print( name, object_j )
 
-                print( "Symbols" )
-                for name, object_j in state_i["trueSymbols"].items():
-                    print( name, object_j )
-
-                print( "plan:", EROM_Reader.planning_result_from_thin_step( step_i, state_i, prntPlan=True ) )
-                print( "actn:", EROM_Reader.action_result_from_thin_step( step_i )   )
+                    print( "plan:", EROM_Reader.planning_result_from_thin_step( step_i, state_i, prntPlan=_VERBOSE ) )
+                    print( "actn:", EROM_Reader.action_result_from_thin_step( step_i )   )
             else:
-                print( "\nSymbols" )
-                for name, object_j in state_i["trueSymbols"].items():
-                    print( name, object_j )
+                if _VERBOSE:
+                    print( "\nSymbols" )
+                    for name, object_j in state_i["trueSymbols"].items():
+                        print( name, object_j )
             
-        print( f"\n\n{totalBad}/{totalSteps} BAD PLANNING ATTEMPTS\n\n" )
+        if _VERBOSE:
+            print( f"\n\n{totalBad}/{totalSteps} BAD PLANNING ATTEMPTS\n\n" )
         return rtnDct
     
 
