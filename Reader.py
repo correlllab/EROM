@@ -312,6 +312,40 @@ class EROM_Reader:
                         # pprint( dtmDat )
                         return parse_action( dtmDat )
         return None
+    
+
+    def print_all_step_msgs( self ):
+        """ Just print them all for TS + dev """
+        _, assocSteps = self.get_states_and_steps()
+
+        for i in range( len( assocSteps ) ):
+            fState_i = assocSteps[i]
+
+            with open( fState_i, 'rb' ) as f:
+                step_i = pickle.load(f)
+
+            print('\n')
+            for datum in step_i:
+                print( datum['msg'] )
+            print('\n')
+
+            break # But not ACTUALLY all of them
+
+            
+    @staticmethod
+    def search_time_from_thin_step( step_i ):
+        """ How long did the robot spend searching? """
+
+
+    def aggregate_search_times( self ):
+        """ Just print them all for TS + dev """
+        _, assocSteps = self.get_states_and_steps()
+
+        for i in range( len( assocSteps ) ):
+            fState_i = assocSteps[i]
+
+            with open( fState_i, 'rb' ) as f:
+                step_i = pickle.load(f)
 
 
     @staticmethod
@@ -445,7 +479,7 @@ class EROM_Reader:
             else:
                 rtnDct["N_missng"].append( 0 )
 
-            rtnDct["resPlan"].append( EROM_Reader.planning_result_from_thin_step( step_i ) )
+            rtnDct["resPlan"].append( EROM_Reader.planning_result_from_thin_step( step_i, state_i ) )
 
             if len( state_i["sensSymbols"] ) != 3:
                 print()
@@ -453,7 +487,7 @@ class EROM_Reader:
                     print( "HALLUCINATION" )
                 elif len( state_i["sensSymbols"] ) < 3:
                     print( "MISSING BLOCK" )
-                    if EROM_Reader.planning_result_from_thin_step( step_i ):
+                    if EROM_Reader.planning_result_from_thin_step( step_i, state_i ):
                         totalBad += 1
 
                 print( "sensSymbols" )
@@ -461,14 +495,14 @@ class EROM_Reader:
                     print( object_j )
 
                 print( "Symbols" )
-                for name, object_j in state_i["symbols"].items():
+                for name, object_j in state_i["trueSymbols"].items():
                     print( name, object_j )
 
-                print( "plan:", EROM_Reader.planning_result_from_thin_step( step_i, prntPlan=True ) )
+                print( "plan:", EROM_Reader.planning_result_from_thin_step( step_i, state_i, prntPlan=True ) )
                 print( "actn:", EROM_Reader.action_result_from_thin_step( step_i )   )
             else:
                 print( "\nSymbols" )
-                for name, object_j in state_i["symbols"].items():
+                for name, object_j in state_i["trueSymbols"].items():
                     print( name, object_j )
             
         print( f"\n\n{totalBad}/{totalSteps} BAD PLANNING ATTEMPTS\n\n" )
@@ -539,10 +573,10 @@ class EROM_Reader:
         "depth"  : dict(), #- Lookup of depth images used
         "clouds" : deque(), # Collection of clouds obtained from the masked images
 
-        "objects": deque(), # Collection of readings obtained from the masked images
+        "sensBeliefs": deque(), # Collection of readings obtained from the masked images
         
         "sensSymbols" : list(), # Collection of symbols obtained from the robot
-        "symbols": dict(), #- Lookup of objects obtained from the readings
+        "trueSymbols": dict(), #- Lookup of objects obtained from the true masks
         """
 
         rtnDct = {
@@ -574,7 +608,8 @@ class EROM_Reader:
             if len( state_i["sensSymbols"] ):
                 N = 0
                 d = 0.0
-                for lbl, obj_j in state_i["sensSymbols"].items():
+                for obj_j in state_i["sensSymbols"]:
+                    lbl = obj_j.label
                     if lbl in truthDict:
                         N += 1
                         d += diff_mag(
