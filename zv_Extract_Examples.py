@@ -87,7 +87,7 @@ class Example_Reader:
 
         
     def quantify_steps_lost_on_action_failure( self ):
-        """ Get metric for the selection """
+        """ Get action failure effect metric for the selection """
         lostDque = deque()
         ## For each example in the selection ##
         for datum in self.slct:
@@ -100,6 +100,12 @@ class Example_Reader:
                 nAfter = Example_Reader.num_blocks_in_column( datum.nextState.trueSymbols )
                 lostDque.append( nBefor - nAfter )
         return list( lostDque )
+    
+
+    # def aggregate_search_time_metric( self ):
+    #     """ Get search time metric for the selection """
+    #     timeDque = deque()
+
                 
 
 

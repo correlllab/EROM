@@ -484,8 +484,8 @@ Std.Dev.: 0.006483282207430517
 
 ########## MAIN ####################################################################################
 
-_GET_STATS = False
-_EP_EVENTS = True
+_GET_STATS = True
+_EP_EVENTS = False
 _CONFUSION = False
 _THINIFY   = False
 
@@ -780,6 +780,7 @@ if _GET_STATS:
                     resDct_i["episode"] = _i_+1
                     resDct_i.update( reader.action_failure_vs_position_variation() )
                     totRes[ setNam ][ test ].append( resDct_i )
+                    reader.print_all_step_msgs()
 
         with open( _SIM_INFO_PATH, 'wb' ) as f:
             pickle.dump( totRes, f )
