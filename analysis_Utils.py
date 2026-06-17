@@ -95,6 +95,29 @@ def make_histo( series, plotTitle, xLabel = 'Makespan', yLabel = 'Occurrences', 
     plt.show()
 
 
+def chop_sigmas( data : list[int], sigmas = 3.0, useMean : bool = True ) -> list[int]:
+    """ Return a version of `binPopLst` without the most distant outliers """
+    rtnL = deque()
+    if useMean:
+        mean = np.mean( data )
+    else:
+        mean = np.median( data )
+    stdv = np.std( data )
+    lo   = max( mean - sigmas * stdv, 0.0 )
+    hi   = mean + sigmas * stdv
+    for val in data:
+        if lo <  val <= hi:
+            rtnL.append( val )
+    return list( rtnL )
+
+
+def fit_lognorm_to_data( data : list[float], sigmaChop : float = 3.0, useMean : bool = True ) -> tuple[float,float,float]:
+    shape, loc, scale = lognorm.fit( chop_sigmas( data, sigmaChop, useMean = useMean ), floc = 0 )
+    print( f"Log-Normal Fit - Shape: {shape}, Location: {loc}, Scale: {scale}" )
+    return shape, loc, scale
+
+
+
 ########## PROBABILITY CLASSES #####################################################################
 
 ##### Continuous Outcome PDF ##############################################
@@ -156,24 +179,8 @@ class DiceContin_PDF:
         return list( binPopLst )
     
 
-    @staticmethod
-    def chop_sigmas( binPopLst : list[int], sigmas = 3.0 ) -> list[int]:
-        """ Return a version of `binPopLst` without the most distant outliers """
-        rtnL = deque()
-        # mean = np.mean( binPopLst )
-        mean = np.median( binPopLst )
-        stdv = np.std(  binPopLst )
-        lo   = max( mean - sigmas * stdv, 0.0 )
-        hi   = mean + sigmas * stdv
-        for val in binPopLst:
-            if lo <  val <= hi:
-                rtnL.append( val )
-        return list( rtnL )
-
-
-
     def fit_lognorm_to_data( self ):
-        shape, loc, scale = lognorm.fit( self.chop_sigmas( self.data, 3.0 ), floc = 0 )
+        shape, loc, scale = lognorm.fit( chop_sigmas( self.data, 3.0, useMean = False ), floc = 0 )
         print( f"Log-Normal Fit - Shape: {shape}, Location: {loc}, Scale: {scale}" )
 
 
