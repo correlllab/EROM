@@ -21,7 +21,7 @@ from draw_beliefs import set_render_env
 from magpie_control.realsense_wrapper import MPCD
 from Reader import EROM_Reader
 
-from analysis_Utils import DiceContin_PDF, DiceBinary_CDF
+from analysis_Utils import DiceContin_PDF, DiceBinary_CDF, fit_lognorm_to_data
 
 
 ##### Environment && Constants ############################################
@@ -267,98 +267,58 @@ class ConfMatx:
 """
 ########## TEST, RGB: KC-KP #####################################################################
 Search Times
-Mean: ____ 97.84770667254925
-Median: __ 95.49739038944244
-Std. Dev.: 28.457294974739355
-
+Log-Normal Fit - Shape: 0.28674900506295525, Location: 0, Scale: 93.90954640387551
 Action Times
-Mean: ____ 18.722207021713256
-Median: __ 18.724510550498962
-Std. Dev.: 0.9546526187570857
+Log-Normal Fit - Shape: 0.05144232369223114, Location: 0, Scale: 18.697605905294804
 
 
 ########## TEST, RGB: SC-KP #####################################################################
 Search Times
-Mean: ____ 99.55878910934348
-Median: __ 80.87493681907654
-Std. Dev.: 78.68463663037048
-
+Log-Normal Fit - Shape: 0.47115397552083116, Location: 0, Scale: 82.87279800944911
 Action Times
-Mean: ____ 13.73475697607097
-Median: __ 16.61520254611969
-Std. Dev.: 6.805881517654276
+Log-Normal Fit - Shape: 1.335055424877319, Location: 0, Scale: 8.767471695780298
 
 
 ########## TEST, RGB: KC-SP #####################################################################
 Search Times
-Mean: ____ 92.71540115483074
-Median: __ 65.1628565788269
-Std. Dev.: 90.36696745408392
-
+Log-Normal Fit - Shape: 0.44645100101638924, Location: 0, Scale: 69.1421987530391
 Action Times
-Mean: ____ 14.751321010042036
-Median: __ 18.08821702003479
-Std. Dev.: 6.943472613741698
+Log-Normal Fit - Shape: 0.7665100421157891, Location: 0, Scale: 11.93487992351694
 
 
 ########## TEST, RGB: SC-SP #####################################################################
 Search Times
-Mean: ____ 95.81063004095391
-Median: __ 75.5402045249939
-Std. Dev.: 97.967399710513
-
+Log-Normal Fit - Shape: 0.4954870103662892, Location: 0, Scale: 74.24385054021829
 Action Times
-Mean: ____ 12.385267950041325
-Median: __ 15.824206590652466
-Std. Dev.: 6.395084273369044
+Log-Normal Fit - Shape: 1.4953473899683347, Location: 0, Scale: 7.9200927749431385
 
 
 ########## TEST, RBW: KC-KP #####################################################################
 Search Times
-Mean: ____ 83.43758271270327
-Median: __ 79.7240754365921
-Std. Dev.: 32.76190600617366
-
+Log-Normal Fit - Shape: 0.23601114474261797, Location: 0, Scale: 78.44404936626925
 Action Times
-Mean: ____ 21.0063688720482
-Median: __ 21.386223554611206
-Std. Dev.: 2.605053423433944
+Log-Normal Fit - Shape: 0.07387960239384964, Location: 0, Scale: 21.202165368135727
 
 
 ########## TEST, RBW: SC-KP #####################################################################
 Search Times
-Mean: ____ 136.2377805161364
-Median: __ 96.23149704933167
-Std. Dev.: 111.13786768175457
-
+Log-Normal Fit - Shape: 0.4773927781806837, Location: 0, Scale: 107.1830264822935
 Action Times
-Mean: ____ 14.366592703863631
-Median: __ 18.133749842643738
-Std. Dev.: 7.087404968542044
+Log-Normal Fit - Shape: 0.8069032963493088, Location: 0, Scale: 11.356399726082188
 
 
 ########## TEST, RBW: KC-SP #####################################################################
 Search Times
-Mean: ____ 125.67697696028084
-Median: __ 95.2853752374649
-Std. Dev.: 100.50350102105392
-
+Log-Normal Fit - Shape: 0.4620953772377743, Location: 0, Scale: 101.7941468753413
 Action Times
-Mean: ____ 14.540475406429984
-Median: __ 18.60429096221924
-Std. Dev.: 7.196430969503812
+Log-Normal Fit - Shape: 0.7891396574154087, Location: 0, Scale: 11.567504797464126
 
 
 ########## TEST, RBW: SC-SP #####################################################################
 Search Times
-Mean: ____ 134.2123550243916
-Median: __ 95.12833392620087
-Std. Dev.: 115.52686461171622
-
+Log-Normal Fit - Shape: 0.5012157834032029, Location: 0, Scale: 107.11724660211397
 Action Times
-Mean: ____ 13.664175781285818
-Median: __ 17.63955330848694
-Std. Dev.: 7.120744390102755
+Log-Normal Fit - Shape: 0.800120382970747, Location: 0, Scale: 10.739329853228101
 
 """
 
@@ -894,9 +854,10 @@ if _GET_STATS:
                 stSrch  = np.std( tSearch ) 
 
                 print( "Search Times" )
-                print( f"Mean: ____ {muSrch}" )
-                print( f"Median: __ {mdSrch}" )
-                print( f"Std. Dev.: {stSrch}\n" )
+                fit_lognorm_to_data( tSearch )
+                # print( f"Mean: ____ {muSrch}" )
+                # print( f"Median: __ {mdSrch}" )
+                # print( f"Std. Dev.: {stSrch}\n" )
 
                 tAction = list( tAction )
                 muActn  = np.mean( tAction )
@@ -904,9 +865,10 @@ if _GET_STATS:
                 stActn  = np.std( tAction ) 
 
                 print( "Action Times" )
-                print( f"Mean: ____ {muActn}" )
-                print( f"Median: __ {mdActn}" )
-                print( f"Std. Dev.: {stActn}\n" )
+                fit_lognorm_to_data( tAction )
+                # print( f"Mean: ____ {muActn}" )
+                # print( f"Median: __ {mdActn}" )
+                # print( f"Std. Dev.: {stActn}\n" )
 
 
         with open( _SIM_INFO_PATH, 'wb' ) as f:
