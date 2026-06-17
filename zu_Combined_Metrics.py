@@ -264,7 +264,103 @@ class ConfMatx:
             self.normalize()
         return self.matx.copy()
     
+"""
+########## TEST, RGB: KC-KP #####################################################################
+Search Times
+Mean: ____ 97.84770667254925
+Median: __ 95.49739038944244
+Std. Dev.: 28.457294974739355
 
+Action Times
+Mean: ____ 18.722207021713256
+Median: __ 18.724510550498962
+Std. Dev.: 0.9546526187570857
+
+
+########## TEST, RGB: SC-KP #####################################################################
+Search Times
+Mean: ____ 99.55878910934348
+Median: __ 80.87493681907654
+Std. Dev.: 78.68463663037048
+
+Action Times
+Mean: ____ 13.73475697607097
+Median: __ 16.61520254611969
+Std. Dev.: 6.805881517654276
+
+
+########## TEST, RGB: KC-SP #####################################################################
+Search Times
+Mean: ____ 92.71540115483074
+Median: __ 65.1628565788269
+Std. Dev.: 90.36696745408392
+
+Action Times
+Mean: ____ 14.751321010042036
+Median: __ 18.08821702003479
+Std. Dev.: 6.943472613741698
+
+
+########## TEST, RGB: SC-SP #####################################################################
+Search Times
+Mean: ____ 95.81063004095391
+Median: __ 75.5402045249939
+Std. Dev.: 97.967399710513
+
+Action Times
+Mean: ____ 12.385267950041325
+Median: __ 15.824206590652466
+Std. Dev.: 6.395084273369044
+
+
+########## TEST, RBW: KC-KP #####################################################################
+Search Times
+Mean: ____ 83.43758271270327
+Median: __ 79.7240754365921
+Std. Dev.: 32.76190600617366
+
+Action Times
+Mean: ____ 21.0063688720482
+Median: __ 21.386223554611206
+Std. Dev.: 2.605053423433944
+
+
+########## TEST, RBW: SC-KP #####################################################################
+Search Times
+Mean: ____ 136.2377805161364
+Median: __ 96.23149704933167
+Std. Dev.: 111.13786768175457
+
+Action Times
+Mean: ____ 14.366592703863631
+Median: __ 18.133749842643738
+Std. Dev.: 7.087404968542044
+
+
+########## TEST, RBW: KC-SP #####################################################################
+Search Times
+Mean: ____ 125.67697696028084
+Median: __ 95.2853752374649
+Std. Dev.: 100.50350102105392
+
+Action Times
+Mean: ____ 14.540475406429984
+Median: __ 18.60429096221924
+Std. Dev.: 7.196430969503812
+
+
+########## TEST, RBW: SC-SP #####################################################################
+Search Times
+Mean: ____ 134.2123550243916
+Median: __ 95.12833392620087
+Std. Dev.: 115.52686461171622
+
+Action Times
+Mean: ____ 13.664175781285818
+Median: __ 17.63955330848694
+Std. Dev.: 7.120744390102755
+
+"""
 
 
 """
@@ -767,9 +863,12 @@ if _GET_STATS:
                 testRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" not in f"{item}") and ("thin" not in f"{item}".lower()))]
                 trueRecord = [os.path.join( path, item ) for item in sorted( os.listdir( path ) ) if ((".pkl" in f"{item}".lower()) and ("_OCV-State" in f"{item}")     and ("thin" not in f"{item}".lower()))]
 
+                tSearch = deque()
+                tAction = deque()
+
                 ### For every episode ###
                 for _i_, episodePath in enumerate( testRecord ):
-                    print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
+                    # print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
                     try:
                         reader = EROM_Reader( episodePath, suppressLoad = True )
                     except RuntimeError:
@@ -780,7 +879,35 @@ if _GET_STATS:
                     resDct_i["episode"] = _i_+1
                     resDct_i.update( reader.action_failure_vs_position_variation() )
                     totRes[ setNam ][ test ].append( resDct_i )
-                    reader.print_all_step_msgs()
+
+                    # reader.print_all_step_msgs()
+
+                    tSearch_i = reader.aggregate_search_times()
+                    tSearch.extend( tSearch_i )
+
+                    tAction_i = reader.aggregate_action_times()
+                    tAction.extend( tAction_i )
+                
+                tSearch = list( tSearch )
+                muSrch  = np.mean( tSearch )
+                mdSrch  = np.median( tSearch )
+                stSrch  = np.std( tSearch ) 
+
+                print( "Search Times" )
+                print( f"Mean: ____ {muSrch}" )
+                print( f"Median: __ {mdSrch}" )
+                print( f"Std. Dev.: {stSrch}\n" )
+
+                tAction = list( tAction )
+                muActn  = np.mean( tAction )
+                mdActn  = np.median( tAction )
+                stActn  = np.std( tAction ) 
+
+                print( "Action Times" )
+                print( f"Mean: ____ {muActn}" )
+                print( f"Median: __ {mdActn}" )
+                print( f"Std. Dev.: {stActn}\n" )
+
 
         with open( _SIM_INFO_PATH, 'wb' ) as f:
             pickle.dump( totRes, f )
@@ -815,7 +942,7 @@ if _THINIFY:
 
             ### For every episode ###
             for _i_, episodePath in enumerate( testRecord ):
-                print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
+                # print( f"\n{episodePath}, {int(os.path.getsize(episodePath)/1e6)}MB" )
                 try:
                     reader = EROM_Reader( episodePath, suppressLoad = False )
                 except RuntimeError:
@@ -831,7 +958,7 @@ if _THINIFY:
                 statePaths.sort( key = lambda x: dex_key( x ) )
 
                 for _j_, sPath in enumerate( statePaths ):
-                    print_header( f"STATE {_j_ + 1}, {sPath}", preWidth = 5, totWidth = 75, capitalize = False )
+                    # print_header( f"STATE {_j_ + 1}, {sPath}", preWidth = 5, totWidth = 75, capitalize = False )
 
                     reader.thinify_state_file( sPath )
 
