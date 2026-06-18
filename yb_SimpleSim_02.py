@@ -1,3 +1,5 @@
+########## INIT ####################################################################################
+
 ### Standard ### 
 import os, json
 from collections import deque
@@ -10,6 +12,7 @@ from typing import Deque
 
 ### Special ### 
 import numpy as np
+from scipy.stats import lognorm
 
 ### ASPIRE::PDDLStream ### 
 from aspire.symbols import ObjPose, GraspObj, euclidean_distance_between_symbols
@@ -22,6 +25,122 @@ from env_config import set_experiment_env
 from ya_SimClasses import SimBlock
 
 
+""" ########## DEV_PLAN ############################################################################
+[>] Perception
+    [Y] Roll Confusion
+    [Y] Roll Pose Error
+    [Y] Roll Hallucination
+    [>] Build Perceived State
+[>] Planning
+    [>] Roll Valid Plan: P( Plan | N_halluc )  
+    [ ] Solve for Plan
+[ ] Action
+    [ ] Roll Action Outcome: P( Success | Pose Error )
+        [ ] Success: Update Actual State
+        [ ] Failure: Roll tower destruction
+[ ] While NOT solved, ^^^ LOOP ^^^
+
+[ ] Iterate Datasets
+[ ] Iterate Scenarios
+
+* Issues:
+    - Seems like N_halluc would ALSO influence action success?
+
+"""
+
+########## SIMULATION CLASSES ######################################################################
+
+##### Engine ##############################################################
+_SETTINGS_PATH = "$HOME/EROM/json/sim_settings.json"
+
+class Engine:
+    """ Simulate reality in the cheapest way possible """
+    def __init__( self ):
+        """ Get ready to simulate! """
+        self.settings = dict()
+        with open( os.path.expandvars( _SETTINGS_PATH ), 'r' ) as f:
+            self.settings = json.load(f)
+        self.actualState = deque()
+        self.initPoses   = [4.0, 5.0, 6.0,]
+
+
+    def reset_blocks( self, dataset : str ):
+        """ Get ready for a new episode! """
+        self.actualState = deque()
+        for i, pose in enumerate( self.initPoses ):
+            self.actualState.append( SimBlock(
+                label = self.settings[ dataset ]["labels"][i],
+                pose  = pose
+            ) )
+    
+
+    @staticmethod
+    def roll_probs_as_odds( probs : list[float] ) -> int:
+        """ Return the index of the outcome, given a collection of ordered odds """
+        total = 0.0
+        scale = sum( probs )
+        odds  = np.zeros( (len( probs ),) )
+        for i, prob in enumerate( probs ):
+            total += prob
+            odds[i] = total
+        odds /= scale # This should have summed to 1, but Be Prepared
+        roll = random()
+        for i, odd in enumerate( odds ):
+            if roll < odd:
+                return i
+        return len( probs )-1
+
+
+    def roll_confusion( self, dataset : str, actual : str ):
+        """ What class will the robot see? """
+        confMatx = np.array( self.settings[ dataset ]["confMatx"] )
+        if actual in self.settings[ dataset ]["classes"]:
+            ndx = self.settings[ dataset ]["classes"].index( actual )
+            row = confMatx[ ndx, : ]
+            res = Engine.roll_probs_as_odds( row )
+            return self.settings[ dataset ]["classes"][ res ]
+        raise KeyError( f"{actual} is NOT a valid label for the {dataset} dataset!" )
+
+    
+    def roll_avg_pose_error( self, dataset : str, test : str ) -> float:
+        """ Roll from the (average) pose error for this `dataset`::`test` """
+        return lognorm.rvs( 
+            loc   = self.settings[ dataset ][ test ]["poseErr"]["location"] * 1.0, 
+            shape = self.settings[ dataset ][ test ]["poseErr"]["shape"], 
+            scale = self.settings[ dataset ][ test ]["poseErr"]["scale"]
+        )
+    
+
+    @staticmethod
+    def extract_int( expr : str ) -> int:
+        iStr = ""
+        for char in expr:
+            if char.isdigit():
+                iStr += char
+        return int( iStr )
+    
+
+    def roll_hallucination( self, dataset : str, test : str ) -> int:
+        """ Get the number of hallucinated blocks """
+        keys  = list( self.settings[ dataset ][ test ].keys() )
+        probs = dict()
+        for key in keys:
+            if (" Halluc)" in key) and ('|' not in key):
+                probs[ key ] = self.settings[ dataset ][ test ][ key ]
+        keys = deque()
+        odds = deque()
+        for k, v in probs.items():
+            keys.append(k)
+            odds.append(v)
+        res = Engine.roll_probs_as_odds( odds )
+        ans = keys[ res ]
+        return Engine.extract_int( ans )
+
+
+
+
+##### Planner #############################################################
+
 @dataclass
 class Action:
     """ Move `heldBlc` from `bgnPose` to `endPose` """
@@ -33,11 +152,13 @@ class Action:
 
 class SimplePlanner:
     """ Cheap Planner for Simulation """
+
+    goals = {
+        "RGB" : ["GRN", "RED", "BLU"],
+        "RBW" : ["WHT", "RED", "BLK"],
+    }
+
     def __init__( self ):
-        self.goals = {
-            "RGB" : ["GRN", "RED", "BLU"],
-            "RBW" : ["WHT", "RED", "BLK"],
-        }
         self.poses            = [1.0, 2.0, 3.0,]
         self.goal : list[str] = None
 
@@ -130,3 +251,6 @@ class SimplePlanner:
                 ) )
 
         return list( rtnPln )
+
+
+########## MAIN ####################################################################################
