@@ -6,6 +6,7 @@ from enum import Enum
 from pprint import pprint
 from copy import deepcopy
 from dataclasses import dataclass, field
+from typing import Deque
 
 ### Special ### 
 import numpy as np
@@ -42,6 +43,15 @@ class SimplePlanner:
 
 
     @staticmethod
+    def copy_state( state : list[SimBlock] ) -> list[SimBlock]:
+        """ Deep copy of `state` """
+        rtnStt = deque()
+        for block in state:
+            rtnStt.append( block.copy() )
+        return list( rtnStt )
+
+
+    @staticmethod
     def block_at_pose( state : list[SimBlock], pose : float ):
         """ Return the class of the block at the pose, Otherwise retun None """
         dMin = 6e10
@@ -53,6 +63,15 @@ class SimplePlanner:
                     dMin = d
                     lMin = block.label
         return lMin
+    
+
+    @staticmethod
+    def get_block_by_name( state : list[SimBlock], label : float ):
+        """ Fetch the named block """
+        for block in state:
+            if block.label == label:
+                return block
+        return None
     
 
     @staticmethod
@@ -68,11 +87,46 @@ class SimplePlanner:
         compare = deque()
         for target in self.poses:
             compare.append( SimplePlanner.block_at_pose( state, target ) )
+        
         ## Step 1: Check goal ##
         goalMet = True
+        blcDiff = deque()
         for i in range( len( self.goal ) ):
-            pass # FIXME: START HERE - CHECK FOR THE GOAL
-            
-        ## Step 2: Check for corrections ##
-        ## Step 3: Build remainder ##
+            if self.goal[i] != compare[i]:
+                goalMet = False
+                blcDiff.append( compare[i] )
+            else:
+                blcDiff.append( True )
+        blcDiff = list( blcDiff )
 
+        if goalMet:
+            return list()
+            
+        rtnPln : Deque[Action] = deque()
+        
+        ## Step 2: Check for corrections ##
+        wrong   = False
+        nuState = SimplePlanner.copy_state( state )
+        for i in range( len( self.goal ) ):
+            if (wrong or (blcDiff[i] != True)) and (blcDiff[i] is not None):
+                wrong = True
+                rtnPln.appendleft( Action(
+                    bgnPose = self.poses[i],
+                    endPose = SimplePlanner.random_pose(),
+                    heldBlc = blcDiff[i]
+                ) )
+                nuBlc = SimplePlanner.get_block_by_name( nuState, blcDiff[i] )
+                nuBlc.pose = rtnPln[0].endPose
+                blcDiff[i] = None
+        
+        ## Step 3: Build remainder ##
+        for i in range( len( self.goal ) ):
+            if blcDiff[i] == None:
+                nuBlc = SimplePlanner.get_block_by_name( nuState, self.goal[i] )
+                rtnPln.append( Action(
+                    bgnPose = nuBlc.pose,
+                    endPose = self.poses[i],
+                    heldBlc = self.goal[i]
+                ) )
+
+        return list( rtnPln )
