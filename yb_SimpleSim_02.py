@@ -26,19 +26,33 @@ from ya_SimClasses import SimBlock
 
 
 """ ########## DEV_PLAN ############################################################################
-[>] Perception
-    [Y] Roll Confusion
-    [Y] Roll Pose Error
-    [Y] Roll Hallucination
-    [>] Build Perceived State
-[>] Planning
-    [Y] Roll Planning Success: P( Plan | N_halluc )  
-    [>] Solve for Plan
-[ ] Action
-    [ ] Roll Action Outcome: P( Success | Pose Error )
-        [ ] Success: Update Actual State
-        [ ] Failure: Roll tower destruction
-[ ] While NOT solved, ^^^ LOOP ^^^
+[Y] Support Functions / Classes
+    [Y] Perception
+        [Y] Roll Confusion
+        [Y] Roll Pose Error
+        [Y] Roll Hallucination
+    [Y] Planning
+        [Y] Roll Planning Success: P( Plan | N_halluc )  
+        [Y] Solve for Plan
+    [Y] Action
+        [Y] Roll Action Outcome: P( Success | Pose Error )
+            [Y] Success: Update Actual State
+            [Y] Failure: Roll tower destruction
+
+[ ] Simulation Loop
+    [ ] Perception
+        [ ] Build Perceived State
+            [ ] Roll Confusion
+            [ ] Roll Pose Error
+        [ ] Roll Hallucination
+    [ ] Planning
+        [ ] Roll Planning Success: P( Plan | N_halluc )  
+        [ ] Solve for Plan
+    [ ] Action
+        [ ] Roll Action Outcome: P( Success | Pose Error )
+            [ ] Success: Update Actual State
+            [ ] Failure: Roll tower destruction
+    [ ] While NOT solved, ^^^ LOOP ^^^
 
 [ ] Iterate Datasets
 [ ] Iterate Scenarios
@@ -49,6 +63,17 @@ from ya_SimClasses import SimBlock
 """
 
 ########## SIMULATION CLASSES ######################################################################
+
+##### Action ##############################################################
+
+@dataclass
+class Action:
+    """ Move `heldBlc` from `bgnPose` to `endPose` """
+    bgnPose : float = -1.0
+    endPose : float = -1.0
+    heldBlc : str   = None
+
+
 
 ##### Engine ##############################################################
 _SETTINGS_PATH = "$HOME/EROM/json/sim_settings.json"
@@ -67,15 +92,7 @@ class Engine:
         self.init_action_cdf()
 
 
-    def reset_blocks( self, dataset : str ):
-        """ Get ready for a new episode! """
-        self.actualState = deque()
-        for i, pose in enumerate( self.initPoses ):
-            self.actualState.append( SimBlock(
-                label = self.settings[ dataset ]["labels"][i],
-                pose  = pose
-            ) )
-    
+    ##### Probabilistic Outcomes #################
 
     @staticmethod
     def roll_probs_as_odds( probs : list[float] ) -> int:
@@ -92,6 +109,18 @@ class Engine:
             if roll < odd:
                 return i
         return len( probs )-1
+    
+
+    @staticmethod
+    def roll_dict_as_odds( table : dict[str,float] ):
+        """ Roll a dictionary of odds, Return key associated with rolled event """
+        keys = deque()
+        odds = deque()
+        for k, v in table.items():
+            keys.append(k)
+            odds.append(v)
+        res = Engine.roll_probs_as_odds( odds )
+        return keys[ res ]
 
 
     def roll_confusion( self, dataset : str, actual : str ):
@@ -130,13 +159,7 @@ class Engine:
         for key in keys:
             if (" Halluc)" in key) and ('|' not in key):
                 probs[ key ] = self.settings[ dataset ][ test ][ key ]
-        keys = deque()
-        odds = deque()
-        for k, v in probs.items():
-            keys.append(k)
-            odds.append(v)
-        res = Engine.roll_probs_as_odds( odds )
-        ans = keys[ res ]
+        ans = Engine.roll_dict_as_odds( probs )
         return Engine.extract_int( ans )
     
 
@@ -170,16 +193,54 @@ class Engine:
         return not self.actionCDF.sample_outcome( avgPoseErr )
     
 
+    def roll_tower_desctruction( self, dataset : str, test : str ):
+        """ How many blocks did the tower lose on a failed action? """
+        table : dict[str,float] = self.settings[ dataset ][ test ]["actFailLostSteps"]
+        if len( table ):
+            ans = Engine.roll_dict_as_odds( table )
+            return Engine.extract_int( ans )
+        return 0
+    
+
+    ##### Deterministic Outcomes #################
+
+    def reset_blocks( self, dataset : str ):
+        """ Get ready for a new episode! """
+        self.actualState = deque()
+        for i, pose in enumerate( self.initPoses ):
+            self.actualState.append( SimBlock(
+                label = self.settings[ dataset ]["labels"][i],
+                pose  = pose
+            ) )
+
+
+    @staticmethod
+    def block_at_pose( state : list[SimBlock], pose : float ) -> SimBlock:
+        """ Return the class of the block at the pose, Otherwise retun None """
+        dMin = 6e10
+        bMin = None
+        for block in state:
+            d = abs( pose - block.pose )
+            if d <= env_var("_PLACE_XY_ACCEPT"):
+                if d < dMin:
+                    dMin = d
+                    bMin = block
+        return bMin
+
+
+    def apply_action( self, action : Action ) -> bool:
+        """ Change the true state for an action that succeeds """
+        bgnPose = action.bgnPose
+        target  = Engine.block_at_pose( self.actualState, bgnPose )
+        if target is not None:
+            endPose = action.endPose
+            target.pose = endPose
+            return True
+        return False
+    
+
 
 ##### Planner #############################################################
-
-@dataclass
-class Action:
-    """ Move `heldBlc` from `bgnPose` to `endPose` """
-    bgnPose : float = -1.0
-    endPose : float = -1.0
-    heldBlc : str   = None
-
 
 
 class SimplePlanner:
@@ -205,7 +266,7 @@ class SimplePlanner:
 
 
     @staticmethod
-    def block_at_pose( state : list[SimBlock], pose : float ):
+    def label_at_pose( state : list[SimBlock], pose : float ):
         """ Return the class of the block at the pose, Otherwise retun None """
         dMin = 6e10
         lMin = None
@@ -239,7 +300,7 @@ class SimplePlanner:
         ## Step 0: Ground the State ##
         compare = deque()
         for target in self.poses:
-            compare.append( SimplePlanner.block_at_pose( state, target ) )
+            compare.append( SimplePlanner.label_at_pose( state, target ) )
         
         ## Step 1: Check goal ##
         goalMet = True
