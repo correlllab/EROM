@@ -247,7 +247,7 @@ class DiceBinary_CDF:
         self.prob = list( Yprb )
 
 
-    def sample_outcome( self, val : float ):
+    def sample_outcome( self, val : float ) -> bool:
         """ Sample from a discrete probability at the given `val`ue """
         # ASSUMPTION: VALUES ARE CLOSE ENOUGH TOGETHER TO FAITHFULLY REPRESENT THE OUTCOME PROBABILITY 
         pPos = 0.0
@@ -334,3 +334,8 @@ class Loc:
     }
 
     plotExt = ".pdf"
+
+    _JSON_PATH = {
+        "Overall Posn Err" : "json/OverallPosnErr.json",
+        "Failure-v-Err_CDF": "json/FailVErr_CDF.json",
+    }

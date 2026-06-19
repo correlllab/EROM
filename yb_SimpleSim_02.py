@@ -21,7 +21,7 @@ from aspire.BlocksTask import set_blocks_env
 
 ### Local ### 
 from env_config import set_experiment_env
-# from env_config import KNOWN_BLOCKS
+from analysis_Utils import DiceBinary_CDF, Loc
 from ya_SimClasses import SimBlock
 
 
@@ -32,8 +32,8 @@ from ya_SimClasses import SimBlock
     [Y] Roll Hallucination
     [>] Build Perceived State
 [>] Planning
-    [>] Roll Valid Plan: P( Plan | N_halluc )  
-    [ ] Solve for Plan
+    [Y] Roll Planning Success: P( Plan | N_halluc )  
+    [>] Solve for Plan
 [ ] Action
     [ ] Roll Action Outcome: P( Success | Pose Error )
         [ ] Success: Update Actual State
@@ -53,6 +53,7 @@ from ya_SimClasses import SimBlock
 ##### Engine ##############################################################
 _SETTINGS_PATH = "$HOME/EROM/json/sim_settings.json"
 
+
 class Engine:
     """ Simulate reality in the cheapest way possible """
     def __init__( self ):
@@ -60,8 +61,10 @@ class Engine:
         self.settings = dict()
         with open( os.path.expandvars( _SETTINGS_PATH ), 'r' ) as f:
             self.settings = json.load(f)
-        self.actualState = deque()
-        self.initPoses   = [4.0, 5.0, 6.0,]
+        self.actualState: Deque[SimBlock] = deque()
+        self.initPoses  : list[float]     = [4.0, 5.0, 6.0,]
+        self.actionCDF  : DiceBinary_CDF  = None
+        self.init_action_cdf()
 
 
     def reset_blocks( self, dataset : str ):
@@ -135,8 +138,37 @@ class Engine:
         res = Engine.roll_probs_as_odds( odds )
         ans = keys[ res ]
         return Engine.extract_int( ans )
+    
+
+    def roll_plan_success( self, dataset : str, test : str, N_halluc : int ) -> bool:
+        """ Return whether a plan resulted from symbols given a number of hallucinations """
+        keys  = list( self.settings[ dataset ][ test ].keys() )
+        probs = dict()
+        for key in keys:
+            if (" Halluc)" in key) and ('|' in key):
+                probs[ key ] = self.settings[ dataset ][ test ][ key ]
+        for k, v in probs.items():
+            if Engine.extract_int(k) == N_halluc:
+                roll = random()
+                if roll <= v:
+                    return True
+                else:
+                    return False
+        raise RuntimeError( f"Did NOT find a plan probability for {N_halluc} hallucinations!" )
+    
+
+    def init_action_cdf( self, cdfPath : str = None):
+        """ Rebuild the CDF from the JSON file """
+        if cdfPath is None:
+            self.actionCDF = DiceBinary_CDF.load( Loc._JSON_PATH["Failure-v-Err_CDF"] )
+        else:
+            self.actionCDF = DiceBinary_CDF.load( cdfPath )
 
 
+    def roll_action_success( self, avgPoseErr : float ) -> bool:
+        """ Use the CDF to determine whether a failure occurred """
+        return not self.actionCDF.sample_outcome( avgPoseErr )
+    
 
 
 ##### Planner #############################################################
