@@ -39,10 +39,10 @@ from ya_SimClasses import SimBlock
             [Y] Success: Update Actual State
             [Y] Failure: Roll tower destruction
 
-[ ] Simulation Loop
-    [ ] Perception
-        [ ] Build Perceived State
-            [ ] Roll Confusion
+[>] Simulation Loop
+    [>] Perception
+        [>] Build Perceived State
+            [>] Roll Confusion
             [ ] Roll Pose Error
         [ ] Roll Hallucination
     [ ] Planning
@@ -61,6 +61,8 @@ from ya_SimClasses import SimBlock
     - Seems like N_halluc would ALSO influence action success?
 
 """
+
+
 
 ########## SIMULATION CLASSES ######################################################################
 
@@ -145,11 +147,17 @@ class Engine:
 
     @staticmethod
     def extract_int( expr : str ) -> int:
+        """ Return the first int of the string, if it exists, Otherwise return None """
         iStr = ""
         for char in expr:
             if char.isdigit():
                 iStr += char
-        return int( iStr )
+            elif len( iStr ):
+                break
+        try:
+            return int( iStr )
+        except ValueError:
+            return None
     
 
     def roll_hallucination( self, dataset : str, test : str ) -> int:
