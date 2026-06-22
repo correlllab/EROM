@@ -241,10 +241,10 @@ class DiceContin_PDF:
 
 class DiceBinary_CDF:
     """ Use a CDF to roll for a binary outcome """
-    def __init__( self, Xval : list[float], Yprb : list[float] ):
+    def __init__( self, Xval : list[float] = None, Yprb : list[float] = None ):
         """ Store CDF """
-        self.valu = list( Xval )
-        self.prob = list( Yprb )
+        self.valu = list( Xval ) if (Xval is not None) else None
+        self.prob = list( Yprb ) if (Yprb is not None) else None
 
 
     def sample_outcome( self, val : float ) -> bool:

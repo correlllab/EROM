@@ -21,7 +21,7 @@ from aspire.BlocksTask import set_blocks_env
 
 ### Local ### 
 from env_config import set_experiment_env
-from analysis_Utils import DiceBinary_CDF, Loc
+from analysis_Utils import DiceBinary_CDF, Loc, crash_out
 from ya_SimClasses import SimBlock
 
 
@@ -41,12 +41,12 @@ from ya_SimClasses import SimBlock
 
 [>] Simulation Loop
     [>] Perception
-        [>] Build Perceived State
-            [>] Roll Confusion
-            [ ] Roll Pose Error
-        [ ] Roll Hallucination
-    [ ] Planning
-        [ ] Roll Planning Success: P( Plan | N_halluc )  
+        [Y] Build Perceived State
+            [Y] Roll Confusion
+            [Y] Roll Pose Error
+        [Y] Roll Hallucination
+    [>] Planning
+        [Y] Roll Planning Success: P( Plan | N_halluc )  
         [ ] Solve for Plan
     [ ] Action
         [ ] Roll Action Outcome: P( Success | Pose Error )
@@ -57,7 +57,13 @@ from ya_SimClasses import SimBlock
 [ ] Iterate Datasets
 [ ] Iterate Scenarios
 
+
+[ ] Iterate Scenarios
+
 * Issues:
+    - `TaskPlanner` determination does NOT allow multiple of the same label?
+        [ ] Just flip another label ???
+    - Not counting hallucinated labels when allowing a plan to succeed? 
     - Seems like N_halluc would ALSO influence action success?
 
 """
@@ -76,6 +82,16 @@ class Action:
     heldBlc : str   = None
 
 
+
+@dataclass
+class StepRecord:
+    """ Record of one complete step """
+    trueState : list[SimBlock] = None
+    percState : list[SimBlock] = None
+    poseError : float          = np.nan
+    N_halluc  : int            = -1
+    planYes   : bool           = False
+    planSeq   : list[Action]   = field( default_factory = list )
 
 ##### Engine ##############################################################
 _SETTINGS_PATH = "$HOME/EROM/json/sim_settings.json"
@@ -134,13 +150,46 @@ class Engine:
             res = Engine.roll_probs_as_odds( row )
             return self.settings[ dataset ]["classes"][ res ]
         raise KeyError( f"{actual} is NOT a valid label for the {dataset} dataset!" )
+    
+
+    def roll_confusion_state( self, dataset : str, actualState : list[SimBlock], cheatClass = False ) -> list[SimBlock]:
+        """ Get the noisy class for all blocks """
+        rtnStt : Deque[SimBlock] = deque()
+        Nconf  = 0
+        iConf  = deque()
+
+        for i, blc_i in enumerate( actualState ):
+            if cheatClass:
+                lbl_i = blc_i.label
+            else:
+                lbl_i = self.roll_confusion( dataset, blc_i.label )
+                if lbl_i != blc_i.label:
+                    Nconf += 1
+                    iConf.append(i)
+            if lbl_i != "NOTHING":
+                rtnStt.append( SimBlock( label = lbl_i, pose = blc_i.pose ) )
+        
+        labels = set( [item.label for item in actualState] )
+        
+        for ii in iConf:
+            cnfLbl = set( [item.label for item in rtnStt] )
+            flpLbl = labels.difference( cnfLbl )
+            print( flpLbl )
+            flpIdx = choice( list( range( len( rtnStt ) ) ) )
+            while flpIdx == ii:
+                flpIdx = choice( list( range( len( rtnStt ) ) ) )
+            print( flpIdx,  )
+            rtnStt[ flpIdx ].label = choice( list( flpLbl ) )
+
+        
+        return list( rtnStt )
 
     
     def roll_avg_pose_error( self, dataset : str, test : str ) -> float:
         """ Roll from the (average) pose error for this `dataset`::`test` """
         return lognorm.rvs( 
             loc   = self.settings[ dataset ][ test ]["poseErr"]["location"] * 1.0, 
-            shape = self.settings[ dataset ][ test ]["poseErr"]["shape"], 
+            s     = self.settings[ dataset ][ test ]["poseErr"]["shape"], 
             scale = self.settings[ dataset ][ test ]["poseErr"]["scale"]
         )
     
@@ -220,6 +269,12 @@ class Engine:
                 label = self.settings[ dataset ]["labels"][i],
                 pose  = pose
             ) )
+
+
+    def start( self, dataset : str ):
+        """ Do initial setup """
+        self.reset_blocks( dataset )
+        self.init_action_cdf()
 
 
     @staticmethod
@@ -302,9 +357,9 @@ class SimplePlanner:
         return (16 + int(random()*1000)) * 1.0
 
 
-    def plan( self, setting : str, state : list[SimBlock] ):
+    def plan( self, dataset : str, state : list[SimBlock] ):
         """ Get a plan for the given state """
-        self.goal = self.goals[ setting ] 
+        self.goal = self.goals[ dataset ] 
         ## Step 0: Ground the State ##
         compare = deque()
         for target in self.poses:
@@ -352,6 +407,64 @@ class SimplePlanner:
                 ) )
 
         return list( rtnPln )
+    
+
+
+##### Simulator + Stats ###################################################
+
+class SimpleSim:
+    """ Engine + Planner = Simulation """
+    def __init__( self, dataset : str, test : str ):
+        """ Set up the simulation model """
+        self.engine : Engine            = Engine()
+        self.planner: SimplePlanner     = SimplePlanner()
+        self.dataset: str               = dataset
+        self.test   : str               = test
+        self.records: Deque[StepRecord] = deque()
+        self.engine.start( self.dataset )
+        
+
+    def step( self ):
+        """ Run a full simulation step """
+        record = StepRecord()
+
+        ##### Perception #########################
+        record.trueState = deepcopy( self.engine.actualState )
+        if "KC" in self.test:
+            record.percState = self.engine.roll_confusion_state( self.dataset, self.engine.actualState, cheatClass = True )
+        else:
+            record.percState = self.engine.roll_confusion_state( self.dataset, self.engine.actualState, cheatClass = False )
+        record.poseError = self.engine.roll_avg_pose_error( self.dataset, self.test )
+        record.N_halluc  = self.engine.roll_hallucination(  self.dataset, self.test )
+
+        ##### Planning ###########################
+        lblSet = set( [item.label for item in record.percState] )
+        if len( lblSet ) >= 3:
+            record.planYes = self.engine.roll_plan_success( self.dataset, self.test, record.N_halluc )
+        else:
+            record.planYes = False
+        if record.planYes:
+            record.planSeq = self.planner.plan( self.dataset, record.percState )
+
+
+
+        ##### Action #############################
+
+
+        ##### Check ##############################
+        print()
+        pprint( record )
+
+    
+
 
 
 ########## MAIN ####################################################################################
+sim = SimpleSim( "RGB", "SC-KP" )
+
+sim.step()
+
+
+
+########## EXIT ####################################################################################
+crash_out( False )
