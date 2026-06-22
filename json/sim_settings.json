@@ -1,6 +1,5 @@
 {
     "poseErrCDFpath" : "/$HOME/EROM/json/FailVErr_CDF.json",
-
     
     "RGB" : {
         "labels" : ["RED", "GRN", "BLU"],
