@@ -155,7 +155,8 @@ class Engine:
     def roll_confusion_state( self, dataset : str, actualState : list[SimBlock], cheatClass = False ) -> list[SimBlock]:
         """ Get the noisy class for all blocks """
         rtnStt : Deque[SimBlock] = deque()
-        Nconf  = 0
+        lConf  = deque()
+        lTrue  = deque()
         iConf  = deque()
 
         for i, blc_i in enumerate( actualState ):
@@ -163,27 +164,39 @@ class Engine:
                 lbl_i = blc_i.label
             else:
                 lbl_i = self.roll_confusion( dataset, blc_i.label )
-                if lbl_i != blc_i.label:
-                    Nconf += 1
-                    iConf.append(i)
             if lbl_i != "NOTHING":
                 rtnStt.append( SimBlock( label = lbl_i, pose = blc_i.pose ) )
+                if lbl_i != blc_i.label:
+                    lConf.append( lbl_i )
+                    lTrue.append( blc_i.label )
+                    iConf.append(i) 
+
+        labels = [item.label for item in actualState]
+        lblSet = set( labels )
+        cnfLbl = [item.label for item in rtnStt     ]
         
-        labels = set( [item.label for item in actualState] )
 
         print( f"True Labels: {labels}" )
-        cnfLbl = set( [item.label for item in rtnStt] )
         print( f"Perc Labels: {cnfLbl}" )
-        flpLbl = labels.difference( cnfLbl )
-        print( f"Unseen Labels: {flpLbl}\n" )
-        
-        for ii in iConf:
-            flpIdx = choice( list( range( len( rtnStt ) ) ) )
-            while flpIdx == ii:
-                flpIdx = choice( list( range( len( rtnStt ) ) ) )
-            print( flpIdx,  )
-            rtnStt[ flpIdx ].label = choice( list( flpLbl ) )
 
+        ## FLIP LOGIC ##
+        # WARNING: THIS IS NOT BASED ON THE CONF MATX!
+        if len( rtnStt ) > 2:
+            # for miss in missng:
+            for k, miss in enumerate( lTrue ):
+
+                cnfSet = set( [item.label for item in rtnStt ] )
+                missng = lblSet.difference( cnfSet )
+                print( f"Missing: ___ {missng}" )
+                if not len( missng ):
+                    break
+
+                opo = lConf[k]
+                for j, tru in enumerate( labels ):
+                    # prc = cnfLbl[j]
+                    if (tru == opo):
+                        rtnStt[j].label = miss
+                        break
         
         return list( rtnStt )
 
@@ -463,10 +476,11 @@ class SimpleSim:
 
 
 ########## MAIN ####################################################################################
-sim = SimpleSim( "RGB", "SC-KP" )
 
-sim.step()
-
+for _ in range( 50 ):
+    sim = SimpleSim( "RGB", "SC-KP" )
+    sim.step()
+    print('\n')
 
 
 ########## EXIT ####################################################################################
