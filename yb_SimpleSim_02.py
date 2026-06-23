@@ -40,12 +40,12 @@ from ya_SimClasses import SimBlock
             [Y] Failure: Roll tower destruction
 
 [>] Simulation Loop
-    [>] Perception
+    [Y] Perception
         [Y] Build Perceived State
             [Y] Roll Confusion
             [Y] Roll Pose Error
         [Y] Roll Hallucination
-        [>] Roll search time
+        [Y] Roll search time
     [Y] Planning
         [Y] Roll Planning Success: P( Plan | N_halluc )  
         [Y] Solve for Plan
@@ -54,7 +54,7 @@ from ya_SimClasses import SimBlock
             [Y] Success: Update Actual State
             [Y] Failure: Roll tower destruction
                 [Y] Update destruction state
-        [>] Roll Action time
+        [Y] Roll Action time
     [>] While NOT solved, ^^^ LOOP ^^^
 
 [ ] Iterate Datasets
@@ -83,6 +83,7 @@ class Action:
     heldBlc : str   = None
 
 
+##### Step Results ########################################################
 
 @dataclass
 class StepRecord:
@@ -415,7 +416,7 @@ class SimplePlanner:
     
 
     @staticmethod
-    def get_block_by_name( state : list[SimBlock], label : float ):
+    def get_block_by_name( state : list[SimBlock], label : str ):
         """ Fetch the named block """
         for block in state:
             if block.label == label:
@@ -465,8 +466,9 @@ class SimplePlanner:
                     heldBlc = blcDiff[i]
                 ) )
                 nuBlc = SimplePlanner.get_block_by_name( nuState, blcDiff[i] )
-                nuBlc.pose = rtnPln[0].endPose
-                blcDiff[i] = None
+                if nuBlc is not None:
+                    nuBlc.pose = rtnPln[0].endPose
+                    blcDiff[i] = None
         
         ## Step 3: Build remainder ##
         for i in range( len( self.goal ) ):
@@ -488,11 +490,12 @@ class SimpleSim:
     """ Engine + Planner = Simulation """
     def __init__( self, dataset : str, test : str ):
         """ Set up the simulation model """
-        self.engine : Engine            = Engine()
-        self.planner: SimplePlanner     = SimplePlanner()
-        self.dataset: str               = dataset
-        self.test   : str               = test
-        self.records: Deque[StepRecord] = deque()
+        self.engine  : Engine                 = Engine()
+        self.planner : SimplePlanner          = SimplePlanner()
+        self.dataset : str                    = dataset
+        self.test    : str                    = test
+        self.records : Deque[StepRecord]      = deque()
+        self.episodes: list[list[StepRecord]] = deque()
         self.engine.start( self.dataset )
         
 
@@ -523,16 +526,22 @@ class SimpleSim:
             record.actionRes = self.engine.roll_action_success( record.poseError )
             record.tAction   = self.engine.roll_action_time( self.dataset, self.test )
 
-            # [Y] Success: Update Actual State
-            if record.actionRes:
-                self.engine.apply_action( record.planSeq[0] )
-                record.knockDown = 0
+            if (record.planSeq is not None):
 
-            # [N] Failure: Roll tower destruction
-            else:
-                record.knockDown = self.engine.roll_tower_desctruction( self.dataset, self.test )
-                record.actualDwn = self.engine.apply_destruction( record.knockDown, record.planSeq[0] )
+                if len( record.planSeq ):
+                    record.goalMet = False
 
+                    # [Y] Success: Update Actual State
+                    if record.actionRes:
+                        self.engine.apply_action( record.planSeq[0] )
+                        record.knockDown = 0
+
+                    # [N] Failure: Roll tower destruction
+                    else:
+                        record.knockDown = self.engine.roll_tower_desctruction( self.dataset, self.test )
+                        record.actualDwn = self.engine.apply_destruction( record.knockDown, record.planSeq[0] )
+                else:
+                    record.goalMet = True
         else:
             record.planSeq   = None
             record.actionRes = None
@@ -544,14 +553,35 @@ class SimpleSim:
         self.records.append( record )
 
 
+    def run_episode( self ):
+        """ Run a full simulation episode """
+        success = False
+        stepLim = 30
+        Nstep   =  0
+
+        while (not success) and (Nstep < stepLim):
+
+            self.step()
+            success = self.records[-1].goalMet
+            if success:
+                print( f"SUCCESS!" )
+
+            Nstep += 1
+        
+        self.episodes.append( list( self.records ) )
+        self.records = deque()
+
+        print( f"There were {Nstep} steps!" )
 
 ########## MAIN ####################################################################################
 
-for _ in range( 50 ):
-    sim = SimpleSim( "RGB", "SC-KP" )
-    sim.step()
-    print('\n')
+# for _ in range( 50 ):
+#     sim = SimpleSim( "RGB", "SC-KP" )
+#     sim.step()
+#     print('\n')
 
+sim = SimpleSim( "RGB", "SC-KP" )
+sim.run_episode()
 
 ########## EXIT ####################################################################################
 crash_out( False )
