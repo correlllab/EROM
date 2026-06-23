@@ -48,12 +48,12 @@ from ya_SimClasses import SimBlock
     [Y] Planning
         [Y] Roll Planning Success: P( Plan | N_halluc )  
         [Y] Solve for Plan
-    [>] Action
-        [>] Roll Action Outcome: P( Success | Pose Error )
+    [Y] Action
+        [Y] Roll Action Outcome: P( Success | Pose Error )
             [Y] Success: Update Actual State
-            [>] Failure: Roll tower destruction
-                [>] Update destruction state
-    [ ] While NOT solved, ^^^ LOOP ^^^
+            [Y] Failure: Roll tower destruction
+                [Y] Update destruction state
+    [>] While NOT solved, ^^^ LOOP ^^^
 
 [ ] Iterate Datasets
 [ ] Iterate Scenarios
@@ -85,14 +85,16 @@ class Action:
 @dataclass
 class StepRecord:
     """ Record of one complete step """
-    trueState : list[SimBlock] = None
-    percState : list[SimBlock] = None
-    poseError : float          = np.nan
-    N_halluc  : int            = -1
-    planYes   : bool           = False
-    planSeq   : list[Action]   = field( default_factory = list )
-    actionRes : bool           = False
-    knockDown : int            = 0
+    trueState: list[SimBlock] = None
+    percState: list[SimBlock] = None
+    poseError: float          = np.nan
+    N_halluc : int            = -1
+    planYes  : bool           = False
+    planSeq  : list[Action]   = field( default_factory = list )
+    actionRes: bool           = False
+    knockDown: int            = 0
+    actualDwn: int            = 0
+    endState : list[SimBlock] = None
 
 
 ##### Engine ##############################################################
@@ -107,6 +109,7 @@ class Engine:
         with open( os.path.expandvars( _SETTINGS_PATH ), 'r' ) as f:
             self.settings = json.load(f)
         self.actualState: Deque[SimBlock] = deque()
+        self.goalPoses  : list[float]     = [1.0, 2.0, 3.0,]
         self.initPoses  : list[float]     = [4.0, 5.0, 6.0,]
         self.actionCDF  : DiceBinary_CDF  = None
         self.init_action_cdf()
@@ -309,6 +312,18 @@ class Engine:
         return bMin
 
 
+    def get_tower( self, state : list[SimBlock] ):
+        """ Get all the blocks currently in the tower """
+        rtnTwr = deque()
+        for gp in self.goalPoses:
+            gb = Engine.block_at_pose( state, gp )
+            if gb is not None:
+                rtnTwr.append( gb )
+            else:
+                break
+        return rtnTwr                
+
+
     def apply_action( self, action : Action ) -> bool:
         """ Change the true state for an action that succeeds """
         bgnPose = action.bgnPose
@@ -319,6 +334,22 @@ class Engine:
             return True
         return False
     
+
+    def apply_destruction( self, undo : int, action : Action ) -> int:
+        """ Change the true state for an action that fails """
+        undone = 0
+        tower : Deque[SimBlock] = self.get_tower( self.actualState )
+        if undo > 0:
+            for _ in range( undo ):
+                if len( tower ):
+                    blc = tower.pop()
+                    blc.pose = SimplePlanner.random_pose()
+                    undone += 1
+            return undone
+        elif undo < 0:
+            self.apply_action( action )
+            return -1
+        return 0
 
 
 ##### Planner #############################################################
@@ -461,6 +492,8 @@ class SimpleSim:
             record.planYes = self.engine.roll_plan_success( self.dataset, self.test, record.N_halluc )
         else:
             record.planYes = False
+
+        ##### Action #############################
         if record.planYes:
             record.planSeq = self.planner.plan( self.dataset, record.percState )
             record.actionRes = self.engine.roll_action_success( record.poseError )
@@ -473,21 +506,16 @@ class SimpleSim:
             # [N] Failure: Roll tower destruction
             else:
                 record.knockDown = self.engine.roll_tower_desctruction( self.dataset, self.test )
-
+                record.actualDwn = self.engine.apply_destruction( record.knockDown, record.planSeq[0] )
 
         else:
             record.planSeq   = list()
             record.actionRes = None
 
-
-        ##### Action #############################
-
-
         ##### Check ##############################
+        record.endState = deepcopy( self.engine.actualState )
         print()
         pprint( record )
-
-    
 
 
 
