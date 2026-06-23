@@ -609,31 +609,33 @@ class SimpleSim:
     
 
 
-########## MAIN ####################################################################################
-_N_EPISODES    = 200
-_SIM_DATA_PATH = os.path.expandvars( "$HOME/EROM/data/pkl/simResults.pkl" )
+if __name__ == "__main__":
 
-simRes = dict()
+    ########## MAIN ####################################################################################
+    _N_EPISODES    = 200
+    _SIM_DATA_PATH = os.path.expandvars( "$HOME/EROM/data/pkl/simResults.pkl" )
 
-### For every block set ###
-for iii, paths in enumerate( Loc.datasets ):
+    simRes = dict()
 
-    setNam   = Loc.dataLabels[iii]
-    classes  = Loc.blcNam[setNam]
-    eClasses = Loc.eBlcNam[setNam]
+    ### For every block set ###
+    for iii, paths in enumerate( Loc.datasets ):
 
-    simRes[ setNam ] = dict()
+        setNam   = Loc.dataLabels[iii]
+        classes  = Loc.blcNam[setNam]
+        eClasses = Loc.eBlcNam[setNam]
 
-    ### For every scenario ###
-    for ii, test in enumerate( Loc.tests ):
+        simRes[ setNam ] = dict()
 
-        sim = SimpleSim( setNam, test )
-        simRes[ setNam ][ test ] = sim.run_N_episodes( _N_EPISODES )
+        ### For every scenario ###
+        for ii, test in enumerate( Loc.tests ):
 
-with open( _SIM_DATA_PATH, 'wb' ) as f:
-    pickle.dump( simRes, f )
+            sim = SimpleSim( setNam, test )
+            simRes[ setNam ][ test ] = sim.run_N_episodes( _N_EPISODES )
+
+    with open( _SIM_DATA_PATH, 'wb' ) as f:
+        pickle.dump( simRes, f )
 
 
 
-########## EXIT ####################################################################################
-crash_out( False )
+    ########## EXIT ####################################################################################
+    crash_out( False )
