@@ -40,27 +40,26 @@ from ya_SimClasses import SimBlock
             [Y] Failure: Roll tower destruction
 
 [>] Simulation Loop
-    [>] Perception
+    [Y] Perception
         [Y] Build Perceived State
             [Y] Roll Confusion
             [Y] Roll Pose Error
         [Y] Roll Hallucination
-    [>] Planning
+    [Y] Planning
         [Y] Roll Planning Success: P( Plan | N_halluc )  
-        [ ] Solve for Plan
-    [ ] Action
-        [ ] Roll Action Outcome: P( Success | Pose Error )
-            [ ] Success: Update Actual State
-            [ ] Failure: Roll tower destruction
+        [Y] Solve for Plan
+    [>] Action
+        [>] Roll Action Outcome: P( Success | Pose Error )
+            [Y] Success: Update Actual State
+            [>] Failure: Roll tower destruction
+                [>] Update destruction state
     [ ] While NOT solved, ^^^ LOOP ^^^
 
 [ ] Iterate Datasets
 [ ] Iterate Scenarios
 
-
-[ ] Iterate Scenarios
-
 * Issues:
+    - What happens if pose error puts an object outside of the allowable error for a grounded pose?
     - `TaskPlanner` determination does NOT allow multiple of the same label?
         [ ] Just flip another label ???
     - Not counting hallucinated labels when allowing a plan to succeed? 
@@ -92,6 +91,9 @@ class StepRecord:
     N_halluc  : int            = -1
     planYes   : bool           = False
     planSeq   : list[Action]   = field( default_factory = list )
+    actionRes : bool           = False
+    knockDown : int            = 0
+
 
 ##### Engine ##############################################################
 _SETTINGS_PATH = "$HOME/EROM/json/sim_settings.json"
@@ -461,7 +463,21 @@ class SimpleSim:
             record.planYes = False
         if record.planYes:
             record.planSeq = self.planner.plan( self.dataset, record.percState )
+            record.actionRes = self.engine.roll_action_success( record.poseError )
 
+            # [Y] Success: Update Actual State
+            if record.actionRes:
+                self.engine.apply_action( record.planSeq[0] )
+                record.knockDown = 0
+
+            # [N] Failure: Roll tower destruction
+            else:
+                record.knockDown = self.engine.roll_tower_desctruction( self.dataset, self.test )
+
+
+        else:
+            record.planSeq   = list()
+            record.actionRes = None
 
 
         ##### Action #############################
