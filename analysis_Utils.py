@@ -251,11 +251,11 @@ class DiceBinary_CDF:
         """ Sample from a discrete probability at the given `val`ue """
         # ASSUMPTION: VALUES ARE CLOSE ENOUGH TOGETHER TO FAITHFULLY REPRESENT THE OUTCOME PROBABILITY 
         pPos = 0.0
-        for i, v in self.valu:
+        for i, v in enumerate( self.valu ):
             pPos = self.prob[i]
             if v >= val:
                 break
-        return (random <= pPos)
+        return (random() <= pPos)
     
 
     def save( self, path : str ):
