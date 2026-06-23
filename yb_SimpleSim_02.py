@@ -3,8 +3,7 @@
 ### Standard ### 
 import os, json, pickle
 from collections import deque
-from random import random, choice
-from enum import Enum
+from random import random
 from pprint import pprint
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -15,12 +14,9 @@ import numpy as np
 from scipy.stats import lognorm
 
 ### ASPIRE::PDDLStream ### 
-from aspire.symbols import ObjPose, GraspObj, euclidean_distance_between_symbols
-from aspire.env_config import env_var, env_sto
-from aspire.BlocksTask import set_blocks_env
+from aspire.env_config import env_var
 
 ### Local ### 
-from env_config import set_experiment_env
 from analysis_Utils import DiceBinary_CDF, Loc, crash_out
 
 
@@ -57,8 +53,8 @@ from analysis_Utils import DiceBinary_CDF, Loc, crash_out
         [Y] Roll Action time
     [Y] While NOT solved, ^^^ LOOP ^^^
 
-[ ] Iterate Datasets
-[ ] Iterate Scenarios
+[Y] Iterate Datasets
+[Y] Iterate Scenarios
 
 * Issues:
     - What happens if pose error puts an object outside of the allowable error for a grounded pose?

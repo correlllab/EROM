@@ -78,7 +78,7 @@ def xy_plot_filled_under( X, Y, plotTitle = None, fName = "output.pdf", xLabel =
     plt.show()
 
 
-def make_histo( series, plotTitle, xLabel = 'Makespan', yLabel = 'Occurrences', savefig = True ):
+def make_histo( series, plotTitle, fName, xLabel = 'Makespan', yLabel = 'Occurrences', forceYlim = True, savefig = True ):
     """ Create Histogram """
     if savefig:
         plt.clf()
@@ -87,12 +87,81 @@ def make_histo( series, plotTitle, xLabel = 'Makespan', yLabel = 'Occurrences', 
     print( f"Mean: ___ {np.mean(series)}" )
     print( f"Median: _ {np.median(series)}" )
     print( f"Std.Dev.: {np.std(series)}" )
-    plt.hist( series, _DEFAULT_DIV )
+    plt.hist( series )
     plt.title( plotTitle, fontsize = _TITLE_FONT_SIZE ) # Set the title && font size
     plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
     plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
+    if forceYlim:
+        plt.ylim( (0, Loc._N_TRIALS,) )
     plt.tight_layout()
-    plt.show()
+    if savefig:
+        plt.savefig( fName )
+        return plt.gca()
+
+
+def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
+                      forceYlim = True, savefig = True, titleFontSize_pt = _TITLE_FONT_SIZE ):
+    """ Create Histogram """
+    if savefig:
+        plt.clf()
+    plt.margins( _TIGHT_MARGIN )
+    print( f"\n### {plotTitle} ###" )
+    for i, series in enumerate( multiSeries ):
+        print( f"\t{seriesNames[i]}" )
+        print( f"\tMean: ___ {np.mean(series)}" )
+        print( f"\tMedian: _ {np.median(series)}" )
+        print( f"\tStd.Dev.: {np.std(series)}" )
+    plt.hist( multiSeries, label = seriesNames )
+    if plotTitle is not None:
+        plt.title( plotTitle, fontsize = titleFontSize_pt ) # Set the title && font size
+    if xLabel is not None:
+        plt.xlabel( xLabel ) # ---------------- Setting the x-axis label
+    if yLabel is not None:
+        plt.ylabel( yLabel ) # ---------------- Setting the y-axis label
+    if savefig:
+        plt.legend( loc = 'upper right' )
+    if forceYlim:
+        plt.ylim( (0, Loc._N_TRIALS,) )
+    plt.tight_layout()
+    if savefig:
+        plt.savefig( fName )
+        return plt.gca()
+
+
+def filter_series( series, stdFactor = 2.0 ):
+    """ Filter outliers more than `stdFactor` standard deviations from the mean """
+    if not len( series ):
+        return list()
+    mu = np.mean( series )
+    sd = np.std( series )
+    nuSeries = deque()
+    thresh   = abs(sd*stdFactor)
+    for datum in series:
+        if abs( datum - mu ) <= thresh:
+            nuSeries.append( datum )
+    return list( nuSeries )
+
+
+def as_json( dataObj, asLeaf = False ):
+    """ Convert the dataclass into a struct that can be JSON serialized """
+    def make_serializable( obj, depth = 0 ):
+        nonlocal asLeaf
+        if isinstance( obj, (deque, list,) ):
+            rtnLst = deque()
+            for item in obj:
+                rtnLst.append( make_serializable( item, depth+1 ) )
+            return list( rtnLst )
+        elif isinstance( obj, np.ndarray ):
+            return obj.tolist()
+        elif isinstance( obj, dict ):
+            rtnDct = dict()
+            for k, v in obj.items():
+                rtnDct[k] = make_serializable( v, depth+1 )
+            return rtnDct
+        else:
+            return obj
+    rtnObj = make_serializable( dataObj, 0 )
+    return rtnObj
 
 
 def chop_sigmas( data : list[int], sigmas = 3.0, useMean : bool = True ) -> list[int]:
@@ -339,3 +408,7 @@ class Loc:
         "Overall Posn Err" : "json/OverallPosnErr.json",
         "Failure-v-Err_CDF": "json/FailVErr_CDF.json",
     }
+
+    _SIM_DATA_PATH = os.path.expandvars( "$HOME/EROM/data/pkl/simResults.pkl" )
+
+    _N_TRIALS = 20
