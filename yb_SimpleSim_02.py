@@ -1,7 +1,7 @@
 ########## INIT ####################################################################################
 
 ### Standard ### 
-import os, json
+import os, json, pickle
 from collections import deque
 from random import random, choice
 from enum import Enum
@@ -39,7 +39,7 @@ from ya_SimClasses import SimBlock
             [Y] Success: Update Actual State
             [Y] Failure: Roll tower destruction
 
-[>] Simulation Loop
+[Y] Simulation Loop
     [Y] Perception
         [Y] Build Perceived State
             [Y] Roll Confusion
@@ -55,7 +55,7 @@ from ya_SimClasses import SimBlock
             [Y] Failure: Roll tower destruction
                 [Y] Update destruction state
         [Y] Roll Action time
-    [>] While NOT solved, ^^^ LOOP ^^^
+    [Y] While NOT solved, ^^^ LOOP ^^^
 
 [ ] Iterate Datasets
 [ ] Iterate Scenarios
@@ -376,6 +376,7 @@ class Engine:
         return 0
 
 
+
 ##### Planner #############################################################
 
 
@@ -573,15 +574,42 @@ class SimpleSim:
 
         print( f"There were {Nstep} steps!" )
 
+
+    def run_N_episodes( self, N : int = 200 ):
+        """ Run `N` episodes and return the data """
+        for _ in range( N ):
+            self.run_episode()
+        rtnLst = list( self.episodes )
+        self.episodes = deque()
+        return rtnLst
+    
+
+
 ########## MAIN ####################################################################################
+_N_EPISODES    = 200
+_SIM_DATA_PATH = os.path.expandvars( "$HOME/EROM/data/pkl/simResults.pkl" )
 
-# for _ in range( 50 ):
-#     sim = SimpleSim( "RGB", "SC-KP" )
-#     sim.step()
-#     print('\n')
+simRes = dict()
 
-sim = SimpleSim( "RGB", "SC-KP" )
-sim.run_episode()
+### For every block set ###
+for iii, paths in enumerate( Loc.datasets ):
+
+    setNam   = Loc.dataLabels[iii]
+    classes  = Loc.blcNam[setNam]
+    eClasses = Loc.eBlcNam[setNam]
+
+    simRes[ setNam ] = dict()
+
+    ### For every scenario ###
+    for ii, test in enumerate( Loc.tests ):
+
+        sim = SimpleSim( setNam, test )
+        simRes[ setNam ][ test ] = sim.run_N_episodes( _N_EPISODES )
+
+with open( _SIM_DATA_PATH, 'wb' ) as f:
+    pickle.dump( simRes, f )
+
+
 
 ########## EXIT ####################################################################################
 crash_out( False )
