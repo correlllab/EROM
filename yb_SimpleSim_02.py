@@ -170,11 +170,14 @@ class Engine:
                 rtnStt.append( SimBlock( label = lbl_i, pose = blc_i.pose ) )
         
         labels = set( [item.label for item in actualState] )
+
+        print( f"True Labels: {labels}" )
+        cnfLbl = set( [item.label for item in rtnStt] )
+        print( f"Perc Labels: {cnfLbl}" )
+        flpLbl = labels.difference( cnfLbl )
+        print( f"Unseen Labels: {flpLbl}\n" )
         
         for ii in iConf:
-            cnfLbl = set( [item.label for item in rtnStt] )
-            flpLbl = labels.difference( cnfLbl )
-            print( flpLbl )
             flpIdx = choice( list( range( len( rtnStt ) ) ) )
             while flpIdx == ii:
                 flpIdx = choice( list( range( len( rtnStt ) ) ) )
