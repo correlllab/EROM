@@ -40,11 +40,12 @@ from ya_SimClasses import SimBlock
             [Y] Failure: Roll tower destruction
 
 [>] Simulation Loop
-    [Y] Perception
+    [>] Perception
         [Y] Build Perceived State
             [Y] Roll Confusion
             [Y] Roll Pose Error
         [Y] Roll Hallucination
+        [>] Roll search time
     [Y] Planning
         [Y] Roll Planning Success: P( Plan | N_halluc )  
         [Y] Solve for Plan
@@ -53,6 +54,7 @@ from ya_SimClasses import SimBlock
             [Y] Success: Update Actual State
             [Y] Failure: Roll tower destruction
                 [Y] Update destruction state
+        [>] Roll Action time
     [>] While NOT solved, ^^^ LOOP ^^^
 
 [ ] Iterate Datasets
@@ -87,11 +89,14 @@ class StepRecord:
     """ Record of one complete step """
     trueState: list[SimBlock] = None
     percState: list[SimBlock] = None
+    tSearch  : float          = np.nan
     poseError: float          = np.nan
     N_halluc : int            = -1
     planYes  : bool           = False
     planSeq  : list[Action]   = field( default_factory = list )
+    goalMet  : bool           = False
     actionRes: bool           = False
+    tAction  : float          = np.nan
     knockDown: int            = 0
     actualDwn: int            = 0
     endState : list[SimBlock] = None
@@ -212,6 +217,24 @@ class Engine:
             loc   = self.settings[ dataset ][ test ]["poseErr"]["location"] * 1.0, 
             s     = self.settings[ dataset ][ test ]["poseErr"]["shape"], 
             scale = self.settings[ dataset ][ test ]["poseErr"]["scale"]
+        )
+    
+
+    def roll_search_time( self, dataset : str, test : str ) -> float:
+        """ Roll from the search time for this `dataset`::`test` """
+        return lognorm.rvs( 
+            loc   = self.settings[ dataset ][ test ]["tSearch"]["location"] * 1.0, 
+            s     = self.settings[ dataset ][ test ]["tSearch"]["shape"], 
+            scale = self.settings[ dataset ][ test ]["tSearch"]["scale"]
+        )
+     
+
+    def roll_action_time( self, dataset : str, test : str ) -> float:
+        """ Roll from the search time for this `dataset`::`test` """
+        return lognorm.rvs( 
+            loc   = self.settings[ dataset ][ test ]["tAction"]["location"] * 1.0, 
+            s     = self.settings[ dataset ][ test ]["tAction"]["shape"], 
+            scale = self.settings[ dataset ][ test ]["tAction"]["scale"]
         )
     
 
@@ -485,6 +508,7 @@ class SimpleSim:
             record.percState = self.engine.roll_confusion_state( self.dataset, self.engine.actualState, cheatClass = False )
         record.poseError = self.engine.roll_avg_pose_error( self.dataset, self.test )
         record.N_halluc  = self.engine.roll_hallucination(  self.dataset, self.test )
+        record.tSearch   = self.engine.roll_search_time( self.dataset, self.test )
 
         ##### Planning ###########################
         lblSet = set( [item.label for item in record.percState] )
@@ -495,8 +519,9 @@ class SimpleSim:
 
         ##### Action #############################
         if record.planYes:
-            record.planSeq = self.planner.plan( self.dataset, record.percState )
+            record.planSeq   = self.planner.plan( self.dataset, record.percState )
             record.actionRes = self.engine.roll_action_success( record.poseError )
+            record.tAction   = self.engine.roll_action_time( self.dataset, self.test )
 
             # [Y] Success: Update Actual State
             if record.actionRes:
@@ -509,13 +534,14 @@ class SimpleSim:
                 record.actualDwn = self.engine.apply_destruction( record.knockDown, record.planSeq[0] )
 
         else:
-            record.planSeq   = list()
+            record.planSeq   = None
             record.actionRes = None
 
         ##### Check ##############################
         record.endState = deepcopy( self.engine.actualState )
         print()
         pprint( record )
+        self.records.append( record )
 
 
 
