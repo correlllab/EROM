@@ -22,6 +22,8 @@ set_blocks_env()
 set_experiment_env()
 set_render_env()
 
+
+
 ########## HELPER FUNCTIONS ########################################################################
 
 def print_header( text : str, preWidth : int, totWidth : int, capitalize = True, _HDR_CHR : str = '#' ):
@@ -58,6 +60,31 @@ def crash_out( notify = True ):
     print( "\n\n" )
     os.system( 'kill %d' % os.getpid() ) 
 
+
+def as_json( dataObj, asLeaf = False ):
+    """ Convert the dataclass into a struct that can be JSON serialized """
+    def make_serializable( obj, depth = 0 ):
+        nonlocal asLeaf
+        if isinstance( obj, (deque, list,) ):
+            rtnLst = deque()
+            for item in obj:
+                rtnLst.append( make_serializable( item, depth+1 ) )
+            return list( rtnLst )
+        elif isinstance( obj, np.ndarray ):
+            return obj.tolist()
+        elif isinstance( obj, dict ):
+            rtnDct = dict()
+            for k, v in obj.items():
+                rtnDct[k] = make_serializable( v, depth+1 )
+            return rtnDct
+        else:
+            return obj
+    rtnObj = make_serializable( dataObj, 0 )
+    return rtnObj
+
+
+
+########## PLOTTING FUNCTIONS ######################################################################
 
 def xy_plot_filled_under( X, Y, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
                           titleFontSize_pt = _TITLE_FONT_SIZE ):
@@ -97,6 +124,8 @@ def make_histo( series, plotTitle, fName, xLabel = 'Makespan', yLabel = 'Occurre
     if savefig:
         plt.savefig( fName )
         return plt.gca()
+    else:
+        plt.show()
 
 
 def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
@@ -126,7 +155,11 @@ def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "outpu
     if savefig:
         plt.savefig( fName )
         return plt.gca()
+    else:
+        plt.show()
 
+
+########## DATA PROCESSING #########################################################################
 
 def filter_series( series, stdFactor = 2.0 ):
     """ Filter outliers more than `stdFactor` standard deviations from the mean """
@@ -140,28 +173,6 @@ def filter_series( series, stdFactor = 2.0 ):
         if abs( datum - mu ) <= thresh:
             nuSeries.append( datum )
     return list( nuSeries )
-
-
-def as_json( dataObj, asLeaf = False ):
-    """ Convert the dataclass into a struct that can be JSON serialized """
-    def make_serializable( obj, depth = 0 ):
-        nonlocal asLeaf
-        if isinstance( obj, (deque, list,) ):
-            rtnLst = deque()
-            for item in obj:
-                rtnLst.append( make_serializable( item, depth+1 ) )
-            return list( rtnLst )
-        elif isinstance( obj, np.ndarray ):
-            return obj.tolist()
-        elif isinstance( obj, dict ):
-            rtnDct = dict()
-            for k, v in obj.items():
-                rtnDct[k] = make_serializable( v, depth+1 )
-            return rtnDct
-        else:
-            return obj
-    rtnObj = make_serializable( dataObj, 0 )
-    return rtnObj
 
 
 def chop_sigmas( data : list[int], sigmas = 3.0, useMean : bool = True ) -> list[int]:
@@ -354,8 +365,8 @@ _DATA_DRIVE = "STARGAZER/DATA_TANK"
 class Loc:
     """ Static Container Class """    
 
-    _MISC_DIR  = "/media/james/STARGAZER/DATA_TANK/misc_data/" 
-    _PLOT_DIR  = "/media/james/FILEPILE/EROM/data/plots/"
+    _MISC_DIR  = os.path.expandvars( "/media/$USER/STARGAZER/DATA_TANK/misc_data/" )    
+    _PLOT_DIR  = os.path.expandvars( "/media/$USER/FILEPILE/EROM/data/plots/"      )
     _GC_CYCLE  = False 
     _F_EXTRACT = f"{_PLOT_DIR}outData.pkl"
     _T_EXTRACT = f"{_PLOT_DIR}outText.json"
@@ -382,8 +393,8 @@ class Loc:
     ]
 
     datasets = [
-        [ f"/media/james/{_DATA_DRIVE}/2025-08B_{test}" for test in tests ],
-        [ f"/media/james/{_DATA_DRIVE}/RWB_2025-09_{test}" for test in tests ],
+        [ os.path.expandvars( f"/media/$USER/{_DATA_DRIVE}/2025-08B_{test}"    ) for test in tests ],
+        [ os.path.expandvars( f"/media/$USER/{_DATA_DRIVE}/RWB_2025-09_{test}" ) for test in tests ],
     ]
 
     dataLabels = ["RGB", "RBW",]
