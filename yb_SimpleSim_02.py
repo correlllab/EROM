@@ -580,6 +580,7 @@ class SimpleSim:
 
     def run_episode( self ):
         """ Run a full simulation episode """
+        self.engine.reset_blocks( self.dataset )
         success = False
         stepLim = 30
         Nstep   =  0
