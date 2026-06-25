@@ -57,9 +57,11 @@ from analysis_Utils import DiceBinary_CDF, Loc, crash_out
 [Y] Iterate Scenarios
 
 * Issues:
+    - Try using the per-test action failure curves
+    - Try eliminating ALL pose variation for KP
+    - Try rolling pose variation PER BLOCK
+    - Try measuring the PER BLOCK pose variation
     - What happens if pose error puts an object outside of the allowable error for a grounded pose?
-    - `TaskPlanner` determination does NOT allow multiple of the same label?
-        [ ] Just flip another label ???
     - Not counting hallucinated labels when allowing a plan to succeed? 
     - Seems like N_halluc would ALSO influence action success?
 
@@ -242,7 +244,7 @@ class Engine:
             loc   = self.settings[ dataset ][ test ]["poseErr"]["location"] * 1.0, 
             s     = self.settings[ dataset ][ test ]["poseErr"]["shape"], 
             scale = self.settings[ dataset ][ test ]["poseErr"]["scale"]
-        )
+        ) * self.settings["factors"]["posnErr"]
     
 
     def roll_search_time( self, dataset : str, test : str ) -> float:
@@ -613,7 +615,7 @@ class SimpleSim:
 if __name__ == "__main__":
 
     ########## MAIN ####################################################################################
-    _N_EPISODES    = 200
+    _N_EPISODES    = 500 #200
     _SIM_DATA_PATH = os.path.expandvars( "$HOME/EROM/data/pkl/simResults.pkl" )
 
     simRes = dict()
