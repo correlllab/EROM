@@ -109,6 +109,7 @@ class Action:
     heldBlc : str   = None
 
 
+
 ##### Step Results ########################################################
 
 @dataclass
@@ -127,6 +128,7 @@ class StepRecord:
     knockDown: int            = 0
     actualDwn: int            = 0
     endState : list[SimBlock] = None
+
 
 
 ##### Engine ##############################################################

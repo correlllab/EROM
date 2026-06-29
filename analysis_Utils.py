@@ -16,6 +16,7 @@ from draw_beliefs import set_render_env
 _TITLE_FONT_SIZE =  13
 _TIGHT_MARGIN    =   0.05
 _DEFAULT_DIV     = 100 #80 #100 #200
+_SIGMA_CHOP      = 2.5
 
 ##### Environment && Constants ############################################
 set_blocks_env()
@@ -221,6 +222,8 @@ class DiceContin_PDF:
         self.data = list( data )
         self.data.sort()
         self.Ndat = len( self.data )
+        if not self.Ndat:
+            return
         vMin = self.data[0]
         vMax = self.data[-1]
         span = vMax - vMin
@@ -259,8 +262,8 @@ class DiceContin_PDF:
         return list( binPopLst )
     
 
-    def fit_lognorm_to_data( self ):
-        shape, loc, scale = lognorm.fit( chop_sigmas( self.data, 3.0, useMean = False ), floc = 0 )
+    def fit_lognorm_to_data( self, chopSigma : float = _SIGMA_CHOP ):
+        shape, loc, scale = lognorm.fit( chop_sigmas( self.data, sigmas = chopSigma, useMean = False ), floc = 0 )
         print( f"Log-Normal Fit - Shape: {shape}, Location: {loc}, Scale: {scale}" )
 
 

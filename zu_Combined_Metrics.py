@@ -539,9 +539,12 @@ Std.Dev.: 0.006483282207430517
         
 
 ########## MAIN ####################################################################################
+_POSE_SIGMA_CHOP = 2.5
+_ACTN_SIGMA_CHOP = 2.5
+_SRCH_SIGMA_CHOP = 2.5
 
 _GET_STATS = True
-_EP_EVENTS = False
+_EP_EVENTS = True
 _CONFUSION = False
 _THINIFY   = False
 
@@ -658,7 +661,7 @@ if _EP_EVENTS:
                 roll = DiceContin_PDF( Nbins = _DEFAULT_DIV )
                 roll.set_data( Xe_t )
 
-                roll.fit_lognorm_to_data()
+                roll.fit_lognorm_to_data( chopSigma = _POSE_SIGMA_CHOP )
                 
                 roll.save( f"json/PsnErr.{setNam}.{test}.json" )
 
@@ -689,8 +692,10 @@ if _EP_EVENTS:
         for st, ea in enumerate( totErrAct ):
             if ea[1] == False:
                 totlFail += 1
-            failDens.append( (ea[0], totlFail/N_fail,) )
-            pErrDens.append( (ea[0], st/N_all,) )
+            if N_fail:
+                failDens.append( (ea[0], totlFail/N_fail,) )
+            if N_all:
+                pErrDens.append( (ea[0], st/N_all,) )
 
         Xe = [item[0] for item in failDens]
         Ya = [item[1] for item in failDens]
@@ -854,7 +859,7 @@ if _GET_STATS:
                 stSrch  = np.std( tSearch ) 
 
                 print( "Search Times" )
-                fit_lognorm_to_data( tSearch )
+                fit_lognorm_to_data( tSearch, sigmaChop = _SRCH_SIGMA_CHOP )
                 # print( f"Mean: ____ {muSrch}" )
                 # print( f"Median: __ {mdSrch}" )
                 # print( f"Std. Dev.: {stSrch}\n" )
@@ -865,7 +870,7 @@ if _GET_STATS:
                 stActn  = np.std( tAction ) 
 
                 print( "Action Times" )
-                fit_lognorm_to_data( tAction )
+                fit_lognorm_to_data( tAction, sigmaChop = _ACTN_SIGMA_CHOP )
                 # print( f"Mean: ____ {muActn}" )
                 # print( f"Median: __ {mdActn}" )
                 # print( f"Std. Dev.: {stActn}\n" )
