@@ -133,6 +133,7 @@ class StepRecord:
 
 ##### Engine ##############################################################
 _SETTINGS_PATH = "$HOME/EROM/json/sim_settings.json"
+_USE_TEST_CDF  = True
 
 
 class Engine:
@@ -344,10 +345,13 @@ class Engine:
             ) )
 
 
-    def start( self, dataset : str ):
+    def start( self, dataset : str, test : str ):
         """ Do initial setup """
         self.reset_blocks( dataset )
-        self.init_action_cdf()
+        if _USE_TEST_CDF:
+            self.init_action_cdf( f"json/FailVErr-CDF_{setNam}_{test}.json" )
+        else:
+            self.init_action_cdf()
 
 
     @staticmethod
@@ -525,7 +529,9 @@ class SimpleSim:
         self.test    : str                    = test
         self.records : Deque[StepRecord]      = deque()
         self.episodes: list[list[StepRecord]] = deque()
-        self.engine.start( self.dataset )
+        self.actFail : bool                   = False
+        self.lastErr : float                  = -1.0
+        self.engine.start( self.dataset, self.test )
         
 
     def step( self ):
@@ -534,11 +540,23 @@ class SimpleSim:
 
         ##### Perception #########################
         record.trueState = deepcopy( self.engine.actualState )
-        if "KC" in self.test:
+
+        if ("KC" in self.test) and (not self.actFail):
             record.percState = self.engine.roll_confusion_state( self.dataset, self.engine.actualState, cheatClass = True )
         else:
             record.percState = self.engine.roll_confusion_state( self.dataset, self.engine.actualState, cheatClass = False )
-        record.poseError = self.engine.roll_avg_pose_error( self.dataset, self.test )
+        
+        # if ("KP" in self.test) and (not self.actFail) and (self.lastErr >= 0.0):
+        if ("KP" in self.test) and (not self.actFail):
+            # record.poseError = self.lastErr
+            record.poseError = 0.0
+        else:
+            err = 0.0
+            for _ in range( len( self.engine.get_tower( self.engine.actualState ) ) ):
+                err = max( err, self.engine.roll_avg_pose_error( self.dataset, self.test ) )
+            record.poseError = err
+            self.lastErr     = err
+        
         record.N_halluc  = self.engine.roll_hallucination(  self.dataset, self.test )
         record.tSearch   = self.engine.roll_search_time( self.dataset, self.test )
 
@@ -554,6 +572,11 @@ class SimpleSim:
             record.planSeq   = self.planner.plan( self.dataset, record.percState )
             record.actionRes = self.engine.roll_action_success( record.poseError )
             record.tAction   = self.engine.roll_action_time( self.dataset, self.test )
+
+            if record.actionRes == False:
+                self.actFail = True
+            else:
+                self.actFail = False
 
             if (record.planSeq is not None):
 
@@ -584,18 +607,17 @@ class SimpleSim:
 
     def run_episode( self ):
         """ Run a full simulation episode """
+        self.lastErr = -1.0
         self.engine.reset_blocks( self.dataset )
         success = False
         stepLim = 30
         Nstep   =  0
 
         while (not success) and (Nstep < stepLim):
-
             self.step()
             success = self.records[-1].goalMet
             if success:
                 print( f"SUCCESS!" )
-
             Nstep += 1
         
         self.episodes.append( list( self.records ) )
@@ -617,7 +639,7 @@ class SimpleSim:
 if __name__ == "__main__":
 
     ########## MAIN ################################################################################
-    _N_EPISODES    = 500 #200
+    _N_EPISODES    = 500 # 1000 # 500 # 200 # 50
     _SIM_DATA_PATH = os.path.expandvars( "$HOME/EROM/data/pkl/simResults.pkl" )
 
     simRes = dict()
