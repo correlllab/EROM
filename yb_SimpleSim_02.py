@@ -187,6 +187,7 @@ class Engine:
         if actual in self.settings[ dataset ]["classes"]:
             ndx = self.settings[ dataset ]["classes"].index( actual )
             row = confMatx[ ndx, : ]
+            row = row * np.array( [1, 1, 1, self.settings["factors"]["missing"],] )
             res = Engine.roll_probs_as_odds( row )
             return self.settings[ dataset ]["classes"][ res ]
         raise KeyError( f"{actual} is NOT a valid label for the {dataset} dataset!" )
@@ -243,12 +244,14 @@ class Engine:
     
     def roll_avg_pose_error( self, dataset : str, test : str ) -> float:
         """ Roll from the (average) pose error for this `dataset`::`test` """
-        return lognorm.rvs( 
-            loc   = self.settings[ dataset ][ test ]["poseErr"]["location"] * 1.0, 
-            s     = self.settings[ dataset ][ test ]["poseErr"]["shape"], 
-            scale = self.settings[ dataset ][ test ]["poseErr"]["scale"]
-        ) * self.settings["factors"]["posnErr"]
-    
+        if 0:
+            return lognorm.rvs( 
+                loc   = self.settings[ dataset ][ test ]["poseErr"]["location"] * 1.0, 
+                s     = self.settings[ dataset ][ test ]["poseErr"]["shape"], 
+                scale = self.settings[ dataset ][ test ]["poseErr"]["scale"]
+            ) * self.settings["factors"]["posnErr"]
+        else:
+            return 0.040 * random() * self.settings["factors"]["posnErr"]
 
     def roll_search_time( self, dataset : str, test : str ) -> float:
         """ Roll from the search time for this `dataset`::`test` """
@@ -321,8 +324,10 @@ class Engine:
 
     def roll_action_success( self, avgPoseErr : float ) -> bool:
         """ Use the CDF to determine whether a failure occurred """
-        return not self.actionCDF.sample_outcome( avgPoseErr )
-    
+        if 0:
+            return not self.actionCDF.sample_outcome( avgPoseErr )
+        else:
+            return random() > (avgPoseErr / 0.04)
 
     def roll_tower_desctruction( self, dataset : str, test : str ):
         """ How many blocks did the tower lose on a failed action? """
@@ -546,13 +551,14 @@ class SimpleSim:
         else:
             record.percState = self.engine.roll_confusion_state( self.dataset, self.engine.actualState, cheatClass = False )
         
-        # if ("KP" in self.test) and (not self.actFail) and (self.lastErr >= 0.0):
-        if ("KP" in self.test) and (not self.actFail):
-            # record.poseError = self.lastErr
-            record.poseError = 0.0
+        if ("KP" in self.test) and (not self.actFail) and (self.lastErr >= 0.0):
+        # if ("KP" in self.test) and (not self.actFail):
+            record.poseError = self.lastErr
+            # record.poseError = 0.0
         else:
             err = 0.0
-            for _ in range( len( self.engine.get_tower( self.engine.actualState ) ) ):
+            # for _ in range( len( self.engine.get_tower( self.engine.actualState ) ) ):
+            for _ in range(3):
                 err = max( err, self.engine.roll_avg_pose_error( self.dataset, self.test ) )
             record.poseError = err
             self.lastErr     = err
