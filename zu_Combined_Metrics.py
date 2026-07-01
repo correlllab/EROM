@@ -539,9 +539,9 @@ Std.Dev.: 0.006483282207430517
         
 
 ########## MAIN ####################################################################################
-_POSE_SIGMA_CHOP = 2.5
-_ACTN_SIGMA_CHOP = 2.5
-_SRCH_SIGMA_CHOP = 2.5
+_POSE_SIGMA_CHOP = 3.5
+_ACTN_SIGMA_CHOP = 2.0
+_SRCH_SIGMA_CHOP = 2.0
 
 _GET_STATS = True
 _EP_EVENTS = True
