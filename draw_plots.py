@@ -45,6 +45,8 @@ def make_histo( series, plotTitle, fName, xLabel = 'Makespan', yLabel = 'Occurre
     if savefig:
         plt.savefig( fName )
         return plt.gca()
+    else:
+        plt.show()
 
 
 def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "output.pdf", xLabel = None, yLabel = None, 
@@ -101,10 +103,13 @@ def make_multi_histo( multiSeries, seriesNames, plotTitle = None, fName = "outpu
     if savefig:
         plt.savefig( fName )
         return plt.gca()
+    else:
+        plt.show()
     
 
 def make_whisker( multiSeries, seriesNames, plotTitle = None, fName = "output.pdf", yLabel = None, 
                   forceYlim = True, savefig = True, titleFontSize_pt = _TITLE_FONT_SIZE, outliers = True ):
+    plt.clf()
     init_tight_fig( savefig )
     figure_data_report( multiSeries, seriesNames, plotTitle )
     # Create the plot
@@ -121,3 +126,5 @@ def make_whisker( multiSeries, seriesNames, plotTitle = None, fName = "output.pd
     if savefig:
         plt.savefig( fName )
         return plt.gca()
+    else:
+        plt.show()
