@@ -577,8 +577,8 @@ if _EP_EVENTS:
 
             ### For every scenario ###
             for ii, test in enumerate( tests ):
-            # for ii, test in enumerate( tests[1:] ):
-            # for ii, test in enumerate( tests[3:] ):
+            
+                tstErrAct = deque()
                 
                 episodes = totRes[ setNam ][ test ] 
 
@@ -618,6 +618,7 @@ if _EP_EVENTS:
                         if D_posErr[I] >= 0.0:
                             testRes["<Err,Act>"].append( (D_posErr[I], A_result[I],) )
                             totErrAct.append( (D_posErr[I], A_result[I],) )
+                            tstErrAct.append( (D_posErr[I], A_result[I],) )
 
                         if X_halluc[I] not in testRes["P(p|n_H)"]:
                             testRes["P(p|n_H)"][ X_halluc[I] ] = deque()
@@ -671,10 +672,31 @@ if _EP_EVENTS:
                 if _SHOW_PLOT:
                     make_histo( Xr, f"POS ERR, Simulated, {setNam}:{test}" , xLabel = 'Err', yLabel = 'Occurrences', savefig = True )
                 
+                tstErrAct = list( tstErrAct )
+                tstErrAct.sort( key = lambda x: x[0] )
                 N_fail = 0
-                for ea in errAct:
+                N_all  = len(tstErrAct)
+                for ea in tstErrAct:
                     if ea[1] == False:
                         N_fail += 1
+
+                tstlFail = 0                        
+                failDens = deque()
+                pErrDens = deque()
+                
+                for st, ea in enumerate( tstErrAct ):
+                    if ea[1] == False:
+                        tstlFail += 1
+                    if N_fail:
+                        failDens.append( (ea[0], tstlFail/N_fail,) )
+                    if N_all:
+                        pErrDens.append( (ea[0], st/N_all,) )
+
+                Xe = [item[0] for item in failDens]
+                Ya = [item[1] for item in failDens]
+
+                cdf = DiceBinary_CDF( Xe, Ya )
+                cdf.save( f"json/FailVErr-CDF_{setNam}_{test}.json" )
 
         
         totErrAct = list( totErrAct )
