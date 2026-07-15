@@ -193,7 +193,19 @@ def chop_sigmas( data : list[int], sigmas = 3.0, useMean : bool = True ) -> list
 
 
 def fit_lognorm_to_data( data : list[float], sigmaChop : float = 3.0, useMean : bool = True ) -> tuple[float,float,float]:
-    shape, loc, scale = lognorm.fit( chop_sigmas( data, sigmaChop, useMean = useMean ), floc = 0 )
+
+    # 2. Calculate initial guesses based on your data
+    log_data    = np.log( data )
+    guess_shape = np.std( log_data ) # ---------- Shape parameter is the std of log data
+    guess_scale = np.exp( np.mean( log_data ) ) # Scale parameter is exp of the mean of log data
+    guess_loctn = 0.0  # ------------------------ Fixing loc to 0 usually yields the best fits
+
+    shape, loc, scale = lognorm.fit( chop_sigmas( data, sigmaChop, useMean = useMean ), 
+                                     f0     = guess_shape,
+                                     floc   = guess_loctn, 
+                                     scale  = guess_scale,
+                                     method = 'MLE' )
+    print( f"Initial Guess  - Shape: {guess_shape}, Location: {guess_loctn}, Scale: {guess_scale}" )
     print( f"Log-Normal Fit - Shape: {shape}, Location: {loc}, Scale: {scale}" )
     return shape, loc, scale
 
@@ -263,9 +275,10 @@ class DiceContin_PDF:
     
 
     def fit_lognorm_to_data( self, chopSigma : float = _SIGMA_CHOP ):
-        shape, loc, scale = lognorm.fit( chop_sigmas( self.data, sigmas = chopSigma, useMean = False ), floc = 0 )
-        print( f"Log-Normal Fit - Shape: {shape}, Location: {loc}, Scale: {scale}" )
-
+        shape, loc, scale = fit_lognorm_to_data( self.data , sigmaChop = chopSigma, useMean = False ) 
+        # print( f"Log-Normal Fit - Shape: {shape}, Location: {loc}, Scale: {scale}" )
+        return shape, loc, scale
+    
 
     def fit_poisson_to_curv( self ):
 
