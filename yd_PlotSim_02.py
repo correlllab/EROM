@@ -40,7 +40,7 @@ for iii, paths in enumerate( Loc.datasets ):
         ##### Analyze Data ################################################
 
         ##### Makespan (Steps) ###################
-        msDqu_stp : Deque[int] = deque()
+        msDqu_stp : Deque[int]   = deque()
 
         for episode in simData:
             ms_i = 0.0
@@ -62,6 +62,7 @@ for iii, paths in enumerate( Loc.datasets ):
         for episode in simData:
             ms_i = 0.0
             for datum in episode: 
+                print( datum.tSearch, datum.tAction )
                 ms_i += (datum.tSearch + datum.tAction)
             msDqu_sec.append( ms_i )
 
@@ -76,6 +77,18 @@ for iii, paths in enumerate( Loc.datasets ):
         sNames.append( test )
 
     make_whisker( series, sNames, plotTitle = f"{setNam} Makespan [steps]", fName = "output.pdf", yLabel = "Steps", 
+                  forceYlim = False, savefig = False, outliers = True )
+    
+
+    series = deque()
+    sNames = deque()
+
+    ### For every scenario ###
+    for ii, test in enumerate( Loc.tests ):
+        series.append( list( setData[ setNam ]["msTime"][ test ] ) )
+        sNames.append( test )
+
+    make_whisker( series, sNames, plotTitle = f"{setNam} Makespan [s]", fName = "output.pdf", yLabel = "Seconds", 
                   forceYlim = False, savefig = False, outliers = True )
         
 
