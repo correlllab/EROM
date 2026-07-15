@@ -603,6 +603,7 @@ class SimpleSim:
         else:
             record.planSeq   = None
             record.actionRes = None
+            record.tAction   = 0.0
 
         ##### Check ##############################
         record.endState = deepcopy( self.engine.actualState )
