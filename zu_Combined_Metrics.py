@@ -662,6 +662,7 @@ if _EP_EVENTS:
                 roll = DiceContin_PDF( Nbins = _DEFAULT_DIV )
                 roll.set_data( Xe_t )
 
+                print( "Posn Error Dist" )
                 roll.fit_lognorm_to_data( chopSigma = _POSE_SIGMA_CHOP )
                 
                 roll.save( f"json/PsnErr.{setNam}.{test}.json" )
