@@ -52,7 +52,7 @@ for iii, paths in enumerate( Loc.datasets ):
 
         make_histo( msDqu_stp, 
                     f"{setNam}:{test}: Makespan [Steps]", 
-                    f"{Loc._PLOT_DIR}{setNam}_{test}_Makespan-Step{Loc.plotExt}", 
+                    f"{Loc._PLOT_DIR}{setNam}_{test}_SIM_Makespan-Step{Loc.plotExt}", 
                     xLabel = 'Makespan', yLabel = 'Occurrences', forceYlim = False, savefig = True )
 
 
@@ -76,8 +76,8 @@ for iii, paths in enumerate( Loc.datasets ):
         series.append( list( setData[ setNam ]["msStep"][ test ] ) )
         sNames.append( test )
 
-    make_whisker( series, sNames, plotTitle = f"{setNam} Makespan [steps]", fName = "output.pdf", yLabel = "Steps", 
-                  forceYlim = False, savefig = False, outliers = True )
+    make_whisker( series, sNames, plotTitle = f"{setNam} Makespan [steps]", fName = f"{Loc._PLOT_DIR}{setNam}_SIM_Makespan-Step_Whisker{Loc.plotExt}", yLabel = "Steps", 
+                  forceYlim = False, savefig = True, outliers = True )
     
 
     series = deque()
@@ -88,8 +88,8 @@ for iii, paths in enumerate( Loc.datasets ):
         series.append( list( setData[ setNam ]["msTime"][ test ] ) )
         sNames.append( test )
 
-    make_whisker( series, sNames, plotTitle = f"{setNam} Makespan [s]", fName = "output.pdf", yLabel = "Seconds", 
-                  forceYlim = False, savefig = False, outliers = True )
+    make_whisker( series, sNames, plotTitle = f"{setNam} Makespan [s]", fName = f"{Loc._PLOT_DIR}{setNam}_SIM_Makespan-Sec_Whisker{Loc.plotExt}", yLabel = "Seconds", 
+                  forceYlim = False, savefig = True, outliers = True )
         
 
 ########## EXIT ####################################################################################
