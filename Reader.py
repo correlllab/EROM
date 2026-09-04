@@ -1,10 +1,9 @@
 ########## INIT ####################################################################################
-import pickle, os, gc, traceback, json
+import pickle, os, gc
 
 from collections import deque
 from typing import Any, Deque
 from pprint import pprint
-from random import random
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,21 +11,12 @@ import numpy as np
 from aspire.symbols import GraspObj, ObjPose, extract_position, euclidean_distance_between_symbols
 from aspire.BlocksTask import set_blocks_env
 from aspire.env_config import env_var
-from TaskPlanner import set_experiment_env
-from draw_beliefs import set_render_env
-from magpie_control.realsense_wrapper import MPCD
 
 from homog_utils import homog_xform, diff_mag, posn_from_xform
 from utils import dex_key, parse_action
 from Example import PlanStatus, ActionStatus
 
 set_blocks_env()
-
-# _BLOCK_DIAG = np.nan
-# _HALF_SCALE = np.nan
-
-# _BLOCK_DIAG = np.sqrt( 3 * env_var("_BLOCK_SCALE")**2 )
-# _HALF_SCALE = env_var("_BLOCK_SCALE") / 2.0
 
 
 ########## HELPER FUNCTIONS ########################################################################
