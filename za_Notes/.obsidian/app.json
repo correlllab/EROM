@@ -1,3 +1,6 @@
 {
-  "readableLineLength": false
+  "readableLineLength": false,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "Log",
+  "attachmentFolderPath": "zz_Resources"
 }
