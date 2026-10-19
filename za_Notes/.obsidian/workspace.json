@@ -4,12 +4,13 @@
     "type": "split",
     "children": [
       {
-        "id": "8c1de3977607a833",
+        "id": "c3e5a33cfb453d6d",
         "type": "tabs",
         "children": [
           {
-            "id": "e3304013ac1266b6",
+            "id": "902be1fed101836c",
             "type": "leaf",
+            "pinned": true,
             "state": {
               "type": "markdown",
               "state": {
@@ -17,6 +18,7 @@
                 "mode": "source",
                 "source": false
               },
+              "pinned": true,
               "icon": "lucide-file",
               "title": "2026-10-15"
             }
@@ -171,10 +173,19 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "e3304013ac1266b6",
+  "active": "902be1fed101836c",
   "lastOpenFiles": [
-    "Log/2026-10-14.md",
+    "file:/home/james/Project_Stargazer/dotnet/00_Dashboard/CreateProject.md",
+    "file:/home/james/SlopTrough/Python/01_Pascal/prompt.md",
+    "zz_Resources/Pasted image 20261016180253.png",
+    "zz_Resources/Pasted image 20261016134210.png",
+    "zz_Resources/Pasted image 20261016134036.png",
+    "zz_Resources/Pasted image 20261016131114.png",
+    "file:/home/james/SlopTrough/Dart/10_BLE_Mesh/prompt.md",
     "Log/2026-10-15.md",
+    "zz_Resources/Pasted image 20261016123841.png",
+    "zz_Resources",
+    "Log/2026-10-14.md",
     "zz_Resources.md",
     "Log/2026-09-02.md",
     "DEV_PLAN/2026-05-29, Friday.md",
